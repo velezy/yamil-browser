@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="96" fill="#0f172a" stroke="#4ade80" stroke-width="4"/>
+
+  <!-- Lightning bolt -->
+  <path d="M115 20 L68 105 L95 105 L85 180 L132 95 L105 95 Z"
+        fill="#4ade80"
+        filter="url(#glow)"/>
+
+  <!-- Glow filter -->
+  <defs>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+</svg>

@@ -21,6 +21,7 @@ function createWindow () {
     minWidth:  900,
     minHeight: 600,
     backgroundColor: '#0f172a',
+    icon: path.join(__dirname, 'assets', 'yamil-logo.svg'),
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
