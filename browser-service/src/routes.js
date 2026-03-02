@@ -137,4 +137,28 @@ export async function registerRoutes(app) {
     await s.page.waitForSelector(selector, { timeout })
     return { ok: true }
   })
+
+  // ── Mouse + keyboard (used by Electron canvas interactions) ──────────
+  app.post('/sessions/:id/mouse/click', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    await s.page.mouse.click(req.body.x, req.body.y)
+    return { ok: true }
+  })
+
+  app.post('/sessions/:id/mouse/move', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    await s.page.mouse.move(req.body.x, req.body.y)
+    return { ok: true }
+  })
+
+  app.post('/sessions/:id/keyboard/type', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    await s.page.keyboard.type(req.body.text, { delay: req.body.delay || 0 })
+    return { ok: true }
+  })
 }

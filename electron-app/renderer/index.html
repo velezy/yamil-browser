@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YAMIL Browser</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ── Navigation bar ─────────────────────────────────────── -->
+    <div id="navbar">
+      <button id="btn-back"    title="Back">&#8592;</button>
+      <button id="btn-refresh" title="Refresh">&#8635;</button>
+      <div id="address-wrap">
+        <span id="lock-icon">🔒</span>
+        <input id="address-bar" type="text" placeholder="Enter URL or search..." autocomplete="off" spellcheck="false">
+      </div>
+      <div id="nav-right">
+        <span id="conn-dot" class="dot disconnected" title="Service connection"></span>
+      </div>
+    </div>
+
+    <!-- ── Main area ──────────────────────────────────────────── -->
+    <div id="main">
+
+      <!-- Browser viewport -->
+      <div id="browser-area">
+        <canvas id="screen"></canvas>
+        <div id="overlay-msg" class="hidden">Connecting to browser service...</div>
+      </div>
+
+      <!-- AI Sidebar -->
+      <div id="sidebar">
+        <div id="sidebar-header">
+          <span>⚡ YAMIL AI</span>
+          <button id="btn-sidebar-toggle" title="Collapse">&#x276E;</button>
+        </div>
+
+        <div id="chat-log"></div>
+
+        <div id="chat-footer">
+          <textarea id="chat-input" rows="2" placeholder="Ask AI to browse, extract, or automate..."></textarea>
+          <button id="chat-send">&#9658;</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Status bar ─────────────────────────────────────────── -->
+    <div id="statusbar">
+      <span id="status-url"></span>
+      <span id="status-events"></span>
+    </div>
+
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>

@@ -2,6 +2,22 @@ import { chromium } from 'playwright'
 import { randomUUID } from 'crypto'
 import { STEALTH_SCRIPT, LAUNCH_ARGS, USER_AGENT } from './stealth.js'
 
+const HUD_SCRIPT = `(function(){
+  if(document.getElementById('__yamil_hud__'))return;
+  const s=document.createElement('style');
+  s.textContent='@keyframes yp{0%,100%{opacity:1}50%{opacity:.25}}';
+  document.head.appendChild(s);
+  const h=document.createElement('div');
+  h.id='__yamil_hud__';
+  h.style.cssText='position:fixed;bottom:20px;right:20px;z-index:2147483647;background:rgba(10,12,20,.82);color:#e2e8f0;font:600 11px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",monospace;padding:6px 10px 6px 8px;border-radius:7px;border:1px solid rgba(74,222,128,.35);box-shadow:0 2px 12px rgba(0,0,0,.5);display:flex;align-items:center;gap:7px;pointer-events:none;user-select:none;backdrop-filter:blur(6px)';
+  const d=document.createElement('span');
+  d.style.cssText='width:7px;height:7px;border-radius:50%;background:#4ade80;display:inline-block;flex-shrink:0;animation:yp 2s ease-in-out infinite';
+  const l=document.createElement('span');
+  l.textContent='⚡ YAMIL Stealth Browser';
+  h.appendChild(d);h.appendChild(l);
+  document.body.appendChild(h);
+})()`
+
 const SESSION_TIMEOUT_MS = parseInt(process.env.SESSION_TIMEOUT_MS || '900000') // 15 min
 
 // event → method name for CDP domains we want to enable
@@ -41,8 +57,9 @@ export async function createSession(opts = {}) {
     viewport: { width: 1920, height: 1080 },
   })
 
-  // Inject stealth on every page/navigation
+  // Inject stealth + HUD on every page/navigation
   await context.addInitScript(STEALTH_SCRIPT)
+  await context.addInitScript(HUD_SCRIPT)
 
   const page = await context.newPage()
 

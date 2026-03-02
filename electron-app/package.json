@@ -1,0 +1,27 @@
+{
+  "name": "yamil-browser-app",
+  "version": "0.1.0",
+  "description": "YAMIL Stealth Browser — desktop client for YAMIL, DriveSentinel, Memobytes",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.yamil.browser",
+    "productName": "YAMIL Browser",
+    "directories": { "output": "dist" },
+    "win":   { "target": "nsis",   "icon": "assets/icon.ico" },
+    "mac":   { "target": "dmg",    "icon": "assets/icon.icns" },
+    "linux": { "target": "AppImage" }
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}
