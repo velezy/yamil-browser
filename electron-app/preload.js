@@ -1,5 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
+// Pass build-time config from main process to renderer
+contextBridge.exposeInMainWorld('YAMIL_CONFIG', {
+  AI_ENDPOINT: process.env.AI_ENDPOINT || null,
+  APP_TITLE:   process.env.APP_TITLE   || 'YAMIL Browser',
+})
+
 contextBridge.exposeInMainWorld('yamil', {
   // Navigation
   navigate:     (url)    => ipcRenderer.invoke('navigate',      url),

@@ -2,8 +2,10 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron')
 const path = require('path')
 const { WebSocket } = require('ws')
 
-const SERVICE_URL = process.env.BROWSER_SERVICE_URL || 'http://localhost:4000'
-const WS_URL      = SERVICE_URL.replace(/^http/, 'ws')
+const SERVICE_URL  = process.env.BROWSER_SERVICE_URL || 'http://localhost:4000'
+const WS_URL       = SERVICE_URL.replace(/^http/, 'ws')
+const AI_ENDPOINT  = process.env.AI_ENDPOINT || null   // e.g. http://localhost:8003/ai/chat
+const APP_TITLE    = process.env.APP_TITLE    || 'YAMIL Browser'
 
 let mainWindow
 let sessionId     = null
@@ -29,6 +31,7 @@ function createWindow () {
   })
 
   mainWindow.loadFile('renderer/index.html')
+  mainWindow.setTitle(APP_TITLE)
   mainWindow.on('closed', () => { mainWindow = null })
 }
 

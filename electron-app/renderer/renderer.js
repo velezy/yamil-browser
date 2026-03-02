@@ -14,7 +14,12 @@ let sessionId       = null
 let screenW         = 1280
 let screenH         = 800
 let lastEventCount  = 0
-let aiEndpoint      = window.AI_ENDPOINT || null // set per-app via env
+let aiEndpoint      = window.YAMIL_CONFIG?.AI_ENDPOINT || null
+
+// Set window title from config
+if (window.YAMIL_CONFIG?.APP_TITLE) {
+  document.title = window.YAMIL_CONFIG.APP_TITLE
+}
 
 // ── Screencast canvas ─────────────────────────────────────────────────
 
