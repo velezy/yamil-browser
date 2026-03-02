@@ -1,0 +1,13 @@
+services:
+  browser-service:
+    build:
+      context: browser-service
+      dockerfile: Dockerfile
+    container_name: yamil-browser-service
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - SESSION_TIMEOUT_MS=900000   # 15 min idle timeout
+    shm_size: "2gb"                 # Chrome needs extra shared memory
+    restart: unless-stopped
