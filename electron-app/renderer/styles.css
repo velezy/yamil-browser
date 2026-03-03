@@ -67,6 +67,7 @@ body { background: var(--bg); color: var(--text); font-size: 13px; }
   font-size: 15px;
   display: flex; align-items: center; justify-content: center;
   transition: background .15s;
+  flex-shrink: 0;
 }
 #navbar button:hover { background: #475569; }
 
@@ -98,36 +99,15 @@ body { background: var(--bg); color: var(--text); font-size: 13px; }
   display: flex;
   height: calc(100vh - var(--navbar-h) - var(--status-h));
   overflow: hidden;
+  background: #fff;
 }
 
-/* ── Browser area ────────────────────────────────────────────────── */
-#browser-area {
+/* ── Webview (native Chrome, no canvas) ──────────────────────────── */
+webview#screen {
   flex: 1;
-  background: #000;
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  height: 100%;
+  border: none;
 }
-
-#screen {
-  display: block;
-  cursor: default;
-  image-rendering: crisp-edges;
-}
-
-#overlay-msg {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg);
-  color: var(--text-muted);
-  font-size: 14px;
-}
-#overlay-msg.hidden { display: none; }
 
 /* ── Sidebar ─────────────────────────────────────────────────────── */
 #sidebar {

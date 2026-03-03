@@ -1,31 +1,7 @@
-const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge } = require('electron')
 
-// Pass build-time config from main process to renderer
 contextBridge.exposeInMainWorld('YAMIL_CONFIG', {
-  AI_ENDPOINT: process.env.AI_ENDPOINT || null,
+  AI_ENDPOINT: process.env.AI_ENDPOINT || 'http://localhost:9080/api/v1/builder-orchestra/browser-chat',
   APP_TITLE:   process.env.APP_TITLE   || 'YAMIL Browser',
-})
-
-contextBridge.exposeInMainWorld('yamil', {
-  // Navigation
-  navigate:     (url)    => ipcRenderer.invoke('navigate',      url),
-  goBack:       ()       => ipcRenderer.invoke('go-back'),
-  pressKey:     (key)    => ipcRenderer.invoke('press-key',     key),
-  scroll:       (d)      => ipcRenderer.invoke('scroll',        d),
-
-  // Mouse + keyboard (canvas interactions)
-  mouseClick:   (pos)    => ipcRenderer.invoke('mouse-click',   pos),
-  mouseMove:    (pos)    => ipcRenderer.invoke('mouse-move',    pos),
-  keyboardType: (text)   => ipcRenderer.invoke('keyboard-type', text),
-
-  // Page data
-  evaluate:     (script) => ipcRenderer.invoke('evaluate',      script),
-  getUrl:       ()       => ipcRenderer.invoke('get-url'),
-  getSessions:  ()       => ipcRenderer.invoke('get-sessions'),
-
-  // Events from main process
-  onSessionReady:    (cb) => ipcRenderer.on('session-ready',    (_, d) => cb(d)),
-  onServiceError:    (cb) => ipcRenderer.on('service-error',    (_, m) => cb(m)),
-  onScreencastFrame: (cb) => ipcRenderer.on('screencast-frame', (_, d) => cb(d)),
-  onCdpEvent:        (cb) => ipcRenderer.on('cdp-event',        (_, d) => cb(d)),
+  START_URL:   process.env.START_URL   || 'https://yamil-ai.com',
 })

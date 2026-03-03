@@ -1,136 +1,85 @@
-/* ── YAMIL Browser — Renderer ─────────────────────────────────────── */
+/* ── YAMIL Browser — Renderer (webview edition) ───────────────────── */
 
-const canvas   = document.getElementById('screen')
-const ctx      = canvas.getContext('2d')
-const overlay  = document.getElementById('overlay-msg')
-const addrBar  = document.getElementById('address-bar')
-const statusUrl= document.getElementById('status-url')
-const connDot  = document.getElementById('conn-dot')
-const chatLog  = document.getElementById('chat-log')
-const chatInput= document.getElementById('chat-input')
-const evtStatus= document.getElementById('status-events')
+const webview    = document.getElementById('screen')
+const addrBar    = document.getElementById('address-bar')
+const statusUrl  = document.getElementById('status-url')
+const statusLoad = document.getElementById('status-loading')
+const connDot    = document.getElementById('conn-dot')
+const chatLog    = document.getElementById('chat-log')
+const chatInput  = document.getElementById('chat-input')
 
-let sessionId       = null
-let screenW         = 1280
-let screenH         = 800
-let lastEventCount  = 0
-let aiEndpoint      = window.YAMIL_CONFIG?.AI_ENDPOINT || null
+const aiEndpoint = window.YAMIL_CONFIG?.AI_ENDPOINT || null
+const startUrl   = window.YAMIL_CONFIG?.START_URL   || 'https://yamil-ai.com'
 
-// Set window title from config
-if (window.YAMIL_CONFIG?.APP_TITLE) {
-  document.title = window.YAMIL_CONFIG.APP_TITLE
-}
+if (window.YAMIL_CONFIG?.APP_TITLE) document.title = window.YAMIL_CONFIG.APP_TITLE
 
-// ── Screencast canvas ─────────────────────────────────────────────────
+// ── Webview navigation events ─────────────────────────────────────────
 
-function setCanvasSize () {
-  const area = document.getElementById('browser-area')
-  const areaW = area.clientWidth
-  const areaH = area.clientHeight
-  const scale = Math.min(areaW / screenW, areaH / screenH)
-  canvas.style.width  = Math.floor(screenW * scale) + 'px'
-  canvas.style.height = Math.floor(screenH * scale) + 'px'
-  canvas.width  = screenW
-  canvas.height = screenH
-}
-
-window.addEventListener('resize', setCanvasSize)
-
-function drawFrame (base64jpeg) {
-  const img = new Image()
-  img.onload = () => ctx.drawImage(img, 0, 0)
-  img.src = 'data:image/jpeg;base64,' + base64jpeg
-}
-
-// ── Canvas → browser coordinate mapping ──────────────────────────────
-
-function canvasToPage (clientX, clientY) {
-  const rect  = canvas.getBoundingClientRect()
-  const scaleX = screenW / rect.width
-  const scaleY = screenH / rect.height
-  return {
-    x: Math.round((clientX - rect.left)  * scaleX),
-    y: Math.round((clientY - rect.top)   * scaleY),
-  }
-}
-
-// ── Canvas interaction ────────────────────────────────────────────────
-
-canvas.addEventListener('click', async (e) => {
-  if (!sessionId) return
-  const pos = canvasToPage(e.clientX, e.clientY)
-  await window.yamil.mouseClick(pos)
-  syncUrl()
+webview.addEventListener('did-start-loading', () => {
+  statusLoad.textContent = 'Loading...'
+  connDot.className = 'dot connecting'
 })
 
-canvas.addEventListener('mousemove', (e) => {
-  if (!sessionId) return
-  const pos = canvasToPage(e.clientX, e.clientY)
-  window.yamil.mouseMove(pos)
+webview.addEventListener('did-stop-loading', () => {
+  statusLoad.textContent = ''
+  connDot.className = 'dot connected'
 })
 
-canvas.addEventListener('wheel', (e) => {
-  if (!sessionId) return
-  e.preventDefault()
-  window.yamil.scroll({ direction: e.deltaY > 0 ? 'down' : 'up', amount: Math.abs(e.deltaY) })
-}, { passive: false })
+webview.addEventListener('did-navigate', (e) => {
+  updateBar(e.url)
+})
 
-canvas.addEventListener('contextmenu', (e) => e.preventDefault())
+webview.addEventListener('did-navigate-in-page', (e) => {
+  updateBar(e.url)
+})
 
-// Keyboard — when canvas has focus
-canvas.setAttribute('tabindex', '0')
-canvas.addEventListener('keydown', async (e) => {
-  if (!sessionId) return
-  e.preventDefault()
-  const named = ['Enter','Tab','Escape','Backspace','Delete','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','PageUp','PageDown','F5']
-  if (named.includes(e.key)) {
-    await window.yamil.pressKey(e.key)
-    if (e.key === 'Enter' || e.key === 'F5') syncUrl()
-  } else if (e.key.length === 1) {
-    await window.yamil.keyboardType(e.key)
+webview.addEventListener('page-title-updated', (e) => {
+  statusUrl.textContent = e.title
+})
+
+webview.addEventListener('did-fail-load', (e) => {
+  if (e.errorCode !== -3) { // -3 = aborted (user navigated away), ignore
+    statusLoad.textContent = `Error: ${e.errorDescription}`
+    connDot.className = 'dot disconnected'
   }
 })
+
+function updateBar (url) {
+  if (document.activeElement !== addrBar) addrBar.value = url || ''
+  document.getElementById('lock-icon').textContent = url?.startsWith('https') ? '🔒' : '🔓'
+}
 
 // ── Address bar ───────────────────────────────────────────────────────
 
-addrBar.addEventListener('keydown', async (e) => {
+addrBar.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return
   let url = addrBar.value.trim()
   if (!url) return
-  if (!url.startsWith('http')) url = 'https://' + url
-  addSystemMsg('Navigating to ' + url)
-  const res = await window.yamil.navigate(url)
-  if (res?.url) addrBar.value = res.url
+  if (!url.match(/^https?:\/\//)) url = 'https://' + url
+  webview.loadURL(url)
 })
 
-document.getElementById('btn-back').addEventListener('click', async () => {
-  await window.yamil.goBack()
-  syncUrl()
+addrBar.addEventListener('focus', () => addrBar.select())
+
+document.getElementById('btn-back').addEventListener('click', () => {
+  if (webview.canGoBack()) webview.goBack()
 })
 
-document.getElementById('btn-refresh').addEventListener('click', async () => {
-  await window.yamil.pressKey('F5')
-  syncUrl()
+document.getElementById('btn-forward').addEventListener('click', () => {
+  if (webview.canGoForward()) webview.goForward()
 })
 
-async function syncUrl () {
-  try {
-    const { url, title } = await window.yamil.getUrl()
-    addrBar.value  = url || ''
-    statusUrl.textContent = title || url || ''
-    document.getElementById('lock-icon').textContent = url?.startsWith('https') ? '🔒' : '🔓'
-  } catch (_) {}
-}
+document.getElementById('btn-refresh').addEventListener('click', () => {
+  webview.reload()
+})
 
 // ── Sidebar toggle ────────────────────────────────────────────────────
 
 document.getElementById('btn-sidebar-toggle').addEventListener('click', () => {
-  const sb = document.getElementById('sidebar')
-  sb.classList.toggle('collapsed')
-  setCanvasSize()
+  document.getElementById('sidebar').classList.toggle('collapsed')
 })
 
-// ── AI Chat sidebar ────────────────────────────────────────────────────
+// ── AI Chat ───────────────────────────────────────────────────────────
 
 function addMsg (role, text) {
   const div = document.createElement('div')
@@ -140,10 +89,32 @@ function addMsg (role, text) {
   chatLog.scrollTop = chatLog.scrollHeight
 }
 
-function addSystemMsg (text) { addMsg('system', text) }
-function addUserMsg   (text) { addMsg('user',   text) }
-function addAiMsg     (text) { addMsg('ai',     text) }
-function addErrorMsg  (text) { addMsg('error',  text) }
+const addSystemMsg = (t) => addMsg('system', t)
+const addUserMsg   = (t) => addMsg('user', t)
+const addAiMsg     = (t) => addMsg('ai', t)
+const addErrorMsg  = (t) => addMsg('error', t)
+
+// Resolve a plain name like "twilio" or "google" to a URL
+function resolveUrl (input) {
+  input = input.trim().replace(/[.!?]+$/, '')
+  if (input.match(/^https?:\/\//i)) return input
+  // If it looks like a domain (contains a dot, no spaces) add https://
+  if (!input.includes(' ') && input.includes('.')) return 'https://' + input
+  // Otherwise treat as a search/site name — go straight to the .com
+  return 'https://' + input.toLowerCase().replace(/\s+/g, '') + '.com'
+}
+
+// Navigate the webview and update the address bar
+function navigateWebview (url) {
+  addrBar.value = url
+  webview.loadURL(url)
+}
+
+// Extract the first https URL mentioned in a string
+function extractUrl (text) {
+  const m = text.match(/https?:\/\/[^\s)"'\]]+/i)
+  return m ? m[0].replace(/[.,;!?]+$/, '') : null
+}
 
 async function sendChat () {
   const text = chatInput.value.trim()
@@ -152,18 +123,47 @@ async function sendChat () {
   addUserMsg(text)
 
   if (!aiEndpoint) {
-    addAiMsg('AI endpoint not configured. Set window.AI_ENDPOINT to your orchestrator URL.')
+    addAiMsg('No AI endpoint configured. Set AI_ENDPOINT env var.')
     return
   }
+
+  // ── Intercept navigation commands and move the webview immediately ──
+  const navMatch = text.match(/^(?:go\s+to|navigate\s+to|open|visit)\s+(.+)/i)
+  if (navMatch) {
+    const url = resolveUrl(navMatch[1])
+    navigateWebview(url)
+    addSystemMsg(`Navigating to ${url}…`)
+  }
+
+  // Send current page context with every message
+  let pageContext = {}
+  try {
+    const result = await webview.executeJavaScript(`({
+      url:   location.href,
+      title: document.title,
+      text:  document.body.innerText.slice(0, 4000),
+    })`)
+    pageContext = result
+  } catch (_) {}
 
   try {
     const res = await fetch(aiEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, sessionId }),
+      body: JSON.stringify({ message: text, pageContext }),
     })
     const data = await res.json()
-    addAiMsg(data.response || data.message || JSON.stringify(data))
+    const reply = data.response || data.message || JSON.stringify(data)
+    addAiMsg(reply)
+
+    // If AI navigated/clicked to a new page, sync the webview to follow
+    if (data.navigatedUrl) {
+      navigateWebview(data.navigatedUrl)
+    } else if (navMatch) {
+      // Fallback: extract URL from reply text
+      const url = extractUrl(reply)
+      if (url) navigateWebview(url)
+    }
   } catch (err) {
     addErrorMsg('AI request failed: ' + err.message)
   }
@@ -174,42 +174,8 @@ chatInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() }
 })
 
-// ── CDP Event counter ─────────────────────────────────────────────────
-
-window.yamil.onCdpEvent(() => {
-  lastEventCount++
-  evtStatus.textContent = `${lastEventCount} events`
-})
-
-// ── Service connection lifecycle ──────────────────────────────────────
-
-window.yamil.onSessionReady(({ id, serviceUrl }) => {
-  sessionId = id
-  overlay.classList.add('hidden')
-  connDot.className = 'dot connected'
-  setCanvasSize()
-  addSystemMsg('Connected to ' + serviceUrl)
-  addSystemMsg('Session: ' + id)
-  syncUrl()
-})
-
-window.yamil.onServiceError((msg) => {
-  overlay.classList.remove('hidden')
-  overlay.textContent = msg
-  connDot.className = 'dot disconnected'
-})
-
-window.yamil.onScreencastFrame(({ frame, metadata }) => {
-  if (metadata) {
-    screenW = metadata.deviceWidth  || screenW
-    screenH = metadata.deviceHeight || screenH
-  }
-  drawFrame(frame)
-})
-
 // ── Init ──────────────────────────────────────────────────────────────
 
-connDot.className = 'dot connecting'
-overlay.classList.remove('hidden')
-setCanvasSize()
-addSystemMsg('Starting YAMIL Stealth Browser...')
+addrBar.value = startUrl
+webview.src = startUrl
+addSystemMsg('YAMIL Browser ready — ' + startUrl)

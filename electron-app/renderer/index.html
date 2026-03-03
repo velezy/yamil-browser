@@ -12,34 +12,37 @@
     <!-- ── Navigation bar ─────────────────────────────────────── -->
     <div id="navbar">
       <div id="nav-logo" title="YAMIL Browser">
-        <img src="../assets/yamil-logo.svg" alt="YAMIL" id="logo-img">
+        <img src="../assets/yamil-logo.png" alt="YAMIL" id="logo-img">
         <span id="logo-text">YAMIL</span>
       </div>
       <button id="btn-back"    title="Back">&#8592;</button>
+      <button id="btn-forward" title="Forward">&#8594;</button>
       <button id="btn-refresh" title="Refresh">&#8635;</button>
       <div id="address-wrap">
         <span id="lock-icon">🔒</span>
-        <input id="address-bar" type="text" placeholder="Enter URL or search..." autocomplete="off" spellcheck="false">
+        <input id="address-bar" type="text" placeholder="Enter URL..." autocomplete="off" spellcheck="false">
       </div>
       <div id="nav-right">
-        <span id="conn-dot" class="dot disconnected" title="Service connection"></span>
+        <span id="conn-dot" class="dot connected" title="Ready"></span>
       </div>
     </div>
 
     <!-- ── Main area ──────────────────────────────────────────── -->
     <div id="main">
 
-      <!-- Browser viewport -->
-      <div id="browser-area">
-        <canvas id="screen"></canvas>
-        <div id="overlay-msg" class="hidden">Connecting to browser service...</div>
-      </div>
+      <!-- Native webview — real Chrome, no canvas, no JPEG -->
+      <webview
+        id="screen"
+        src="https://yamil-ai.com"
+        allowpopups
+        partition="persist:yamil"
+      ></webview>
 
       <!-- AI Sidebar -->
       <div id="sidebar">
         <div id="sidebar-header">
           <span id="sidebar-title">
-            <img src="../assets/yamil-logo.svg" alt="" class="sidebar-logo">
+            <img src="../assets/yamil-logo.png" alt="" class="sidebar-logo">
             YAMIL AI
           </span>
           <button id="btn-sidebar-toggle" title="Collapse">&#x276E;</button>
@@ -58,7 +61,7 @@
     <!-- ── Status bar ─────────────────────────────────────────── -->
     <div id="statusbar">
       <span id="status-url"></span>
-      <span id="status-events"></span>
+      <span id="status-loading"></span>
     </div>
 
   </div>
