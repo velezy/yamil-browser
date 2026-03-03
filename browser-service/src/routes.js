@@ -27,7 +27,9 @@ export async function registerRoutes(app) {
     const s = getSession(req.params.id)
     if (!s) return notFound(reply, req.params.id)
     touch(s)
-    await s.page.goto(req.body.url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+    const allowed = ['networkidle', 'load', 'domcontentloaded', 'commit']
+    const waitUntil = allowed.includes(req.body.waitUntil) ? req.body.waitUntil : 'domcontentloaded'
+    await s.page.goto(req.body.url, { waitUntil, timeout: 30000 })
     return { url: s.page.url(), title: await s.page.title() }
   })
 

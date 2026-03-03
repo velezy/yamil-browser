@@ -2,6 +2,8 @@ import { chromium } from 'playwright'
 import { randomUUID } from 'crypto'
 import { STEALTH_SCRIPT, LAUNCH_ARGS, USER_AGENT } from './stealth.js'
 
+const logger = { info: (...a) => console.log('[sessions]', ...a) }
+
 const HUD_SCRIPT = `(function(){
   if(document.getElementById('__yamil_hud__'))return;
   const s=document.createElement('style');
@@ -18,7 +20,10 @@ const HUD_SCRIPT = `(function(){
   document.body.appendChild(h);
 })()`
 
-const SESSION_TIMEOUT_MS = parseInt(process.env.SESSION_TIMEOUT_MS || '900000') // 15 min
+const SESSION_IDLE_MS     = parseInt(process.env.SESSION_IDLE_MS     || '300000')  // 5 min idle
+const SESSION_MAX_AGE_MS  = parseInt(process.env.SESSION_MAX_AGE_MS  || '1800000') // 30 min absolute
+// Legacy alias
+const SESSION_TIMEOUT_MS  = parseInt(process.env.SESSION_TIMEOUT_MS  || String(SESSION_IDLE_MS))
 
 // event → method name for CDP domains we want to enable
 const CDP_DOMAINS = ['Network', 'Runtime', 'Page', 'DOM']
@@ -94,10 +99,14 @@ export async function createSession(opts = {}) {
     )
   }
 
-  // Idle timeout — close session if unused
+  // Expiry timer — closes session on idle or absolute max age
   session._timer = setInterval(() => {
-    if (Date.now() - session.lastUsedAt > SESSION_TIMEOUT_MS) {
-      closeSession(id)
+    const now = Date.now()
+    const idle    = now - session.lastUsedAt > SESSION_IDLE_MS
+    const tooOld  = now - session.createdAt  > SESSION_MAX_AGE_MS
+    if (idle || tooOld) {
+      logger.info(`[sessions] expiring ${id} — idle=${idle} tooOld=${tooOld}`)
+      closeSession(id).catch(() => {})
     }
   }, 60_000)
 
