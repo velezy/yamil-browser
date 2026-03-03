@@ -52,9 +52,10 @@ export async function registerRoutes(app) {
     const s = getSession(req.params.id)
     if (!s) return notFound(reply, req.params.id)
     touch(s)
-    const { selector, text } = req.body
-    if (text) await s.page.getByText(text, { exact: false }).first().click({ timeout: 10000 })
-    else await s.page.click(selector, { timeout: 10000 })
+    const { selector, text, button = 'left', clickCount = 1 } = req.body
+    const opts = { button, clickCount, timeout: 10000 }
+    if (text) await s.page.getByText(text, { exact: false }).first().click(opts)
+    else await s.page.click(selector, opts)
     return { ok: true }
   })
 
@@ -161,6 +162,38 @@ export async function registerRoutes(app) {
     if (!s) return notFound(reply, req.params.id)
     touch(s)
     await s.page.keyboard.type(req.body.text, { delay: req.body.delay || 0 })
+    return { ok: true }
+  })
+
+  // ── Dialog handling ───────────────────────────────────────────────────
+
+  app.post('/sessions/:id/dialog', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const { accept = true, promptText = '' } = req.body || {}
+    // Register a one-shot dialog handler then wait briefly for it to fire
+    await new Promise((resolve) => {
+      const handler = async (dialog) => {
+        s.page.off('dialog', handler)
+        if (accept) await dialog.accept(promptText || undefined)
+        else await dialog.dismiss()
+        resolve()
+      }
+      s.page.on('dialog', handler)
+      // Auto-remove if no dialog appears within 5 s
+      setTimeout(() => { s.page.off('dialog', handler); resolve() }, 5000)
+    })
+    return { ok: true, accepted: accept }
+  })
+
+  // ── Cookie management ─────────────────────────────────────────────────
+
+  app.post('/sessions/:id/clear-cookies', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    await s.context.clearCookies()
     return { ok: true }
   })
 
