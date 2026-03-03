@@ -163,4 +163,117 @@ export async function registerRoutes(app) {
     await s.page.keyboard.type(req.body.text, { delay: req.body.delay || 0 })
     return { ok: true }
   })
+
+  // ── Tab management ────────────────────────────────────────────────────
+
+  app.get('/sessions/:id/tabs', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const pages = s.context.pages()
+    const tabs = await Promise.all(pages.map(async (p, i) => ({
+      index: i,
+      url: p.url(),
+      title: await p.title().catch(() => ''),
+      active: p === s.page,
+    })))
+    return { tabs, count: tabs.length }
+  })
+
+  app.post('/sessions/:id/new-tab', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const url = req.body?.url || 'about:blank'
+    const newPage = await s.context.newPage()
+    if (url !== 'about:blank') {
+      await newPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {})
+    }
+    s.page = newPage
+    const index = s.context.pages().indexOf(newPage)
+    return { index, url: newPage.url(), title: await newPage.title().catch(() => '') }
+  })
+
+  app.post('/sessions/:id/switch-tab', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const { index } = req.body || {}
+    const pages = s.context.pages()
+    if (index === undefined || index < 0 || index >= pages.length) {
+      return reply.code(400).send({ error: `Invalid tab index ${index}` })
+    }
+    s.page = pages[index]
+    await s.page.bringToFront().catch(() => {})
+    return { index, url: s.page.url(), title: await s.page.title().catch(() => '') }
+  })
+
+  app.post('/sessions/:id/close-tab', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const pages = s.context.pages()
+    if (pages.length <= 1) return reply.code(400).send({ error: 'Cannot close the last tab' })
+    const { index } = req.body || {}
+    const idx = (index !== undefined) ? index : pages.indexOf(s.page)
+    if (idx < 0 || idx >= pages.length) return reply.code(400).send({ error: `Invalid tab index ${idx}` })
+    const closing = pages[idx]
+    const isCurrent = closing === s.page
+    await closing.close()
+    if (isCurrent) {
+      const remaining = s.context.pages()
+      s.page = remaining[Math.max(0, idx - 1)] || remaining[0]
+    }
+    const currentIdx = s.context.pages().indexOf(s.page)
+    return { closed: idx, current: currentIdx, url: s.page.url() }
+  })
+
+  // ── File upload ───────────────────────────────────────────────────────
+
+  app.post('/sessions/:id/upload', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const { selector, files } = req.body || {}
+    if (!selector || !Array.isArray(files) || !files.length) {
+      return reply.code(400).send({ error: 'selector and files[] required' })
+    }
+    const fileList = files.map(f => ({
+      name: f.name,
+      mimeType: f.mimeType || 'application/octet-stream',
+      buffer: Buffer.from(f.content, 'base64'),
+    }))
+    await s.page.setInputFiles(selector, fileList)
+    return { ok: true, uploaded: files.map(f => f.name) }
+  })
+
+  // ── File download ─────────────────────────────────────────────────────
+
+  app.post('/sessions/:id/download', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const { selector, timeout = 30000 } = req.body || {}
+    try {
+      const downloadPromise = s.page.waitForEvent('download', { timeout })
+      if (selector) await s.page.click(selector).catch(() => {})
+      const dl = await downloadPromise
+      const stream = await dl.createReadStream()
+      const chunks = []
+      await new Promise((res, rej) => {
+        stream.on('data', c => chunks.push(c))
+        stream.on('end', res)
+        stream.on('error', rej)
+      })
+      const buf = Buffer.concat(chunks)
+      return {
+        ok: true,
+        filename: dl.suggestedFilename(),
+        content: buf.toString('base64'),
+        size: buf.length,
+      }
+    } catch (e) {
+      return reply.code(500).send({ error: e.message })
+    }
+  })
 }

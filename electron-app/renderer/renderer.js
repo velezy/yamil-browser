@@ -75,9 +75,22 @@ document.getElementById('btn-refresh').addEventListener('click', () => {
 
 // ── Sidebar toggle ────────────────────────────────────────────────────
 
-document.getElementById('btn-sidebar-toggle').addEventListener('click', () => {
-  document.getElementById('sidebar').classList.toggle('collapsed')
-})
+const sidebar       = document.getElementById('sidebar')
+const btnToggle     = document.getElementById('btn-sidebar-toggle')
+const btnSidebarOpen = document.getElementById('btn-sidebar-open')
+
+function setSidebarOpen(open) {
+  if (open) {
+    sidebar.classList.remove('collapsed')
+    btnSidebarOpen.style.display = 'none'
+  } else {
+    sidebar.classList.add('collapsed')
+    btnSidebarOpen.style.display = ''
+  }
+}
+
+btnToggle.addEventListener('click', () => setSidebarOpen(false))
+btnSidebarOpen.addEventListener('click', () => setSidebarOpen(true))
 
 // ── AI Chat ───────────────────────────────────────────────────────────
 
