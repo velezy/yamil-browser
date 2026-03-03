@@ -13,6 +13,56 @@ const startUrl   = window.YAMIL_CONFIG?.START_URL   || 'https://yamil-ai.com'
 
 if (window.YAMIL_CONFIG?.APP_TITLE) document.title = window.YAMIL_CONFIG.APP_TITLE
 
+// ── Persistence keys ──────────────────────────────────────────────────
+
+const KEY_LAST_URL     = 'yamil_last_url'
+const KEY_SIDEBAR_OPEN = 'yamil_sidebar_open'
+const KEY_CHAT_HISTORY = 'yamil_chat_history'
+const MAX_STORED_MSGS  = 200
+
+// ── Chat history persistence ──────────────────────────────────────────
+
+function saveChatHistory () {
+  try {
+    const msgs = [...chatLog.children].map(el => ({
+      role: el.dataset.role,
+      text: el.textContent,
+    }))
+    localStorage.setItem(KEY_CHAT_HISTORY, JSON.stringify(msgs.slice(-MAX_STORED_MSGS)))
+  } catch (_) {}
+}
+
+function loadChatHistory () {
+  try {
+    const stored = JSON.parse(localStorage.getItem(KEY_CHAT_HISTORY) || '[]')
+    if (stored.length) {
+      stored.forEach(m => _appendMsg(m.role, m.text))
+      chatLog.scrollTop = chatLog.scrollHeight
+    }
+  } catch (_) {}
+}
+
+// ── Message helpers ───────────────────────────────────────────────────
+
+function _appendMsg (role, text) {
+  const div = document.createElement('div')
+  div.className = `chat-msg ${role}`
+  div.dataset.role = role
+  div.textContent = text
+  chatLog.appendChild(div)
+}
+
+function addMsg (role, text) {
+  _appendMsg(role, text)
+  chatLog.scrollTop = chatLog.scrollHeight
+  saveChatHistory()
+}
+
+const addSystemMsg = (t) => addMsg('system', t)
+const addUserMsg   = (t) => addMsg('user', t)
+const addAiMsg     = (t) => addMsg('ai', t)
+const addErrorMsg  = (t) => addMsg('error', t)
+
 // ── Webview navigation events ─────────────────────────────────────────
 
 webview.addEventListener('did-start-loading', () => {
@@ -27,10 +77,13 @@ webview.addEventListener('did-stop-loading', () => {
 
 webview.addEventListener('did-navigate', (e) => {
   updateBar(e.url)
+  // Persist last visited URL so next launch resumes here
+  try { localStorage.setItem(KEY_LAST_URL, e.url) } catch (_) {}
 })
 
 webview.addEventListener('did-navigate-in-page', (e) => {
   updateBar(e.url)
+  try { localStorage.setItem(KEY_LAST_URL, e.url) } catch (_) {}
 })
 
 webview.addEventListener('page-title-updated', (e) => {
@@ -75,11 +128,11 @@ document.getElementById('btn-refresh').addEventListener('click', () => {
 
 // ── Sidebar toggle ────────────────────────────────────────────────────
 
-const sidebar       = document.getElementById('sidebar')
-const btnToggle     = document.getElementById('btn-sidebar-toggle')
+const sidebar        = document.getElementById('sidebar')
+const btnToggle      = document.getElementById('btn-sidebar-toggle')
 const btnSidebarOpen = document.getElementById('btn-sidebar-open')
 
-function setSidebarOpen(open) {
+function setSidebarOpen (open) {
   if (open) {
     sidebar.classList.remove('collapsed')
     btnSidebarOpen.style.display = 'none'
@@ -87,25 +140,14 @@ function setSidebarOpen(open) {
     sidebar.classList.add('collapsed')
     btnSidebarOpen.style.display = ''
   }
+  // Persist sidebar state
+  try { localStorage.setItem(KEY_SIDEBAR_OPEN, open ? '1' : '0') } catch (_) {}
 }
 
-btnToggle.addEventListener('click', () => setSidebarOpen(false))
+btnToggle.addEventListener('click',      () => setSidebarOpen(false))
 btnSidebarOpen.addEventListener('click', () => setSidebarOpen(true))
 
 // ── AI Chat ───────────────────────────────────────────────────────────
-
-function addMsg (role, text) {
-  const div = document.createElement('div')
-  div.className = `chat-msg ${role}`
-  div.textContent = text
-  chatLog.appendChild(div)
-  chatLog.scrollTop = chatLog.scrollHeight
-}
-
-const addSystemMsg = (t) => addMsg('system', t)
-const addUserMsg   = (t) => addMsg('user', t)
-const addAiMsg     = (t) => addMsg('ai', t)
-const addErrorMsg  = (t) => addMsg('error', t)
 
 // Resolve a plain name like "twilio" or "google" to a URL
 function resolveUrl (input) {
@@ -187,8 +229,18 @@ chatInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() }
 })
 
-// ── Init ──────────────────────────────────────────────────────────────
+// ── Init — restore persisted state ───────────────────────────────────
 
-addrBar.value = startUrl
-webview.src = startUrl
-addSystemMsg('YAMIL Browser ready — ' + startUrl)
+// 1. Restore chat history
+loadChatHistory()
+
+// 2. Restore last visited URL (fall back to configured startUrl)
+const lastUrl = localStorage.getItem(KEY_LAST_URL) || startUrl
+addrBar.value = lastUrl
+webview.src = lastUrl
+
+// 3. Restore sidebar open/closed state (default: open)
+const sidebarWasOpen = localStorage.getItem(KEY_SIDEBAR_OPEN) !== '0'
+setSidebarOpen(sidebarWasOpen)
+
+addSystemMsg('YAMIL Browser ready — ' + lastUrl)

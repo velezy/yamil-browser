@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require('electron')
 const path = require('path')
 const http  = require('http')
+const fs    = require('fs')
 
 const APP_TITLE   = process.env.APP_TITLE || 'YAMIL Browser'
 const CTRL_PORT   = parseInt(process.env.CTRL_PORT || '9300', 10)
@@ -227,12 +228,39 @@ function readBody (req, cb) {
   })
 }
 
+// ── Window state persistence ──────────────────────────────────────────
+
+function windowStatePath () {
+  return path.join(app.getPath('userData'), 'window-state.json')
+}
+
+function loadWindowState () {
+  try {
+    return JSON.parse(fs.readFileSync(windowStatePath(), 'utf8'))
+  } catch (_) {
+    return { width: 1440, height: 900 }
+  }
+}
+
+function saveWindowState () {
+  if (!mainWindow || mainWindow.isMinimized() || mainWindow.isMaximized()) return
+  try {
+    const [x, y]         = mainWindow.getPosition()
+    const [width, height] = mainWindow.getSize()
+    fs.writeFileSync(windowStatePath(), JSON.stringify({ x, y, width, height }))
+  } catch (_) {}
+}
+
 // ── Window ────────────────────────────────────────────────────────────
 
 function createWindow () {
+  const state = loadWindowState()
+
   mainWindow = new BrowserWindow({
-    width:  1440,
-    height: 900,
+    width:  state.width  || 1440,
+    height: state.height || 900,
+    x: state.x,
+    y: state.y,
     minWidth:  900,
     minHeight: 600,
     backgroundColor: '#0f172a',
@@ -250,8 +278,13 @@ function createWindow () {
   mainWindow.loadFile('renderer/index.html')
   mainWindow.setTitle(APP_TITLE)
 
+  // Save window bounds on resize and move
+  mainWindow.on('resize', saveWindowState)
+  mainWindow.on('move',   saveWindowState)
+
   // Minimize to tray instead of quitting when tray is active
   mainWindow.on('close', (e) => {
+    saveWindowState()
     if (tray) {
       e.preventDefault()
       mainWindow.hide()

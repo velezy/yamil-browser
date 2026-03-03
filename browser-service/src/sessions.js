@@ -1,5 +1,7 @@
 import { chromium } from 'playwright'
 import { randomUUID } from 'crypto'
+import { mkdirSync } from 'fs'
+import { join } from 'path'
 import { STEALTH_SCRIPT, LAUNCH_ARGS, USER_AGENT } from './stealth.js'
 
 const logger = { info: (...a) => console.log('[sessions]', ...a) }
@@ -25,6 +27,11 @@ const SESSION_MAX_AGE_MS  = parseInt(process.env.SESSION_MAX_AGE_MS  || '1800000
 // Legacy alias
 const SESSION_TIMEOUT_MS  = parseInt(process.env.SESSION_TIMEOUT_MS  || String(SESSION_IDLE_MS))
 
+// Root directory for persistent browser profiles.
+// Each named profile gets its own subdirectory so cookies/localStorage/logins
+// survive session expiry and service restarts — just like a real browser profile.
+const PROFILES_DIR = process.env.PROFILES_DIR || join(process.cwd(), 'data', 'profiles')
+
 // event → method name for CDP domains we want to enable
 const CDP_DOMAINS = ['Network', 'Runtime', 'Page', 'DOM']
 
@@ -45,22 +52,56 @@ const CDP_EVENTS = [
 const sessions = new Map()
 
 /**
- * Create a new isolated browser session.
- * Each caller (YAMIL, DriveSentinel, Memobytes) gets their own
- * browser context — cookies, storage, and sessions never cross.
+ * Create a new browser session.
+ *
+ * When opts.profile is set (or defaults to "default"), Playwright uses a
+ * persistent user-data directory so cookies, localStorage, IndexedDB, and
+ * browser login state are preserved across session expiry and service restarts.
+ *
+ * Pass opts.profile = null to get a fully ephemeral (incognito) session.
+ *
+ * Each named profile is shared across sessions that request it — this mirrors
+ * how a real user's Chrome profile works: one set of stored credentials used
+ * across many windows/tabs.
  */
 export async function createSession(opts = {}) {
   const id = randomUUID()
 
-  const browser = await chromium.launch({
-    headless: opts.headless !== false,
-    args: LAUNCH_ARGS,
-  })
+  // Resolve profile: "default" unless caller passes a different name or null
+  const profileName = opts.profile === null ? null : (opts.profile || 'default')
 
-  const context = await browser.newContext({
-    userAgent: USER_AGENT,
-    viewport: { width: 1920, height: 1080 },
-  })
+  let context
+
+  if (profileName) {
+    // ── Persistent profile ─────────────────────────────────────────────
+    // launchPersistentContext combines launch + newContext into one call and
+    // writes all browser state (cookies, storage, cache) to userDataDir on disk.
+    const userDataDir = join(PROFILES_DIR, profileName)
+    mkdirSync(userDataDir, { recursive: true })
+    logger.info(`Session ${id} using persistent profile "${profileName}" at ${userDataDir}`)
+
+    context = await chromium.launchPersistentContext(userDataDir, {
+      headless: opts.headless !== false,
+      args: LAUNCH_ARGS,
+      userAgent: USER_AGENT,
+      viewport: { width: 1920, height: 1080 },
+    })
+  } else {
+    // ── Ephemeral (incognito) session ──────────────────────────────────
+    // Use the old launch + newContext path when the caller explicitly opts out
+    // of persistence (opts.profile = null).
+    logger.info(`Session ${id} using ephemeral (incognito) context`)
+    const browser = await chromium.launch({
+      headless: opts.headless !== false,
+      args: LAUNCH_ARGS,
+    })
+    context = await browser.newContext({
+      userAgent: USER_AGENT,
+      viewport: { width: 1920, height: 1080 },
+    })
+    // Attach browser ref so closeSession can call browser.close()
+    context._browser = browser
+  }
 
   // Inject stealth + HUD on every page/navigation
   await context.addInitScript(STEALTH_SCRIPT)
@@ -79,7 +120,7 @@ export async function createSession(opts = {}) {
   /** @type {Session} */
   const session = {
     id,
-    browser,
+    profile: profileName,
     context,
     page,
     cdp,
@@ -99,13 +140,15 @@ export async function createSession(opts = {}) {
     )
   }
 
-  // Expiry timer — closes session on idle or absolute max age
+  // Expiry timer — closes session on idle or absolute max age.
+  // For persistent profiles this only closes the Playwright context (the
+  // browser process), not the on-disk profile data — that persists.
   session._timer = setInterval(() => {
     const now = Date.now()
     const idle    = now - session.lastUsedAt > SESSION_IDLE_MS
     const tooOld  = now - session.createdAt  > SESSION_MAX_AGE_MS
     if (idle || tooOld) {
-      logger.info(`[sessions] expiring ${id} — idle=${idle} tooOld=${tooOld}`)
+      logger.info(`[sessions] expiring ${id} (profile="${profileName}") — idle=${idle} tooOld=${tooOld}`)
       closeSession(id).catch(() => {})
     }
   }, 60_000)
@@ -120,6 +163,7 @@ export function getSession(id) {
 export function listSessions() {
   return [...sessions.values()].map((s) => ({
     id: s.id,
+    profile: s.profile || null,
     url: s.page.url(),
     createdAt: s.createdAt,
     lastUsedAt: s.lastUsedAt,
@@ -136,7 +180,13 @@ export async function closeSession(id) {
   for (const ws of [...s.eventSubs, ...s.screencastSubs]) {
     try { ws.close() } catch (_) {}
   }
-  try { await s.browser.close() } catch (_) {}
+  // For persistent contexts, close() flushes state to disk then shuts the
+  // browser process — the profile directory is preserved for next time.
+  // For ephemeral contexts, also close the underlying browser.
+  try { await s.context.close() } catch (_) {}
+  if (s.context._browser) {
+    try { await s.context._browser.close() } catch (_) {}
+  }
 }
 
 export function touch(session) {
