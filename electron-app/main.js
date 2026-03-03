@@ -150,6 +150,61 @@ function startControlServer () {
       return
     }
 
+    // ── GET /window-screenshot ────────────────────────────────────
+    // Capture the full Electron window (sidebar + webview) as PNG.
+    if (req.method === 'GET' && url.pathname === '/window-screenshot') {
+      if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+      mainWindow.capturePage().then(img => {
+        const buf = img.toPNG()
+        res.setHeader('Content-Type', 'image/png')
+        res.writeHead(200)
+        res.end(buf)
+      }).catch(e => json(res, { error: e.message }, 500))
+      return
+    }
+
+    // ── POST /renderer-eval ────────────────────────────────────────
+    // Run JS in the Electron renderer context (sidebar, address bar, etc.)
+    // Unlike /eval which runs inside the webview, this runs in the shell UI.
+    if (req.method === 'POST' && url.pathname === '/renderer-eval') {
+      readBody(req, body => {
+        const { script } = body
+        if (!script) { json(res, { error: 'script required' }, 400); return }
+        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+        mainWindow.webContents.executeJavaScript(script)
+          .then(result => json(res, { result }))
+          .catch(e => json(res, { error: e.message }, 500))
+      })
+      return
+    }
+
+    // ── POST /sidebar-chat ─────────────────────────────────────────
+    // Send a message through the Electron AI sidebar chat.
+    if (req.method === 'POST' && url.pathname === '/sidebar-chat') {
+      readBody(req, body => {
+        const { message } = body
+        if (!message) { json(res, { error: 'message required' }, 400); return }
+        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+        focusWindow()
+        mainWindow.webContents.executeJavaScript(`
+          (function() {
+            const ta = document.getElementById('chat-input')
+            if (!ta) return { error: 'no chat input found' }
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set
+            nativeInputValueSetter.call(ta, ${JSON.stringify(message)})
+            ta.dispatchEvent(new Event('input', { bubbles: true }))
+            ta.dispatchEvent(new Event('change', { bubbles: true }))
+            const btn = document.getElementById('chat-send')
+            if (btn) { btn.click(); return { sent: true } }
+            ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }))
+            return { sent: true, via: 'enter' }
+          })()
+        `).then(result => json(res, result))
+          .catch(e => json(res, { error: e.message }, 500))
+      })
+      return
+    }
+
     res.writeHead(404); res.end('Not found')
   })
 

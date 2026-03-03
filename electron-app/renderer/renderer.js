@@ -128,7 +128,7 @@ async function sendChat () {
   }
 
   // ── Intercept navigation commands and move the webview immediately ──
-  const navMatch = text.match(/^(?:go\s+to|navigate\s+to|open|visit)\s+(.+)/i)
+  const navMatch = text.match(/^(?:go\s+to|navigate\s+to|open|visit)\s+([^\s,]+)/i)
   if (navMatch) {
     const url = resolveUrl(navMatch[1])
     navigateWebview(url)
