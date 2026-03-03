@@ -129,13 +129,16 @@ class YamilBrowserClient:
     # ── screenshot ────────────────────────────────────────────────────────────
 
     async def screenshot(self, full_page: bool = False) -> str:
-        """Return a base64-encoded PNG screenshot of the current viewport."""
-        data = await self._post("/screenshot", {"fullPage": full_page})
-        return data.get("screenshot", "")
+        """Return a base64-encoded JPEG screenshot of the current viewport."""
+        resp = await self._client.get(self._url("/screenshot"))
+        resp.raise_for_status()
+        return base64.b64encode(resp.content).decode()
 
     async def screenshot_bytes(self, full_page: bool = False) -> bytes:
-        """Return raw PNG bytes."""
-        return base64.b64decode(await self.screenshot(full_page))
+        """Return raw JPEG bytes."""
+        resp = await self._client.get(self._url("/screenshot"))
+        resp.raise_for_status()
+        return resp.content
 
     # ── interactions ──────────────────────────────────────────────────────────
 
