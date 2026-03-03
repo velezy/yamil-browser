@@ -114,7 +114,7 @@ class YamilBrowserClient:
     async def content(self) -> str:
         """Return the full HTML source of the current page."""
         data = await self._get("/content")
-        return data.get("content", "")
+        return data.get("html", data.get("content", ""))
 
     async def evaluate(self, script: str) -> Any:
         """Evaluate *script* in the page context and return the result."""
