@@ -6,6 +6,7 @@ const APP_TITLE   = process.env.APP_TITLE || 'YAMIL Browser'
 const CTRL_PORT   = parseInt(process.env.CTRL_PORT || '9300', 10)
 const START_MINIMIZED = process.argv.includes('--minimized')
 
+
 let mainWindow
 let tray = null
 let webviewRef = null   // set via IPC from renderer once <webview> is ready
