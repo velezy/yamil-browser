@@ -155,17 +155,15 @@ webview#screen {
 }
 #btn-sidebar-toggle:hover { background: var(--bg3); }
 
-#btn-sidebar-open {
+#navbar #btn-sidebar-open {
   background: transparent;
-  border: 1px solid rgba(74,222,128,.35);
-  color: var(--text-muted);
-  cursor: pointer;
+  width: auto;
+  height: auto;
   font-size: 12px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  margin-right: 6px;
+  padding: 2px 5px;
+  color: var(--text-muted);
 }
-#btn-sidebar-open:hover { background: var(--bg3); color: #4ade80; }
+#navbar #btn-sidebar-open:hover { background: var(--bg3); color: var(--text); }
 
 #chat-log {
   flex: 1;
