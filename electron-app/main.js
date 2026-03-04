@@ -206,6 +206,146 @@ function startControlServer () {
       return
     }
 
+    // ── POST /dialog ─────────────────────────────────────────────
+    // Set up a dialog handler (alert/confirm/prompt) for the next dialog
+    if (req.method === 'POST' && url.pathname === '/dialog') {
+      readBody(req, body => {
+        const { action, promptText } = body // action: "accept" | "dismiss"
+        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+        mainWindow.webContents.executeJavaScript(`
+          (function() {
+            const wv = document.getElementById('screen')
+            if (!wv) return { error: 'no webview' }
+            // Inject dialog interceptor into webview
+            return wv.executeJavaScript(\`(function(){
+              window.__yamilDialogResult = null;
+              const origAlert = window.alert;
+              const origConfirm = window.confirm;
+              const origPrompt = window.prompt;
+              window.alert = function(msg) {
+                window.__yamilDialogResult = { type: 'alert', message: msg };
+                ${action === 'accept' ? '' : ''}
+                return undefined;
+              };
+              window.confirm = function(msg) {
+                window.__yamilDialogResult = { type: 'confirm', message: msg };
+                return ${action === 'accept' ? 'true' : 'false'};
+              };
+              window.prompt = function(msg, def) {
+                window.__yamilDialogResult = { type: 'prompt', message: msg, defaultValue: def };
+                return ${action === 'accept' ? JSON.stringify(promptText || '') : 'null'};
+              };
+              // Auto-restore after 30s
+              setTimeout(() => {
+                window.alert = origAlert;
+                window.confirm = origConfirm;
+                window.prompt = origPrompt;
+              }, 30000);
+              return { handler: 'set', action: ${JSON.stringify(action || 'accept')} };
+            })()\`)
+          })()
+        `).then(result => json(res, result))
+          .catch(e => json(res, { error: e.message }, 500))
+      })
+      return
+    }
+
+    // ── POST /screenshot-element ──────────────────────────────────
+    // Screenshot a specific element by CSS selector (returns PNG)
+    if (req.method === 'POST' && url.pathname === '/screenshot-element') {
+      readBody(req, body => {
+        const { selector } = body
+        if (!selector) { json(res, { error: 'selector required' }, 400); return }
+        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+        // Get element bounding rect, then capture page and crop
+        mainWindow.webContents.executeJavaScript(`
+          (function() {
+            const wv = document.getElementById('screen')
+            if (!wv) return Promise.resolve(null)
+            return wv.executeJavaScript(\`(function(){
+              const el = document.querySelector(${JSON.stringify(selector).replace(/\\/g, '\\\\').replace(/`/g, '\\`')});
+              if (!el) return null;
+              el.scrollIntoView({ block: 'center', behavior: 'instant' });
+              const r = el.getBoundingClientRect();
+              return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
+            })()\`).then(rect => {
+              if (!rect) return null;
+              return wv.capturePage({
+                x: Math.max(0, rect.x),
+                y: Math.max(0, rect.y),
+                width: Math.max(1, rect.width),
+                height: Math.max(1, rect.height)
+              }).then(img => img.toDataURL());
+            })
+          })()
+        `).then(dataUrl => {
+          if (!dataUrl) { json(res, { error: 'element not found or capture failed' }, 404); return }
+          const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '')
+          res.setHeader('Content-Type', 'image/png')
+          res.writeHead(200)
+          res.end(Buffer.from(base64, 'base64'))
+        }).catch(e => json(res, { error: e.message }, 500))
+      })
+      return
+    }
+
+    // ── POST /print-pdf ──────────────────────────────────────────
+    // Generate PDF of the current webview page
+    if (req.method === 'POST' && url.pathname === '/print-pdf') {
+      if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+      mainWindow.webContents.executeJavaScript(`
+        (function() {
+          const wv = document.getElementById('screen')
+          if (!wv || !wv.getWebContentsId) return Promise.resolve(null)
+          return wv.getWebContentsId()
+        })()
+      `).then(async wcId => {
+        if (!wcId) { json(res, { error: 'webview not ready' }, 503); return }
+        const { webContents } = require('electron')
+        const wc = webContents.fromId(wcId)
+        if (!wc) { json(res, { error: 'webcontents not found' }, 503); return }
+        const pdfBuf = await wc.printToPDF({
+          printBackground: true,
+          preferCSSPageSize: true,
+        })
+        res.setHeader('Content-Type', 'application/pdf')
+        res.writeHead(200)
+        res.end(pdfBuf)
+      }).catch(e => json(res, { error: e.message }, 500))
+      return
+    }
+
+    // ── POST /drag ────────────────────────────────────────────────
+    // Execute drag-and-drop between two selectors via event dispatch
+    if (req.method === 'POST' && url.pathname === '/drag') {
+      readBody(req, body => {
+        const { sourceSelector, targetSelector } = body
+        if (!sourceSelector || !targetSelector) { json(res, { error: 'sourceSelector and targetSelector required' }, 400); return }
+        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+        mainWindow.webContents.executeJavaScript(`
+          (function() {
+            const wv = document.getElementById('screen')
+            if (!wv) return Promise.resolve({ error: 'no webview' })
+            return wv.executeJavaScript(\`(function(){
+              const src = document.querySelector(${JSON.stringify(sourceSelector).replace(/\\/g, '\\\\').replace(/`/g, '\\`')});
+              const tgt = document.querySelector(${JSON.stringify(targetSelector).replace(/\\/g, '\\\\').replace(/`/g, '\\`')});
+              if (!src) return { error: 'source not found' };
+              if (!tgt) return { error: 'target not found' };
+              const dt = new DataTransfer();
+              src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+              tgt.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+              tgt.dispatchEvent(new DragEvent('dragover',  { bubbles: true, cancelable: true, dataTransfer: dt }));
+              tgt.dispatchEvent(new DragEvent('drop',      { bubbles: true, cancelable: true, dataTransfer: dt }));
+              src.dispatchEvent(new DragEvent('dragend',   { bubbles: true, cancelable: true, dataTransfer: dt }));
+              return { ok: true };
+            })()\`)
+          })()
+        `).then(result => json(res, result))
+          .catch(e => json(res, { error: e.message }, 500))
+      })
+      return
+    }
+
     res.writeHead(404); res.end('Not found')
   })
 
