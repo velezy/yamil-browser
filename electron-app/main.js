@@ -10,13 +10,8 @@ const START_MINIMIZED = process.argv.includes('--minimized')
 
 let mainWindow
 let tray = null
-let webviewRef = null   // set via IPC from renderer once <webview> is ready
 
 // ── Custom URL protocol: yamil-browser:// ─────────────────────────────
-// On Windows the default registration omits the app directory, so Electron
-// receives just the URL as argv[1] and crashes trying to require() it.
-// Explicitly pass __dirname so the registry entry becomes:
-//   electron.exe "<app-dir>" "%1"
 if (process.platform === 'win32') {
   app.setAsDefaultProtocolClient('yamil-browser', process.execPath, [__dirname])
 } else {
@@ -40,10 +35,43 @@ function focusWindow () {
   }
 }
 
+// ── Helper: run JS in the active tab's webview ────────────────────────
+// All endpoints that interact with the page go through this helper.
+// It asks the renderer for the active webview and executes code inside it.
+
+function execInActiveWebview (script) {
+  if (!mainWindow) return Promise.reject(new Error('no window'))
+  return mainWindow.webContents.executeJavaScript(
+    `(function(){
+      const wv = window._yamil && window._yamil.getActiveWebview()
+      if (!wv) return Promise.resolve({error:'no webview'})
+      return wv.executeJavaScript(${JSON.stringify(script)})
+    })()`
+  )
+}
+
+function captureActiveWebview () {
+  if (!mainWindow) return Promise.reject(new Error('no window'))
+  return mainWindow.webContents.executeJavaScript(
+    `(function(){
+      const wv = window._yamil && window._yamil.getActiveWebview()
+      if (!wv) return Promise.resolve(null)
+      return wv.capturePage().then(img => img.toDataURL())
+    })()`
+  )
+}
+
+function getActiveWebviewUrl () {
+  if (!mainWindow) return Promise.reject(new Error('no window'))
+  return mainWindow.webContents.executeJavaScript(
+    `(function(){
+      const wv = window._yamil && window._yamil.getActiveWebview()
+      return wv ? wv.getURL() : null
+    })()`
+  )
+}
+
 // ── HTTP control server on port 9300 ─────────────────────────────────
-// Lets the YAMIL web app (and Claude Code MCP) control the desktop app
-// without relying on protocol registration.
-// CORS headers allow requests from any origin (same machine only).
 
 function startControlServer () {
   const server = http.createServer((req, res) => {
@@ -70,9 +98,8 @@ function startControlServer () {
     // ── GET /url ──────────────────────────────────────────────────
     if (req.method === 'GET' && url.pathname === '/url') {
       if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-      mainWindow.webContents.executeJavaScript(
-        `(function(){ const wv = document.getElementById('screen'); return wv ? wv.getURL() : null })()`
-      ).then(u => json(res, { url: u }))
+      getActiveWebviewUrl()
+        .then(u => json(res, { url: u }))
         .catch(e => json(res, { error: e.message }, 500))
       return
     }
@@ -85,26 +112,22 @@ function startControlServer () {
         if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
         focusWindow()
         mainWindow.webContents.executeJavaScript(
-          `(function(){ const wv = document.getElementById('screen'); if(wv) wv.loadURL(${JSON.stringify(navUrl)}); return !!wv })()`
+          `(function(){
+            const wv = window._yamil && window._yamil.getActiveWebview()
+            if(wv) wv.loadURL(${JSON.stringify(navUrl)})
+            return !!wv
+          })()`
         ).then(ok => json(res, { ok }))
           .catch(e => json(res, { error: e.message }, 500))
       })
       return
     }
 
-    // ── GET /screenshot ────────────────────────────────────────────
+    // ── GET /screenshot ──────────────────────────────────────────
     if (req.method === 'GET' && url.pathname === '/screenshot') {
       if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-      // Capture the webview contents (NativeImage → PNG base64)
-      mainWindow.webContents.executeJavaScript(
-        `(function(){
-          const wv = document.getElementById('screen')
-          if (!wv) return Promise.resolve(null)
-          return wv.capturePage().then(img => img.toDataURL())
-        })()`
-      ).then(dataUrl => {
+      captureActiveWebview().then(dataUrl => {
         if (!dataUrl) { json(res, { error: 'webview not ready' }, 503); return }
-        // Strip "data:image/png;base64," prefix
         const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '')
         res.setHeader('Content-Type', 'image/png')
         res.writeHead(200)
@@ -116,19 +139,14 @@ function startControlServer () {
     // ── GET /dom ──────────────────────────────────────────────────
     if (req.method === 'GET' && url.pathname === '/dom') {
       if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-      mainWindow.webContents.executeJavaScript(
-        `(function(){
-          const wv = document.getElementById('screen')
-          if (!wv) return Promise.resolve(null)
-          return wv.executeJavaScript(\`({
-            url:      location.href,
-            title:    document.title,
-            text:     document.body.innerText.slice(0, 8000),
-            inputs:   Array.from(document.querySelectorAll('input,textarea,select')).slice(0,50).map(el=>({tag:el.tagName,type:el.type||null,name:el.name||null,placeholder:el.placeholder||null,id:el.id||null})),
-            buttons:  Array.from(document.querySelectorAll('button,[role=button],a')).slice(0,80).map(el=>({tag:el.tagName,text:(el.innerText||el.getAttribute('aria-label')||'').slice(0,80),href:el.href||null,id:el.id||null})),
-          })\`)
-        })()`
-      ).then(d => json(res, d || {}))
+      execInActiveWebview(`({
+        url:      location.href,
+        title:    document.title,
+        text:     document.body.innerText.slice(0, 8000),
+        inputs:   Array.from(document.querySelectorAll('input,textarea,select')).slice(0,50).map(el=>({tag:el.tagName,type:el.type||null,name:el.name||null,placeholder:el.placeholder||null,id:el.id||null})),
+        buttons:  Array.from(document.querySelectorAll('button,[role=button],a')).slice(0,80).map(el=>({tag:el.tagName,text:(el.innerText||el.getAttribute('aria-label')||'').slice(0,80),href:el.href||null,id:el.id||null})),
+      })`)
+        .then(d => json(res, d || {}))
         .catch(e => json(res, { error: e.message }, 500))
       return
     }
@@ -139,20 +157,14 @@ function startControlServer () {
         const { script } = body
         if (!script) { json(res, { error: 'script required' }, 400); return }
         if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-        mainWindow.webContents.executeJavaScript(
-          `(function(){
-            const wv = document.getElementById('screen')
-            if (!wv) return Promise.resolve({error:'no webview'})
-            return wv.executeJavaScript(${JSON.stringify(script)})
-          })()`
-        ).then(result => json(res, { result }))
+        execInActiveWebview(script)
+          .then(result => json(res, { result }))
           .catch(e => json(res, { error: e.message }, 500))
       })
       return
     }
 
     // ── GET /window-screenshot ────────────────────────────────────
-    // Capture the full Electron window (sidebar + webview) as PNG.
     if (req.method === 'GET' && url.pathname === '/window-screenshot') {
       if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
       mainWindow.capturePage().then(img => {
@@ -165,8 +177,6 @@ function startControlServer () {
     }
 
     // ── POST /renderer-eval ────────────────────────────────────────
-    // Run JS in the Electron renderer context (sidebar, address bar, etc.)
-    // Unlike /eval which runs inside the webview, this runs in the shell UI.
     if (req.method === 'POST' && url.pathname === '/renderer-eval') {
       readBody(req, body => {
         const { script } = body
@@ -179,8 +189,7 @@ function startControlServer () {
       return
     }
 
-    // ── POST /sidebar-chat ─────────────────────────────────────────
-    // Send a message through the Electron AI sidebar chat.
+    // ── POST /sidebar-chat ──────────────────────────────────────────
     if (req.method === 'POST' && url.pathname === '/sidebar-chat') {
       readBody(req, body => {
         const { message } = body
@@ -207,68 +216,57 @@ function startControlServer () {
     }
 
     // ── POST /dialog ─────────────────────────────────────────────
-    // Set up a dialog handler (alert/confirm/prompt) for the next dialog
     if (req.method === 'POST' && url.pathname === '/dialog') {
       readBody(req, body => {
-        const { action, promptText } = body // action: "accept" | "dismiss"
+        const { action, promptText } = body
         if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-        mainWindow.webContents.executeJavaScript(`
-          (function() {
-            const wv = document.getElementById('screen')
-            if (!wv) return { error: 'no webview' }
-            // Inject dialog interceptor into webview
-            return wv.executeJavaScript(\`(function(){
-              window.__yamilDialogResult = null;
-              const origAlert = window.alert;
-              const origConfirm = window.confirm;
-              const origPrompt = window.prompt;
-              window.alert = function(msg) {
-                window.__yamilDialogResult = { type: 'alert', message: msg };
-                ${action === 'accept' ? '' : ''}
-                return undefined;
-              };
-              window.confirm = function(msg) {
-                window.__yamilDialogResult = { type: 'confirm', message: msg };
-                return ${action === 'accept' ? 'true' : 'false'};
-              };
-              window.prompt = function(msg, def) {
-                window.__yamilDialogResult = { type: 'prompt', message: msg, defaultValue: def };
-                return ${action === 'accept' ? JSON.stringify(promptText || '') : 'null'};
-              };
-              // Auto-restore after 30s
-              setTimeout(() => {
-                window.alert = origAlert;
-                window.confirm = origConfirm;
-                window.prompt = origPrompt;
-              }, 30000);
-              return { handler: 'set', action: ${JSON.stringify(action || 'accept')} };
-            })()\`)
-          })()
-        `).then(result => json(res, result))
+        execInActiveWebview(`(function(){
+          window.__yamilDialogResult = null;
+          const origAlert = window.alert;
+          const origConfirm = window.confirm;
+          const origPrompt = window.prompt;
+          window.alert = function(msg) {
+            window.__yamilDialogResult = { type: 'alert', message: msg };
+            return undefined;
+          };
+          window.confirm = function(msg) {
+            window.__yamilDialogResult = { type: 'confirm', message: msg };
+            return ${action === 'accept' ? 'true' : 'false'};
+          };
+          window.prompt = function(msg, def) {
+            window.__yamilDialogResult = { type: 'prompt', message: msg, defaultValue: def };
+            return ${action === 'accept' ? JSON.stringify(promptText || '') : 'null'};
+          };
+          setTimeout(() => {
+            window.alert = origAlert;
+            window.confirm = origConfirm;
+            window.prompt = origPrompt;
+          }, 30000);
+          return { handler: 'set', action: ${JSON.stringify(action || 'accept')} };
+        })()`)
+          .then(result => json(res, result))
           .catch(e => json(res, { error: e.message }, 500))
       })
       return
     }
 
     // ── POST /screenshot-element ──────────────────────────────────
-    // Screenshot a specific element by CSS selector (returns PNG)
     if (req.method === 'POST' && url.pathname === '/screenshot-element') {
       readBody(req, body => {
         const { selector } = body
         if (!selector) { json(res, { error: 'selector required' }, 400); return }
         if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-        // Get element bounding rect, then capture page and crop
         mainWindow.webContents.executeJavaScript(`
           (function() {
-            const wv = document.getElementById('screen')
+            const wv = window._yamil && window._yamil.getActiveWebview()
             if (!wv) return Promise.resolve(null)
-            return wv.executeJavaScript(\`(function(){
-              const el = document.querySelector(${JSON.stringify(selector).replace(/\\/g, '\\\\').replace(/`/g, '\\`')});
+            return wv.executeJavaScript(${JSON.stringify(`(function(){
+              const el = document.querySelector(${JSON.stringify(selector)});
               if (!el) return null;
               el.scrollIntoView({ block: 'center', behavior: 'instant' });
               const r = el.getBoundingClientRect();
               return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
-            })()\`).then(rect => {
+            })()`)}).then(rect => {
               if (!rect) return null;
               return wv.capturePage({
                 x: Math.max(0, rect.x),
@@ -290,12 +288,11 @@ function startControlServer () {
     }
 
     // ── POST /print-pdf ──────────────────────────────────────────
-    // Generate PDF of the current webview page
     if (req.method === 'POST' && url.pathname === '/print-pdf') {
       if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
       mainWindow.webContents.executeJavaScript(`
         (function() {
-          const wv = document.getElementById('screen')
+          const wv = window._yamil && window._yamil.getActiveWebview()
           if (!wv || !wv.getWebContentsId) return Promise.resolve(null)
           return wv.getWebContentsId()
         })()
@@ -316,29 +313,130 @@ function startControlServer () {
     }
 
     // ── POST /drag ────────────────────────────────────────────────
-    // Execute drag-and-drop between two selectors via event dispatch
     if (req.method === 'POST' && url.pathname === '/drag') {
       readBody(req, body => {
         const { sourceSelector, targetSelector } = body
         if (!sourceSelector || !targetSelector) { json(res, { error: 'sourceSelector and targetSelector required' }, 400); return }
         if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+        execInActiveWebview(`(function(){
+          const src = document.querySelector(${JSON.stringify(sourceSelector)});
+          const tgt = document.querySelector(${JSON.stringify(targetSelector)});
+          if (!src) return { error: 'source not found' };
+          if (!tgt) return { error: 'target not found' };
+          const dt = new DataTransfer();
+          src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+          tgt.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+          tgt.dispatchEvent(new DragEvent('dragover',  { bubbles: true, cancelable: true, dataTransfer: dt }));
+          tgt.dispatchEvent(new DragEvent('drop',      { bubbles: true, cancelable: true, dataTransfer: dt }));
+          src.dispatchEvent(new DragEvent('dragend',   { bubbles: true, cancelable: true, dataTransfer: dt }));
+          return { ok: true };
+        })()`)
+          .then(result => json(res, result))
+          .catch(e => json(res, { error: e.message }, 500))
+      })
+      return
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ── TAB MANAGEMENT ENDPOINTS ─────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+
+    // ── GET /tabs ─────────────────────────────────────────────────
+    // List all open tabs with index, url, title, active status
+    if (req.method === 'GET' && url.pathname === '/tabs') {
+      if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+      mainWindow.webContents.executeJavaScript(`
+        (function() {
+          if (!window._yamil) return []
+          var activeId = null
+          for (var i = 0; i < window._yamil.tabs.length; i++) {
+            if (window._yamil.tabs[i].webview && window._yamil.tabs[i].webview.classList.contains('active')) {
+              activeId = window._yamil.tabs[i].id
+              break
+            }
+          }
+          return window._yamil.tabs.map(function(t, i) {
+            return { index: i, id: t.id, url: t.url || '', title: t.title || '', active: t.id === activeId }
+          })
+        })()
+      `).then(tabs => json(res, { tabs: tabs || [] }))
+        .catch(e => json(res, { error: e.message }, 500))
+      return
+    }
+
+    // ── POST /new-tab ─────────────────────────────────────────────
+    // Create a new tab, optionally with a URL
+    if (req.method === 'POST' && url.pathname === '/new-tab') {
+      readBody(req, body => {
+        const tabUrl = body.url || ''
+        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
         mainWindow.webContents.executeJavaScript(`
           (function() {
-            const wv = document.getElementById('screen')
-            if (!wv) return Promise.resolve({ error: 'no webview' })
-            return wv.executeJavaScript(\`(function(){
-              const src = document.querySelector(${JSON.stringify(sourceSelector).replace(/\\/g, '\\\\').replace(/`/g, '\\`')});
-              const tgt = document.querySelector(${JSON.stringify(targetSelector).replace(/\\/g, '\\\\').replace(/`/g, '\\`')});
-              if (!src) return { error: 'source not found' };
-              if (!tgt) return { error: 'target not found' };
-              const dt = new DataTransfer();
-              src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
-              tgt.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
-              tgt.dispatchEvent(new DragEvent('dragover',  { bubbles: true, cancelable: true, dataTransfer: dt }));
-              tgt.dispatchEvent(new DragEvent('drop',      { bubbles: true, cancelable: true, dataTransfer: dt }));
-              src.dispatchEvent(new DragEvent('dragend',   { bubbles: true, cancelable: true, dataTransfer: dt }));
-              return { ok: true };
-            })()\`)
+            if (!window._yamil) return { error: 'tabs not ready' }
+            const tab = window._yamil.createTab(${JSON.stringify(tabUrl)} || undefined, true)
+            return { ok: true, id: tab.id, url: tab.url }
+          })()
+        `).then(result => json(res, result))
+          .catch(e => json(res, { error: e.message }, 500))
+      })
+      return
+    }
+
+    // ── POST /switch-tab ──────────────────────────────────────────
+    // Switch to a tab by index or id
+    if (req.method === 'POST' && url.pathname === '/switch-tab') {
+      readBody(req, body => {
+        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+        const switchId = body.id != null ? body.id : null
+        const switchIdx = body.index != null ? body.index : null
+        mainWindow.webContents.executeJavaScript(`
+          (function() {
+            if (!window._yamil) return { error: 'tabs not ready' }
+            var tabs = window._yamil.tabs
+            var target = null
+            var wantId = ${switchId != null ? JSON.stringify(switchId) : 'null'}
+            var wantIdx = ${switchIdx != null ? JSON.stringify(switchIdx) : 'null'}
+            if (wantId != null) {
+              for (var i = 0; i < tabs.length; i++) { if (tabs[i].id === wantId) { target = tabs[i]; break } }
+            } else if (wantIdx != null) {
+              target = tabs[wantIdx] || null
+            }
+            if (!target) return { error: 'tab not found' }
+            window._yamil.switchTab(target.id)
+            return { ok: true, id: target.id, url: target.url, title: target.title }
+          })()
+        `).then(result => json(res, result))
+          .catch(e => json(res, { error: e.message }, 500))
+      })
+      return
+    }
+
+    // ── POST /close-tab ───────────────────────────────────────────
+    // Close a tab by index or id (defaults to active tab)
+    if (req.method === 'POST' && url.pathname === '/close-tab') {
+      readBody(req, body => {
+        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+        const closeId = body.id != null ? body.id : null
+        const closeIdx = body.index != null ? body.index : null
+        mainWindow.webContents.executeJavaScript(`
+          (function() {
+            if (!window._yamil) return { error: 'tabs not ready' }
+            var tabs = window._yamil.tabs
+            var target = null
+            var wantId = ${closeId != null ? JSON.stringify(closeId) : 'null'}
+            var wantIdx = ${closeIdx != null ? JSON.stringify(closeIdx) : 'null'}
+            if (wantId != null) {
+              for (var i = 0; i < tabs.length; i++) { if (tabs[i].id === wantId) { target = tabs[i]; break } }
+            } else if (wantIdx != null) {
+              target = tabs[wantIdx] || null
+            } else {
+              for (var i = 0; i < tabs.length; i++) {
+                if (tabs[i].webview && tabs[i].webview.classList.contains('active')) { target = tabs[i]; break }
+              }
+            }
+            if (!target) return { error: 'tab not found' }
+            window._yamil.closeTab(target.id)
+            return { ok: true, remaining: window._yamil.tabs.length }
           })()
         `).then(result => json(res, result))
           .catch(e => json(res, { error: e.message }, 500))
@@ -410,19 +508,17 @@ function createWindow () {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      webviewTag: true,   // required for <webview>
-      sandbox: false,     // webview requires sandbox off
+      webviewTag: true,
+      sandbox: false,
     },
   })
 
   mainWindow.loadFile('renderer/index.html')
   mainWindow.setTitle(APP_TITLE)
 
-  // Save window bounds on resize and move
   mainWindow.on('resize', saveWindowState)
   mainWindow.on('move',   saveWindowState)
 
-  // Minimize to tray instead of quitting when tray is active
   mainWindow.on('close', (e) => {
     saveWindowState()
     if (tray) {
@@ -441,7 +537,6 @@ app.on('open-url', (event, _url) => {
 })
 
 function createTray () {
-  // Use icon.png (32×32 works cross-platform); fall back to logo
   const iconFile = path.join(__dirname, 'assets', 'icon.png')
   const icon = nativeImage.createFromPath(iconFile)
   tray = new Tray(icon.isEmpty() ? nativeImage.createFromPath(path.join(__dirname, 'assets', 'yamil-logo.png')) : icon)
@@ -456,6 +551,23 @@ function createTray () {
   tray.on('click', focusWindow)
 }
 
+// Accept self-signed certificates for local/private network addresses
+app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+  try {
+    const u = new URL(url)
+    const host = u.hostname
+    const isLocal = host === 'localhost' || host === '127.0.0.1' ||
+      host.startsWith('192.168.') || host.startsWith('10.') ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    if (isLocal) {
+      event.preventDefault()
+      callback(true)
+      return
+    }
+  } catch (_) { /* ignore parse errors */ }
+  callback(false)
+})
+
 app.whenReady().then(() => {
   startControlServer()
   createWindow()
@@ -468,6 +580,5 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  // With tray active the window is hidden, not closed — so this only fires on real quit
   if (!tray && process.platform !== 'darwin') app.quit()
 })

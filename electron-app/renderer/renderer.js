@@ -1,12 +1,13 @@
-/* ── YAMIL Browser — Renderer (webview edition) ───────────────────── */
+/* ── YAMIL Browser — Renderer with Tabs ────────────────────────────── */
 
-const webview    = document.getElementById('screen')
 const addrBar    = document.getElementById('address-bar')
 const statusUrl  = document.getElementById('status-url')
 const statusLoad = document.getElementById('status-loading')
 const connDot    = document.getElementById('conn-dot')
 const chatLog    = document.getElementById('chat-log')
 const chatInput  = document.getElementById('chat-input')
+const tabsList   = document.getElementById('tabs-list')
+const container  = document.getElementById('webview-container')
 
 const aiEndpoint = window.YAMIL_CONFIG?.AI_ENDPOINT || null
 const startUrl   = window.YAMIL_CONFIG?.START_URL   || 'https://yamil-ai.com'
@@ -14,11 +15,244 @@ const startUrl   = window.YAMIL_CONFIG?.START_URL   || 'https://yamil-ai.com'
 if (window.YAMIL_CONFIG?.APP_TITLE) document.title = window.YAMIL_CONFIG.APP_TITLE
 
 // ── Persistence keys ──────────────────────────────────────────────────
-
 const KEY_LAST_URL     = 'yamil_last_url'
 const KEY_SIDEBAR_OPEN = 'yamil_sidebar_open'
 const KEY_CHAT_HISTORY = 'yamil_chat_history'
+const KEY_TABS         = 'yamil_tabs'
 const MAX_STORED_MSGS  = 200
+
+// ── Tab state ─────────────────────────────────────────────────────────
+let tabs = []          // { id, title, url, webview, tabEl }
+let activeTabId = null
+let tabIdCounter = 0
+
+// ── Tab management ────────────────────────────────────────────────────
+
+function createTab (url, activate = true) {
+  const id = ++tabIdCounter
+  url = url || startUrl
+
+  // Create webview element
+  const wv = document.createElement('webview')
+  wv.setAttribute('allowpopups', '')
+  wv.setAttribute('partition', 'persist:yamil')
+  wv.src = url
+  container.appendChild(wv)
+
+  // Create tab bar element
+  const tabEl = document.createElement('div')
+  tabEl.className = 'tab'
+  tabEl.dataset.tabId = id
+
+  const titleSpan = document.createElement('span')
+  titleSpan.className = 'tab-title'
+  titleSpan.textContent = 'New Tab'
+
+  const closeBtn = document.createElement('button')
+  closeBtn.className = 'tab-close'
+  closeBtn.textContent = '\u00d7'
+  closeBtn.title = 'Close tab'
+
+  tabEl.appendChild(titleSpan)
+  tabEl.appendChild(closeBtn)
+  tabsList.appendChild(tabEl)
+
+  // Tab object
+  const tab = { id, title: 'New Tab', url, webview: wv, tabEl, titleSpan }
+  tabs.push(tab)
+
+  // Click tab to switch
+  tabEl.addEventListener('click', (e) => {
+    if (e.target === closeBtn) return
+    switchTab(id)
+  })
+
+  // Close tab
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation()
+    closeTab(id)
+  })
+
+  // Wire webview events
+  wireWebviewEvents(tab)
+
+  if (activate) switchTab(id)
+  saveTabs()
+  return tab
+}
+
+function switchTab (id) {
+  const tab = tabs.find(t => t.id === id)
+  if (!tab) return
+
+  activeTabId = id
+
+  // Update webview visibility
+  tabs.forEach(t => {
+    t.webview.classList.toggle('active', t.id === id)
+    t.tabEl.classList.toggle('active', t.id === id)
+  })
+
+  // Update address bar and status
+  updateBar(tab.url)
+  statusUrl.textContent = tab.title || ''
+  saveTabs()
+}
+
+function closeTab (id) {
+  const idx = tabs.findIndex(t => t.id === id)
+  if (idx === -1) return
+
+  // Don't close the last tab — create a new one first
+  if (tabs.length === 1) {
+    createTab(startUrl, true)
+  }
+
+  const tab = tabs[idx]
+  tab.webview.remove()
+  tab.tabEl.remove()
+  tabs.splice(idx, 1)
+
+  // If we closed the active tab, switch to nearest
+  if (activeTabId === id) {
+    const newIdx = Math.min(idx, tabs.length - 1)
+    switchTab(tabs[newIdx].id)
+  }
+  saveTabs()
+}
+
+function getActiveWebview () {
+  const tab = tabs.find(t => t.id === activeTabId)
+  return tab ? tab.webview : null
+}
+
+// Expose for main process queries
+window._yamil = { tabs, getActiveWebview, createTab, switchTab, closeTab }
+
+// ── Wire webview events to a tab ──────────────────────────────────────
+
+function wireWebviewEvents (tab) {
+  const wv = tab.webview
+
+  wv.addEventListener('did-start-loading', () => {
+    if (tab.id === activeTabId) {
+      statusLoad.textContent = 'Loading...'
+      connDot.className = 'dot connecting'
+    }
+  })
+
+  wv.addEventListener('did-stop-loading', () => {
+    if (tab.id === activeTabId) {
+      statusLoad.textContent = ''
+      connDot.className = 'dot connected'
+    }
+  })
+
+  wv.addEventListener('did-navigate', (e) => {
+    tab.url = e.url
+    if (tab.id === activeTabId) updateBar(e.url)
+    saveTabs()
+  })
+
+  wv.addEventListener('did-navigate-in-page', (e) => {
+    tab.url = e.url
+    if (tab.id === activeTabId) updateBar(e.url)
+    saveTabs()
+  })
+
+  wv.addEventListener('page-title-updated', (e) => {
+    tab.title = e.title
+    tab.titleSpan.textContent = e.title
+    if (tab.id === activeTabId) statusUrl.textContent = e.title
+  })
+
+  wv.addEventListener('did-fail-load', (e) => {
+    if (e.errorCode !== -3 && tab.id === activeTabId) {
+      statusLoad.textContent = `Error: ${e.errorDescription}`
+      connDot.className = 'dot disconnected'
+    }
+  })
+
+  // Handle new-window requests (e.g. target="_blank") by opening in a new tab
+  wv.addEventListener('new-window', (e) => {
+    e.preventDefault()
+    createTab(e.url, true)
+  })
+}
+
+// ── Address bar ───────────────────────────────────────────────────────
+
+function updateBar (url) {
+  if (document.activeElement !== addrBar) addrBar.value = url || ''
+  document.getElementById('lock-icon').textContent = url?.startsWith('https') ? '🔒' : '🔓'
+}
+
+addrBar.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return
+  let url = addrBar.value.trim()
+  if (!url) return
+  if (!url.match(/^https?:\/\//)) url = 'https://' + url
+  const wv = getActiveWebview()
+  if (wv) wv.loadURL(url)
+})
+
+addrBar.addEventListener('focus', () => addrBar.select())
+
+document.getElementById('btn-back').addEventListener('click', () => {
+  const wv = getActiveWebview()
+  if (wv && wv.canGoBack()) wv.goBack()
+})
+
+document.getElementById('btn-forward').addEventListener('click', () => {
+  const wv = getActiveWebview()
+  if (wv && wv.canGoForward()) wv.goForward()
+})
+
+document.getElementById('btn-refresh').addEventListener('click', () => {
+  const wv = getActiveWebview()
+  if (wv) wv.reload()
+})
+
+// ── New tab button ────────────────────────────────────────────────────
+
+document.getElementById('btn-new-tab').addEventListener('click', () => {
+  createTab(startUrl, true)
+})
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────
+
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 't') { e.preventDefault(); createTab(startUrl, true) }
+  if (e.ctrlKey && e.key === 'w') { e.preventDefault(); if (activeTabId) closeTab(activeTabId) }
+  if (e.ctrlKey && e.key === 'Tab') {
+    e.preventDefault()
+    const idx = tabs.findIndex(t => t.id === activeTabId)
+    const next = e.shiftKey
+      ? (idx - 1 + tabs.length) % tabs.length
+      : (idx + 1) % tabs.length
+    switchTab(tabs[next].id)
+  }
+})
+
+// ── Sidebar toggle ────────────────────────────────────────────────────
+
+const sidebar        = document.getElementById('sidebar')
+const btnToggle      = document.getElementById('btn-sidebar-toggle')
+const btnSidebarOpen = document.getElementById('btn-sidebar-open')
+
+function setSidebarOpen (open) {
+  if (open) {
+    sidebar.classList.remove('collapsed')
+    btnSidebarOpen.style.display = 'none'
+  } else {
+    sidebar.classList.add('collapsed')
+    btnSidebarOpen.style.display = ''
+  }
+  try { localStorage.setItem(KEY_SIDEBAR_OPEN, open ? '1' : '0') } catch (_) {}
+}
+
+btnToggle.addEventListener('click',      () => setSidebarOpen(false))
+btnSidebarOpen.addEventListener('click', () => setSidebarOpen(true))
 
 // ── Chat history persistence ──────────────────────────────────────────
 
@@ -63,109 +297,21 @@ const addUserMsg   = (t) => addMsg('user', t)
 const addAiMsg     = (t) => addMsg('ai', t)
 const addErrorMsg  = (t) => addMsg('error', t)
 
-// ── Webview navigation events ─────────────────────────────────────────
-
-webview.addEventListener('did-start-loading', () => {
-  statusLoad.textContent = 'Loading...'
-  connDot.className = 'dot connecting'
-})
-
-webview.addEventListener('did-stop-loading', () => {
-  statusLoad.textContent = ''
-  connDot.className = 'dot connected'
-})
-
-webview.addEventListener('did-navigate', (e) => {
-  updateBar(e.url)
-  // Persist last visited URL so next launch resumes here
-  try { localStorage.setItem(KEY_LAST_URL, e.url) } catch (_) {}
-})
-
-webview.addEventListener('did-navigate-in-page', (e) => {
-  updateBar(e.url)
-  try { localStorage.setItem(KEY_LAST_URL, e.url) } catch (_) {}
-})
-
-webview.addEventListener('page-title-updated', (e) => {
-  statusUrl.textContent = e.title
-})
-
-webview.addEventListener('did-fail-load', (e) => {
-  if (e.errorCode !== -3) { // -3 = aborted (user navigated away), ignore
-    statusLoad.textContent = `Error: ${e.errorDescription}`
-    connDot.className = 'dot disconnected'
-  }
-})
-
-function updateBar (url) {
-  if (document.activeElement !== addrBar) addrBar.value = url || ''
-  document.getElementById('lock-icon').textContent = url?.startsWith('https') ? '🔒' : '🔓'
-}
-
-// ── Address bar ───────────────────────────────────────────────────────
-
-addrBar.addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter') return
-  let url = addrBar.value.trim()
-  if (!url) return
-  if (!url.match(/^https?:\/\//)) url = 'https://' + url
-  webview.loadURL(url)
-})
-
-addrBar.addEventListener('focus', () => addrBar.select())
-
-document.getElementById('btn-back').addEventListener('click', () => {
-  if (webview.canGoBack()) webview.goBack()
-})
-
-document.getElementById('btn-forward').addEventListener('click', () => {
-  if (webview.canGoForward()) webview.goForward()
-})
-
-document.getElementById('btn-refresh').addEventListener('click', () => {
-  webview.reload()
-})
-
-// ── Sidebar toggle ────────────────────────────────────────────────────
-
-const sidebar        = document.getElementById('sidebar')
-const btnToggle      = document.getElementById('btn-sidebar-toggle')
-const btnSidebarOpen = document.getElementById('btn-sidebar-open')
-
-function setSidebarOpen (open) {
-  if (open) {
-    sidebar.classList.remove('collapsed')
-    btnSidebarOpen.style.display = 'none'
-  } else {
-    sidebar.classList.add('collapsed')
-    btnSidebarOpen.style.display = ''
-  }
-  // Persist sidebar state
-  try { localStorage.setItem(KEY_SIDEBAR_OPEN, open ? '1' : '0') } catch (_) {}
-}
-
-btnToggle.addEventListener('click',      () => setSidebarOpen(false))
-btnSidebarOpen.addEventListener('click', () => setSidebarOpen(true))
-
 // ── AI Chat ───────────────────────────────────────────────────────────
 
-// Resolve a plain name like "twilio" or "google" to a URL
 function resolveUrl (input) {
   input = input.trim().replace(/[.!?]+$/, '')
   if (input.match(/^https?:\/\//i)) return input
-  // If it looks like a domain (contains a dot, no spaces) add https://
   if (!input.includes(' ') && input.includes('.')) return 'https://' + input
-  // Otherwise treat as a search/site name — go straight to the .com
   return 'https://' + input.toLowerCase().replace(/\s+/g, '') + '.com'
 }
 
-// Navigate the webview and update the address bar
 function navigateWebview (url) {
   addrBar.value = url
-  webview.loadURL(url)
+  const wv = getActiveWebview()
+  if (wv) wv.loadURL(url)
 }
 
-// Extract the first https URL mentioned in a string
 function extractUrl (text) {
   const m = text.match(/https?:\/\/[^\s)"'\]]+/i)
   return m ? m[0].replace(/[.,;!?]+$/, '') : null
@@ -182,24 +328,24 @@ async function sendChat () {
     return
   }
 
-  // ── Intercept navigation commands and move the webview immediately ──
   const navMatch = text.match(/^(?:go\s+to|navigate\s+to|open|visit)\s+([^\s,]+)/i)
   if (navMatch) {
     const url = resolveUrl(navMatch[1])
     navigateWebview(url)
-    addSystemMsg(`Navigating to ${url}…`)
+    addSystemMsg(`Navigating to ${url}...`)
   }
 
-  // Send current page context with every message
   let pageContext = {}
-  try {
-    const result = await webview.executeJavaScript(`({
-      url:   location.href,
-      title: document.title,
-      text:  document.body.innerText.slice(0, 4000),
-    })`)
-    pageContext = result
-  } catch (_) {}
+  const wv = getActiveWebview()
+  if (wv) {
+    try {
+      pageContext = await wv.executeJavaScript(`({
+        url:   location.href,
+        title: document.title,
+        text:  document.body.innerText.slice(0, 4000),
+      })`)
+    } catch (_) {}
+  }
 
   try {
     const res = await fetch(aiEndpoint, {
@@ -211,11 +357,9 @@ async function sendChat () {
     const reply = data.response || data.message || JSON.stringify(data)
     addAiMsg(reply)
 
-    // If AI navigated/clicked to a new page, sync the webview to follow
     if (data.navigatedUrl) {
       navigateWebview(data.navigatedUrl)
     } else if (navMatch) {
-      // Fallback: extract URL from reply text
       const url = extractUrl(reply)
       if (url) navigateWebview(url)
     }
@@ -229,18 +373,52 @@ chatInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() }
 })
 
-// ── Init — restore persisted state ───────────────────────────────────
+// ── Tab persistence ───────────────────────────────────────────────────
 
-// 1. Restore chat history
+function saveTabs () {
+  try {
+    const data = {
+      activeTabId,
+      tabs: tabs.map(t => ({ id: t.id, url: t.url, title: t.title })),
+    }
+    localStorage.setItem(KEY_TABS, JSON.stringify(data))
+  } catch (_) {}
+}
+
+function loadTabs () {
+  try {
+    const stored = JSON.parse(localStorage.getItem(KEY_TABS) || 'null')
+    if (stored && stored.tabs && stored.tabs.length > 0) {
+      // Restore counter to avoid ID conflicts
+      tabIdCounter = Math.max(...stored.tabs.map(t => t.id), 0)
+      // Create tabs without activating
+      stored.tabs.forEach(t => {
+        const tab = createTab(t.url, false)
+        // Override the auto-generated id to match stored id
+        // (not needed since createTab increments, but we want to match activeTabId)
+      })
+      // Activate the previously active tab (or first)
+      const targetId = stored.activeTabId
+      const match = tabs.find(t => t.id === targetId)
+      switchTab(match ? match.id : tabs[0].id)
+      return true
+    }
+  } catch (_) {}
+  return false
+}
+
+// ── Init ──────────────────────────────────────────────────────────────
+
 loadChatHistory()
 
-// 2. Restore last visited URL (fall back to configured startUrl)
-const lastUrl = localStorage.getItem(KEY_LAST_URL) || startUrl
-addrBar.value = lastUrl
-webview.src = lastUrl
+// Restore tabs or create initial tab
+if (!loadTabs()) {
+  const lastUrl = localStorage.getItem(KEY_LAST_URL) || startUrl
+  createTab(lastUrl, true)
+}
 
-// 3. Restore sidebar open/closed state (default: open)
+// Restore sidebar state
 const sidebarWasOpen = localStorage.getItem(KEY_SIDEBAR_OPEN) !== '0'
 setSidebarOpen(sidebarWasOpen)
 
-addSystemMsg('YAMIL Browser ready — ' + lastUrl)
+addSystemMsg('YAMIL Browser ready')

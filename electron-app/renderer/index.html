@@ -9,6 +9,12 @@
 <body>
   <div id="app">
 
+    <!-- ── Tab bar ───────────────────────────────────────────────── -->
+    <div id="tab-bar">
+      <div id="tabs-list"></div>
+      <button id="btn-new-tab" title="New Tab">&#43;</button>
+    </div>
+
     <!-- ── Navigation bar ─────────────────────────────────────── -->
     <div id="navbar">
       <div id="nav-logo" title="YAMIL Browser">
@@ -31,13 +37,8 @@
     <!-- ── Main area ──────────────────────────────────────────── -->
     <div id="main">
 
-      <!-- Native webview — real Chrome, no canvas, no JPEG -->
-      <webview
-        id="screen"
-        src="https://yamil-ai.com"
-        allowpopups
-        partition="persist:yamil"
-      ></webview>
+      <!-- Webviews are created dynamically by renderer.js -->
+      <div id="webview-container"></div>
 
       <!-- AI Sidebar -->
       <div id="sidebar">
