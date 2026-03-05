@@ -851,6 +851,44 @@ body.fullscreen #main {
 }
 .tq-item-actions button:hover { background: #475569; color: var(--text); }
 
+/* Task header with elapsed time */
+.tq-item-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 4px;
+}
+.tq-item-elapsed {
+  font-size: 9px; color: var(--text-muted); flex-shrink: 0;
+  background: var(--bg3); padding: 1px 4px; border-radius: 3px;
+}
+
+/* Live screenshot preview */
+.tq-item-preview {
+  margin: 3px 0; border-radius: 3px; overflow: hidden;
+  border: 1px solid var(--border);
+}
+.tq-preview-img {
+  width: 100%; height: 60px; object-fit: cover;
+  display: block; filter: brightness(.9);
+}
+
+/* Step plan with numbered items */
+.tq-item-plan {
+  margin: 3px 0; font-size: 10px;
+}
+.tq-plan-step {
+  display: flex; align-items: center; gap: 4px;
+  padding: 1px 0; color: var(--text-muted);
+}
+.tq-plan-step.active { color: var(--blue); font-weight: 600; }
+.tq-plan-step.done { color: var(--text-muted); opacity: .7; }
+.tq-plan-num {
+  width: 14px; height: 14px; font-size: 9px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; flex-shrink: 0;
+  background: var(--bg3); color: var(--text-muted);
+}
+.tq-plan-step.active .tq-plan-num { background: var(--blue); color: #fff; }
+.tq-plan-step.done .tq-plan-num { background: transparent; color: var(--green); }
+
 #btn-tasks-toggle {
   background: transparent; border: none; color: var(--text-muted);
   cursor: pointer; font-size: 14px; padding: 2px 4px; border-radius: 4px;

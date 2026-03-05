@@ -2257,11 +2257,46 @@ function renderTaskQueue () {
   show.forEach(task => {
     const el = document.createElement('div')
     el.className = 'tq-item ' + task.status
+
+    // Header row with goal + elapsed time
+    const elapsed = task.status === 'running' ? formatElapsed(Date.now() - task.createdAt) : ''
     el.innerHTML = `
-      <div class="tq-item-goal" title="${task.goal}">${task.goal}</div>
+      <div class="tq-item-header">
+        <div class="tq-item-goal" title="${task.goal}">${task.goal}</div>
+        ${elapsed ? `<span class="tq-item-elapsed">${elapsed}</span>` : ''}
+      </div>
       <div class="tq-item-status">${task.status === 'running' ? 'Running...' : task.status === 'queued' ? 'Queued' : task.status === 'done' ? 'Completed' : 'Failed'}</div>
       ${task.status === 'running' ? `<div class="tq-item-progress"><div class="tq-item-progress-fill" style="width:${task.progress}%"></div></div>` : ''}
     `
+
+    // Live screenshot preview for running tasks
+    if (task.status === 'running' && task.screenshot) {
+      const previewEl = document.createElement('div')
+      previewEl.className = 'tq-item-preview'
+      const img = document.createElement('img')
+      img.src = task.screenshot
+      img.className = 'tq-preview-img'
+      img.title = 'Live agent view'
+      previewEl.appendChild(img)
+      el.appendChild(previewEl)
+    }
+
+    // Step plan with numbered steps
+    if (task.plan && task.plan.length > 0) {
+      const planEl = document.createElement('div')
+      planEl.className = 'tq-item-plan'
+      task.plan.forEach((step, i) => {
+        const stepEl = document.createElement('div')
+        const isActive = i === task.currentPlanStep
+        const isDone = i < task.currentPlanStep
+        stepEl.className = 'tq-plan-step' + (isActive ? ' active' : '') + (isDone ? ' done' : '')
+        stepEl.innerHTML = `<span class="tq-plan-num">${isDone ? '✓' : i + 1}</span> ${step}`
+        planEl.appendChild(stepEl)
+      })
+      el.appendChild(planEl)
+    }
+
+    // Live execution steps (last 3)
     if (task.steps.length > 0) {
       const stepsEl = document.createElement('div')
       stepsEl.className = 'tq-item-steps'
@@ -2274,6 +2309,7 @@ function renderTaskQueue () {
       el.appendChild(stepsEl)
     }
 
+    // Result actions
     if (task.status === 'done' && task.result) {
       const resultBtn = document.createElement('div')
       resultBtn.className = 'tq-item-actions'
@@ -2284,6 +2320,7 @@ function renderTaskQueue () {
       el.appendChild(resultBtn)
     }
 
+    // Cancel action
     if (task.status === 'running' || task.status === 'queued') {
       const actionsEl = document.createElement('div')
       actionsEl.className = 'tq-item-actions'
@@ -2291,6 +2328,7 @@ function renderTaskQueue () {
       cancelBtn.textContent = 'Cancel'
       cancelBtn.addEventListener('click', () => {
         updateAgentTask(task.id, { status: 'failed', result: 'Cancelled by user' })
+        if (task._cancelToken) task._cancelToken.cancelled = true
       })
       actionsEl.appendChild(cancelBtn)
       el.appendChild(actionsEl)
@@ -2300,6 +2338,13 @@ function renderTaskQueue () {
   })
 }
 
+function formatElapsed (ms) {
+  if (ms < 1000) return '<1s'
+  const s = Math.floor(ms / 1000)
+  if (s < 60) return s + 's'
+  return Math.floor(s / 60) + 'm ' + (s % 60) + 's'
+}
+
 // Toggle task queue visibility
 document.getElementById('btn-tasks-toggle').addEventListener('click', () => {
   const visible = taskQueue.style.display !== 'none'
@@ -2307,31 +2352,100 @@ document.getElementById('btn-tasks-toggle').addEventListener('click', () => {
   if (!visible) renderTaskQueue()
 })
 
-// Run a task in the background
-async function runBackgroundTask (task) {
-  updateAgentTask(task.id, { status: 'running', progress: 10 })
-  updateAgentTask(task.id, { steps: ['Preparing request...'] })
-
+// Capture a screenshot for live task preview
+async function captureTaskScreenshot () {
   const tab = tabs.find(t => t.id === activeTabId)
-  let pageContext = {}
-  if (tab && tab.type === 'stealth' && tab.sessionId) {
+  if (!tab) return null
+  try {
+    if (tab.type === 'stealth' && tab.sessionId) {
+      const r = await fetch(`${BROWSER_SERVICE}/sessions/${tab.sessionId}/screenshot`)
+      if (r.ok) {
+        const buf = await r.arrayBuffer()
+        return 'data:image/png;base64,' + btoa(String.fromCharCode(...new Uint8Array(buf)))
+      }
+    } else if (tab.webview) {
+      const nativeImg = await tab.webview.capturePage()
+      if (nativeImg) return nativeImg.toDataURL()
+    }
+  } catch (_) {}
+  return null
+}
+
+// Run a task in the background with live progress view
+async function runBackgroundTask (task) {
+  const cancelToken = { cancelled: false }
+  task._cancelToken = cancelToken
+
+  updateAgentTask(task.id, { status: 'running', progress: 5 })
+  updateAgentTask(task.id, { steps: ['Analyzing task...'] })
+
+  // Generate a plan using AI (if available)
+  if (aiEndpoint) {
     try {
-      const r = await fetch(`${BROWSER_SERVICE}/sessions/${tab.sessionId}/evaluate`, {
+      const planRes = await fetch(aiEndpoint, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script: '({ url: location.href, title: document.title, text: document.body.innerText.slice(0, 4000) })' }),
+        body: JSON.stringify({
+          message: `Break this task into 3-5 concise action steps (one line each, no numbering). Just list the steps, nothing else.\n\nTask: ${task.goal}`,
+        }),
       })
-      const d = await r.json()
-      pageContext = d.result || {}
-    } catch (_) {}
-  } else if (tab && tab.webview) {
-    try {
-      pageContext = await tab.webview.executeJavaScript(`({
-        url: location.href, title: document.title, text: document.body.innerText.slice(0, 4000),
-      })`)
+      const planData = await planRes.json()
+      const planText = planData.response || planData.message || ''
+      const planSteps = planText.split('\n').map(l => l.replace(/^\d+[\.\)]\s*/, '').replace(/^[-•]\s*/, '').trim()).filter(l => l.length > 5).slice(0, 5)
+      if (planSteps.length > 0) {
+        updateAgentTask(task.id, { plan: planSteps, currentPlanStep: 0, progress: 10 })
+      }
     } catch (_) {}
   }
 
-  updateAgentTask(task.id, { steps: [...task.steps, 'Sending to AI...'], progress: 30 })
+  if (cancelToken.cancelled) return
+
+  updateAgentTask(task.id, { steps: ['Preparing request...'], progress: 15 })
+
+  // Start live screenshot polling
+  let screenshotInterval = null
+  screenshotInterval = setInterval(async () => {
+    if (cancelToken.cancelled || task.status !== 'running') {
+      clearInterval(screenshotInterval)
+      return
+    }
+    const screenshot = await captureTaskScreenshot()
+    if (screenshot) {
+      task.screenshot = screenshot
+      renderTaskQueue()
+    }
+  }, 3000) // Update every 3 seconds
+
+  // Capture initial screenshot
+  const initialScreenshot = await captureTaskScreenshot()
+  if (initialScreenshot) {
+    task.screenshot = initialScreenshot
+    renderTaskQueue()
+  }
+
+  const tab = tabs.find(t => t.id === activeTabId)
+  let pageContext = {}
+  if (!isAiBlockedForCurrentPage()) {
+    if (tab && tab.type === 'stealth' && tab.sessionId) {
+      try {
+        const r = await fetch(`${BROWSER_SERVICE}/sessions/${tab.sessionId}/evaluate`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ script: '({ url: location.href, title: document.title, text: document.body.innerText.slice(0, 4000) })' }),
+        })
+        const d = await r.json()
+        pageContext = d.result || {}
+      } catch (_) {}
+    } else if (tab && tab.webview) {
+      try {
+        pageContext = await tab.webview.executeJavaScript(`({
+          url: location.href, title: document.title, text: document.body.innerText.slice(0, 4000),
+        })`)
+      } catch (_) {}
+    }
+  }
+
+  if (cancelToken.cancelled) { clearInterval(screenshotInterval); return }
+
+  updateAgentTask(task.id, { steps: [...task.steps, 'Sending to AI...'], progress: 30, currentPlanStep: 1 })
 
   const memory = getAiMemory()
   const memCtx = memory.length > 0 ? '\n\n[User memories: ' + memory.map(m => m.fact).join('; ') + ']' : ''
@@ -2346,18 +2460,26 @@ async function runBackgroundTask (task) {
       }),
     })
 
-    updateAgentTask(task.id, { steps: [...task.steps, 'Processing response...'], progress: 70 })
+    if (cancelToken.cancelled) { clearInterval(screenshotInterval); return }
+
+    updateAgentTask(task.id, { steps: [...task.steps, 'Processing response...'], progress: 70, currentPlanStep: Math.max((task.plan || []).length - 2, 2) })
 
     const data = await res.json()
     const reply = data.response || data.message || JSON.stringify(data)
 
     if (data.navigatedUrl) navigateWebview(data.navigatedUrl)
 
+    clearInterval(screenshotInterval)
+    // Final screenshot
+    const finalScreenshot = await captureTaskScreenshot()
+
     updateAgentTask(task.id, {
       status: 'done',
       progress: 100,
       result: reply,
       steps: [...task.steps, 'Complete'],
+      currentPlanStep: (task.plan || []).length,
+      screenshot: finalScreenshot || task.screenshot,
     })
 
     // Desktop notification
@@ -2366,6 +2488,7 @@ async function runBackgroundTask (task) {
     }
     addSystemMsg(`Background task completed: "${task.goal}"`)
   } catch (e) {
+    clearInterval(screenshotInterval)
     updateAgentTask(task.id, {
       status: 'failed',
       result: e.message,
