@@ -261,6 +261,135 @@ export async function registerRoutes(app) {
     return { closed: idx, current: currentIdx, url: s.page.url() }
   })
 
+  // ── Double click ─────────────────────────────────────────────────
+  app.post('/sessions/:id/dblclick', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const { selector, text } = req.body
+    if (text) await s.page.getByText(text, { exact: false }).first().dblclick({ timeout: 10000 })
+    else await s.page.dblclick(selector, { timeout: 10000 })
+    return { ok: true }
+  })
+
+  // ── Right click ─────────────────────────────────────────────────
+  app.post('/sessions/:id/rightclick', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const { selector, text } = req.body
+    const opts = { button: 'right', timeout: 10000 }
+    if (text) await s.page.getByText(text, { exact: false }).first().click(opts)
+    else await s.page.click(selector, opts)
+    return { ok: true }
+  })
+
+  // ── Viewport resize ────────────────────────────────────────────
+  app.post('/sessions/:id/resize', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const { width, height } = req.body
+    await s.page.setViewportSize({ width: width || 1920, height: height || 1080 })
+    return { ok: true, width, height }
+  })
+
+  // ── Go forward ──────────────────────────────────────────────────
+  app.post('/sessions/:id/forward', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    await s.page.goForward()
+    return { url: s.page.url() }
+  })
+
+  // ── Network idle ────────────────────────────────────────────────
+  app.post('/sessions/:id/network-idle', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const timeout = req.body?.timeout || 15000
+    await s.page.waitForLoadState('networkidle', { timeout }).catch(() => {})
+    return { ok: true, url: s.page.url() }
+  })
+
+  // ── Element screenshot ──────────────────────────────────────────
+  app.post('/sessions/:id/screenshot-element', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const { selector } = req.body
+    if (!selector) return reply.code(400).send({ error: 'selector required' })
+    const el = s.page.locator(selector).first()
+    const buf = await el.screenshot({ type: 'jpeg', quality: 85, timeout: 10000 })
+    reply.header('content-type', 'image/jpeg')
+    return reply.send(buf)
+  })
+
+  // ── PDF generation ──────────────────────────────────────────────
+  app.post('/sessions/:id/pdf', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const buf = await s.page.pdf({ printBackground: true, preferCSSPageSize: true })
+    reply.header('content-type', 'application/pdf')
+    return reply.send(buf)
+  })
+
+  // ── Raw HTML ────────────────────────────────────────────────────
+  app.get('/sessions/:id/html', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const selector = req.query.selector
+    if (selector) {
+      const html = await s.page.locator(selector).first().innerHTML({ timeout: 10000 })
+      return { html }
+    }
+    return { html: await s.page.content() }
+  })
+
+  // ── Head HTML ───────────────────────────────────────────────────
+  app.get('/sessions/:id/head', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const html = await s.page.locator('head').innerHTML({ timeout: 10000 })
+    return { html }
+  })
+
+  // ── Text content ────────────────────────────────────────────────
+  app.get('/sessions/:id/text', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const selector = req.query.selector || 'body'
+    const text = await s.page.locator(selector).first().innerText({ timeout: 10000 })
+    return { text }
+  })
+
+  // ── Drag and drop ──────────────────────────────────────────────
+  app.post('/sessions/:id/drag', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const { sourceSelector, targetSelector } = req.body
+    if (!sourceSelector || !targetSelector) return reply.code(400).send({ error: 'sourceSelector and targetSelector required' })
+    await s.page.dragAndDrop(sourceSelector, targetSelector, { timeout: 10000 })
+    return { ok: true }
+  })
+
+  // ── Set files on input ─────────────────────────────────────────
+  app.post('/sessions/:id/set-files', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const { selector, filePaths } = req.body
+    if (!selector || !Array.isArray(filePaths)) return reply.code(400).send({ error: 'selector and filePaths[] required' })
+    await s.page.setInputFiles(selector, filePaths)
+    return { ok: true }
+  })
+
   // ── File upload ───────────────────────────────────────────────────────
 
   app.post('/sessions/:id/upload', async (req, reply) => {

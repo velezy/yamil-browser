@@ -12,7 +12,8 @@
     <!-- ── Tab bar ───────────────────────────────────────────────── -->
     <div id="tab-bar">
       <div id="tabs-list"></div>
-      <button id="btn-new-tab" title="New Tab">&#43;</button>
+      <button id="btn-new-tab" title="New Tab (Ctrl+T)">&#43;</button>
+      <button id="btn-new-stealth-tab" title="New Stealth Tab (Ctrl+Shift+N)">&#128737;&#65039;</button>
     </div>
 
     <!-- ── Navigation bar ─────────────────────────────────────── -->
@@ -27,15 +28,152 @@
       <div id="address-wrap">
         <span id="lock-icon">🔒</span>
         <input id="address-bar" type="text" placeholder="Enter URL..." autocomplete="off" spellcheck="false">
+        <div id="addr-autocomplete"></div>
       </div>
       <div id="nav-right">
+        <button id="btn-bookmark" title="Bookmark this page (Ctrl+D)">&#9734;</button>
         <button id="btn-sidebar-open" title="Open AI sidebar" style="display:none">&#x276F;</button>
         <span id="conn-dot" class="dot connected" title="Ready"></span>
       </div>
     </div>
 
+    <!-- ── Bookmark bar ───────────────────────────────────────── -->
+    <div id="bookmark-bar" style="display:none">
+      <div id="bookmark-chips"></div>
+      <button id="btn-bm-more" title="Manage Bookmarks (Ctrl+Shift+O)">&#8230;</button>
+    </div>
+
+    <!-- ── Bookmark Manager overlay ───────────────────────────── -->
+    <div id="bookmark-manager" style="display:none">
+      <div id="bm-dialog">
+        <div id="bm-header">
+          <span>Bookmarks</span>
+          <input id="bm-search" type="text" placeholder="Search bookmarks..." autocomplete="off" spellcheck="false">
+          <button id="bm-close">&times;</button>
+        </div>
+        <div id="bm-body"></div>
+      </div>
+    </div>
+
+    <!-- ── Find bar ─────────────────────────────────────────────── -->
+    <div id="find-bar" style="display:none">
+      <input id="find-input" type="text" placeholder="Find in page..." autocomplete="off" spellcheck="false">
+      <span id="find-count"></span>
+      <button id="find-prev" title="Previous (Shift+Enter)">&#8593;</button>
+      <button id="find-next" title="Next (Enter)">&#8595;</button>
+      <button id="find-close" title="Close (Escape)">&times;</button>
+    </div>
+
+    <!-- ── History panel overlay ────────────────────────────────── -->
+    <div id="history-panel" style="display:none">
+      <div id="hist-dialog">
+        <div id="hist-header">
+          <span>History</span>
+          <input id="hist-search" type="text" placeholder="Search history..." autocomplete="off" spellcheck="false">
+          <button id="hist-close">&times;</button>
+        </div>
+        <div id="hist-body"></div>
+      </div>
+    </div>
+
+    <!-- ── Settings panel overlay ─────────────────────────────── -->
+    <div id="settings-panel" style="display:none">
+      <div id="settings-dialog">
+        <div id="settings-header">
+          <span>Settings</span>
+          <button id="settings-close">&times;</button>
+        </div>
+        <div id="settings-body">
+          <div class="settings-section">
+            <div class="settings-section-title">General</div>
+            <label class="settings-row">
+              <span>Homepage</span>
+              <input id="set-homepage" type="text" placeholder="https://yamil-ai.com" spellcheck="false">
+            </label>
+            <label class="settings-row">
+              <span>Search Engine</span>
+              <select id="set-search-engine">
+                <option value="google">Google</option>
+                <option value="bing">Bing</option>
+                <option value="duckduckgo">DuckDuckGo</option>
+                <option value="brave">Brave Search</option>
+              </select>
+            </label>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-title">Appearance</div>
+            <label class="settings-row">
+              <span>Sidebar Position</span>
+              <select id="set-sidebar-pos">
+                <option value="right">Right</option>
+                <option value="left">Left</option>
+              </select>
+            </label>
+            <label class="settings-row">
+              <span>Show Bookmark Bar</span>
+              <input id="set-bmbar" type="checkbox">
+            </label>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-title">Privacy</div>
+            <label class="settings-row">
+              <span>Clear History</span>
+              <button id="set-clear-history" class="settings-btn">Clear All</button>
+            </label>
+            <label class="settings-row">
+              <span>Clear Chat History</span>
+              <button id="set-clear-chat" class="settings-btn">Clear All</button>
+            </label>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-title">AI</div>
+            <label class="settings-row">
+              <span>AI Endpoint</span>
+              <input id="set-ai-endpoint" type="text" placeholder="http://localhost:8015/..." spellcheck="false">
+            </label>
+            <label class="settings-row">
+              <span>AI Memory</span>
+              <button id="set-clear-memory" class="settings-btn">Clear Memory</button>
+            </label>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-title">Shortcuts</div>
+            <div class="settings-shortcuts">
+              <div><kbd>Ctrl+T</kbd> New Tab</div>
+              <div><kbd>Ctrl+Shift+N</kbd> New Stealth Tab</div>
+              <div><kbd>Ctrl+W</kbd> Close Tab</div>
+              <div><kbd>Ctrl+D</kbd> Toggle Bookmark</div>
+              <div><kbd>Ctrl+F</kbd> Find in Page</div>
+              <div><kbd>Ctrl+H</kbd> History</div>
+              <div><kbd>Ctrl+,</kbd> Settings</div>
+              <div><kbd>Ctrl+Shift+B</kbd> Toggle Bookmark Bar</div>
+              <div><kbd>Ctrl+Shift+O</kbd> Bookmark Manager</div>
+              <div><kbd>Ctrl++</kbd> Zoom In</div>
+              <div><kbd>Ctrl+-</kbd> Zoom Out</div>
+              <div><kbd>Ctrl+0</kbd> Reset Zoom</div>
+              <div><kbd>F11</kbd> Fullscreen</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Downloads panel overlay ─────────────────────────────── -->
+    <div id="downloads-panel" style="display:none">
+      <div id="dl-dialog">
+        <div id="dl-header">
+          <span>Downloads</span>
+          <button id="dl-close">&times;</button>
+        </div>
+        <div id="dl-body"></div>
+      </div>
+    </div>
+
     <!-- ── Main area ──────────────────────────────────────────── -->
     <div id="main">
+
+      <!-- Loading progress bar -->
+      <div id="progress-bar"></div>
 
       <!-- Webviews are created dynamically by renderer.js -->
       <div id="webview-container"></div>
@@ -47,7 +185,10 @@
             <img src="../assets/yamil-logo.png" alt="" class="sidebar-logo">
             YAMIL AI
           </span>
-          <button id="btn-sidebar-toggle" title="Collapse">&#x276E;</button>
+          <div id="sidebar-actions">
+            <button id="btn-summarize" title="Summarize page">&#x2211;</button>
+            <button id="btn-sidebar-toggle" title="Collapse">&#x276E;</button>
+          </div>
         </div>
 
         <div id="chat-log"></div>
@@ -64,6 +205,7 @@
     <div id="statusbar">
       <span id="status-url"></span>
       <span id="status-loading"></span>
+      <span id="status-zoom" style="display:none"></span>
     </div>
 
   </div>

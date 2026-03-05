@@ -27,6 +27,10 @@ const SESSION_MAX_AGE_MS  = parseInt(process.env.SESSION_MAX_AGE_MS  || '1800000
 // Legacy alias
 const SESSION_TIMEOUT_MS  = parseInt(process.env.SESSION_TIMEOUT_MS  || String(SESSION_IDLE_MS))
 
+// Electron-managed sessions get longer timeouts (1hr idle) and skip HUD overlay
+const ELECTRON_IDLE_MS    = 3600000  // 1 hour
+const ELECTRON_MAX_AGE_MS = 86400000 // 24 hours
+
 // Root directory for persistent browser profiles.
 // Each named profile gets its own subdirectory so cookies/localStorage/logins
 // survive session expiry and service restarts — just like a real browser profile.
@@ -66,46 +70,54 @@ const sessions = new Map()
  */
 export async function createSession(opts = {}) {
   const id = randomUUID()
+  const electronManaged = !!opts.electronManaged
 
   // Resolve profile: "default" unless caller passes a different name or null
   const profileName = opts.profile === null ? null : (opts.profile || 'default')
 
   let context
 
+  // Proxy support: pass { server, username, password } in opts.proxy
+  const proxyConfig = opts.proxy || null
+
   if (profileName) {
     // ── Persistent profile ─────────────────────────────────────────────
-    // launchPersistentContext combines launch + newContext into one call and
-    // writes all browser state (cookies, storage, cache) to userDataDir on disk.
     const userDataDir = join(PROFILES_DIR, profileName)
     mkdirSync(userDataDir, { recursive: true })
-    logger.info(`Session ${id} using persistent profile "${profileName}" at ${userDataDir}`)
+    logger.info(`Session ${id} using persistent profile "${profileName}" at ${userDataDir}${proxyConfig ? ' (proxy: ' + proxyConfig.server + ')' : ''}`)
 
-    context = await chromium.launchPersistentContext(userDataDir, {
+    const launchOpts = {
       headless: opts.headless !== false,
       args: LAUNCH_ARGS,
       userAgent: USER_AGENT,
       viewport: { width: 1920, height: 1080 },
-    })
+    }
+    if (proxyConfig) launchOpts.proxy = proxyConfig
+
+    context = await chromium.launchPersistentContext(userDataDir, launchOpts)
   } else {
     // ── Ephemeral (incognito) session ──────────────────────────────────
-    // Use the old launch + newContext path when the caller explicitly opts out
-    // of persistence (opts.profile = null).
-    logger.info(`Session ${id} using ephemeral (incognito) context`)
+    logger.info(`Session ${id} using ephemeral (incognito) context${proxyConfig ? ' (proxy: ' + proxyConfig.server + ')' : ''}`)
     const browser = await chromium.launch({
       headless: opts.headless !== false,
       args: LAUNCH_ARGS,
     })
-    context = await browser.newContext({
+    const contextOpts = {
       userAgent: USER_AGENT,
       viewport: { width: 1920, height: 1080 },
-    })
+    }
+    if (proxyConfig) contextOpts.proxy = proxyConfig
+
+    context = await browser.newContext(contextOpts)
     // Attach browser ref so closeSession can call browser.close()
     context._browser = browser
   }
 
-  // Inject stealth + HUD on every page/navigation
+  // Inject stealth on every page/navigation; skip HUD for electron-managed sessions
   await context.addInitScript(STEALTH_SCRIPT)
-  await context.addInitScript(HUD_SCRIPT)
+  if (!electronManaged) {
+    await context.addInitScript(HUD_SCRIPT)
+  }
 
   const page = await context.newPage()
 
@@ -121,6 +133,7 @@ export async function createSession(opts = {}) {
   const session = {
     id,
     profile: profileName,
+    electronManaged,
     context,
     page,
     cdp,
@@ -143,10 +156,12 @@ export async function createSession(opts = {}) {
   // Expiry timer — closes session on idle or absolute max age.
   // For persistent profiles this only closes the Playwright context (the
   // browser process), not the on-disk profile data — that persists.
+  const idleLimit = electronManaged ? ELECTRON_IDLE_MS : SESSION_IDLE_MS
+  const maxAge    = electronManaged ? ELECTRON_MAX_AGE_MS : SESSION_MAX_AGE_MS
   session._timer = setInterval(() => {
     const now = Date.now()
-    const idle    = now - session.lastUsedAt > SESSION_IDLE_MS
-    const tooOld  = now - session.createdAt  > SESSION_MAX_AGE_MS
+    const idle    = now - session.lastUsedAt > idleLimit
+    const tooOld  = now - session.createdAt  > maxAge
     if (idle || tooOld) {
       logger.info(`[sessions] expiring ${id} (profile="${profileName}") — idle=${idle} tooOld=${tooOld}`)
       closeSession(id).catch(() => {})
@@ -164,6 +179,7 @@ export function listSessions() {
   return [...sessions.values()].map((s) => ({
     id: s.id,
     profile: s.profile || null,
+    electronManaged: s.electronManaged || false,
     url: s.page.url(),
     createdAt: s.createdAt,
     lastUsedAt: s.lastUsedAt,
