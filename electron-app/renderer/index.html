@@ -40,7 +40,30 @@
         <button id="btn-bookmark" title="Bookmark this page (Ctrl+D)">&#9734;</button>
         <button id="btn-sidebar-open" title="Open AI sidebar" style="display:none">&#x276F;</button>
         <span id="conn-dot" class="dot connected" title="Ready"></span>
+        <button id="btn-menu" title="Menu"><span class="menu-icon"></span></button>
       </div>
+    </div>
+
+    <!-- ── App menu dropdown ──────────────────────────────────── -->
+    <div id="app-menu" style="display:none">
+      <button class="menu-item" data-action="new-tab"><span class="mi-icon mi-new-tab"></span>New Tab<kbd>Ctrl+T</kbd></button>
+      <button class="menu-item" data-action="new-stealth"><span class="mi-icon mi-stealth"></span>New Stealth Tab<kbd>Ctrl+Shift+N</kbd></button>
+      <div class="menu-sep"></div>
+      <button class="menu-item" data-action="history"><span class="mi-icon mi-history"></span>History<kbd>Ctrl+H</kbd></button>
+      <button class="menu-item" data-action="bookmarks"><span class="mi-icon mi-bookmarks"></span>Bookmarks<kbd>Ctrl+Shift+O</kbd></button>
+      <button class="menu-item" data-action="downloads"><span class="mi-icon mi-downloads"></span>Downloads</button>
+      <div class="menu-sep"></div>
+      <button class="menu-item" data-action="find"><span class="mi-icon mi-find"></span>Find in Page<kbd>Ctrl+F</kbd></button>
+      <div class="menu-item menu-zoom-row">
+        <span class="mi-icon mi-zoom"></span>Zoom
+        <span class="zoom-controls">
+          <button data-action="zoom-out" title="Zoom out">&#x2212;</button>
+          <span id="menu-zoom-level">100%</span>
+          <button data-action="zoom-in" title="Zoom in">&#x2B;</button>
+        </span>
+      </div>
+      <div class="menu-sep"></div>
+      <button class="menu-item" data-action="settings"><span class="mi-icon mi-settings"></span>Settings<kbd>Ctrl+,</kbd></button>
     </div>
 
     <!-- ── Bookmark bar ───────────────────────────────────────── -->

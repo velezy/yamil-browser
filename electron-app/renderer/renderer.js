@@ -1630,6 +1630,67 @@ document.getElementById('wc-close')?.addEventListener('click', () => {
   if (window.YAMIL_IPC?.close) window.YAMIL_IPC.close()
 })
 
+// ── App menu (three-dot dropdown) ────────────────────────────────────
+
+const appMenu = document.getElementById('app-menu')
+const btnMenu = document.getElementById('btn-menu')
+
+function toggleAppMenu () {
+  if (!appMenu) return
+  const showing = appMenu.style.display !== 'none'
+  appMenu.style.display = showing ? 'none' : 'block'
+  if (!showing) {
+    // Position menu below the button, aligned right
+    const rect = btnMenu.getBoundingClientRect()
+    appMenu.style.top = (rect.bottom + 4) + 'px'
+    appMenu.style.right = (window.innerWidth - rect.right) + 'px'
+    // Update zoom level display
+    const tab = tabs.find(t => t.id === activeTabId)
+    const z = tab ? tab.zoom : 0
+    const pct = Math.round(100 * Math.pow(1.2, z))
+    const zl = document.getElementById('menu-zoom-level')
+    if (zl) zl.textContent = pct + '%'
+  }
+}
+
+if (btnMenu) btnMenu.addEventListener('click', (e) => { e.stopPropagation(); toggleAppMenu() })
+
+// Close menu on outside click
+document.addEventListener('click', (e) => {
+  if (appMenu && appMenu.style.display !== 'none' && !appMenu.contains(e.target) && e.target !== btnMenu) {
+    appMenu.style.display = 'none'
+  }
+})
+
+// Menu item actions
+if (appMenu) {
+  appMenu.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]')
+    if (!btn) return
+    const action = btn.dataset.action
+    switch (action) {
+      case 'new-tab':    createTab(startUrl, true, 'yamil'); break
+      case 'new-stealth': createTab(startUrl, true, 'stealth'); break
+      case 'history':    openHistoryPanel(); break
+      case 'bookmarks':  openBookmarkManager(); break
+      case 'downloads':  openDownloadsPanel(); break
+      case 'find':       openFindBar(); break
+      case 'zoom-in':    zoomIn(); e.stopPropagation(); updateMenuZoom(); return
+      case 'zoom-out':   zoomOut(); e.stopPropagation(); updateMenuZoom(); return
+      case 'settings':   openSettingsPanel(); break
+    }
+    appMenu.style.display = 'none'
+  })
+}
+
+function updateMenuZoom () {
+  const tab = tabs.find(t => t.id === activeTabId)
+  const z = tab ? tab.zoom : 0
+  const pct = Math.round(100 * Math.pow(1.2, z))
+  const zl = document.getElementById('menu-zoom-level')
+  if (zl) zl.textContent = pct + '%'
+}
+
 // ── Settings panel ───────────────────────────────────────────────────
 
 const KEY_SETTINGS = 'yamil_settings'
