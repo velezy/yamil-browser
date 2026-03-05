@@ -31,6 +31,7 @@
         <div id="addr-autocomplete"></div>
       </div>
       <div id="nav-right">
+        <button id="btn-ai-eye" title="Toggle AI page visibility" class="ai-visible">&#128065;</button>
         <button id="btn-bookmark" title="Bookmark this page (Ctrl+D)">&#9734;</button>
         <button id="btn-sidebar-open" title="Open AI sidebar" style="display:none">&#x276F;</button>
         <span id="conn-dot" class="dot connected" title="Ready"></span>
@@ -152,6 +153,9 @@
               <div><kbd>Ctrl+-</kbd> Zoom Out</div>
               <div><kbd>Ctrl+0</kbd> Reset Zoom</div>
               <div><kbd>F11</kbd> Fullscreen</div>
+              <div><kbd>Click</kbd> Eye icon: Toggle AI visibility</div>
+              <div><kbd>@tab:N</kbd> Reference tab N in chat</div>
+              <div><kbd>@all-tabs</kbd> Reference all tabs</div>
             </div>
           </div>
         </div>
@@ -203,8 +207,18 @@
           <div id="tq-list"></div>
         </div>
 
+        <!-- AI Skills tray -->
+        <div id="skills-tray">
+          <button class="skill-btn" data-skill="summarize" title="Summarize page">&#x2211; Summarize</button>
+          <button class="skill-btn" data-skill="extract" title="Extract data">&#x2913; Extract</button>
+          <button class="skill-btn" data-skill="translate" title="Translate page">&#x1F310; Translate</button>
+          <button class="skill-btn" data-skill="explain" title="Explain like I'm 5">&#x1F4A1; Explain</button>
+          <button id="btn-add-skill" title="Create custom skill">+</button>
+        </div>
+
         <div id="chat-footer">
           <textarea id="chat-input" rows="2" placeholder="Ask AI to browse, extract, or automate..."></textarea>
+          <button id="btn-voice" title="Voice input (hold to speak)">&#x1F3A4;</button>
           <label id="bg-toggle" title="Run in background">
             <input id="bg-check" type="checkbox">
             <span>BG</span>

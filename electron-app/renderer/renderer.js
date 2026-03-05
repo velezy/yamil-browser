@@ -23,6 +23,8 @@ const KEY_BOOKMARKS    = 'yamil_bookmarks'
 const KEY_BMBAR_VIS    = 'yamil_bookmarkbar_visible'
 const KEY_HISTORY      = 'yamil_history'
 const KEY_AI_MEMORY    = 'yamil_ai_memory'
+const KEY_AI_SKILLS    = 'yamil_ai_skills'
+const KEY_AI_BLOCKED   = 'yamil_ai_blocked_domains'
 const MAX_STORED_MSGS  = 200
 const MAX_HISTORY      = 5000
 
@@ -416,6 +418,7 @@ function switchTab (id) {
   updateBar(tab.url)
   statusUrl.textContent = tab.title || ''
   updateBookmarkStar()
+  updateAiEyeIcon()
   saveTabs()
 }
 
@@ -484,6 +487,9 @@ window._yamil = {
   history: { getAll: getHistory, search: searchHistory, clear: clearHistory },
   zoom: { zoomIn, zoomOut, zoomReset, getZoom: function () { const t = tabs.find(t => t.id === activeTabId); return t ? t.zoom : 0 } },
   toggleFullscreen,
+  skills: { getAll: getAllSkills, getCustom: getCustomSkills, run: runSkill },
+  aiPrivacy: { isBlocked: isAiBlockedForCurrentPage, toggle: toggleAiVisibility, getBlockedDomains },
+  getTabContext,
 }
 
 // ── Wire webview events to a tab ──────────────────────────────────────
@@ -509,7 +515,7 @@ function wireWebviewEvents (tab) {
 
   wv.addEventListener('did-navigate', (e) => {
     tab.url = e.url
-    if (tab.id === activeTabId) { updateBar(e.url); updateBookmarkStar() }
+    if (tab.id === activeTabId) { updateBar(e.url); updateBookmarkStar(); updateAiEyeIcon() }
     saveTabs()
     recordHistory(e.url, tab.title)
   })
@@ -713,6 +719,8 @@ document.addEventListener('keydown', (e) => {
     if (settingsVisible) { closeSettingsPanel(); return }
     if (dlVisible) { closeDownloadsPanel(); return }
     if (bookmarkMgr.style.display !== 'none') { closeBookmarkManager(); return }
+    const skillsEditor = document.getElementById('skills-editor')
+    if (skillsEditor) { skillsEditor.remove(); return }
     if (document.body.classList.contains('fullscreen')) { toggleFullscreen(); return }
   }
 })
@@ -921,29 +929,47 @@ async function sendChat () {
     addSystemMsg(`Navigating to ${url}...`)
   }
 
+  // Resolve cross-tab references (@tab:N, @all-tabs)
+  let resolvedText = text
+  let extraContexts = []
+  const { text: resolved, contexts } = await resolveTabReferences(text)
+  resolvedText = resolved
+  extraContexts = contexts
+
   let pageContext = {}
-  const activeTab = tabs.find(t => t.id === activeTabId)
-  if (activeTab && activeTab.type === 'stealth' && activeTab.sessionId) {
-    try {
-      const pcRes = await fetch(`${BROWSER_SERVICE}/sessions/${activeTab.sessionId}/evaluate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script: '({ url: location.href, title: document.title, text: document.body.innerText.slice(0, 4000) })' }),
-      })
-      const pcData = await pcRes.json()
-      pageContext = pcData.result || {}
-    } catch (_) {}
-  } else {
-    const wv = getActiveWebview()
-    if (wv) {
+  // Only extract page context if AI is not blocked for this page
+  if (!isAiBlockedForCurrentPage()) {
+    const activeTab = tabs.find(t => t.id === activeTabId)
+    if (activeTab && activeTab.type === 'stealth' && activeTab.sessionId) {
       try {
-        pageContext = await wv.executeJavaScript(`({
-          url:   location.href,
-          title: document.title,
-          text:  document.body.innerText.slice(0, 4000),
-        })`)
+        const pcRes = await fetch(`${BROWSER_SERVICE}/sessions/${activeTab.sessionId}/evaluate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ script: '({ url: location.href, title: document.title, text: document.body.innerText.slice(0, 4000) })' }),
+        })
+        const pcData = await pcRes.json()
+        pageContext = pcData.result || {}
       } catch (_) {}
+    } else {
+      const wv = getActiveWebview()
+      if (wv) {
+        try {
+          pageContext = await wv.executeJavaScript(`({
+            url:   location.href,
+            title: document.title,
+            text:  document.body.innerText.slice(0, 4000),
+          })`)
+        } catch (_) {}
+      }
     }
+  }
+
+  // Build cross-tab context string
+  let crossTabCtx = ''
+  if (extraContexts.length > 0) {
+    crossTabCtx = '\n\n[Cross-tab context:\n' + extraContexts.map(c =>
+      `Tab ${c.tabIndex} "${c.title}" (${c.url}):\n${c.text?.slice(0, 2000) || 'No content'}`
+    ).join('\n---\n') + ']'
   }
 
   // Inject AI memory context
@@ -954,7 +980,7 @@ async function sendChat () {
     const res = await fetch(aiEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text + memCtx, pageContext }),
+      body: JSON.stringify({ message: resolvedText + memCtx + crossTabCtx, pageContext }),
     })
     const data = await res.json()
     const reply = data.response || data.message || JSON.stringify(data)
@@ -1521,6 +1547,7 @@ addrBar.addEventListener('blur', () => { setTimeout(hideAutocomplete, 150) })
 
 document.getElementById('btn-summarize').addEventListener('click', async () => {
   if (!aiEndpoint) { addSystemMsg('No AI endpoint configured.'); return }
+  if (isAiBlockedForCurrentPage()) { addSystemMsg('AI is blocked for this page. Click the eye icon to allow.'); return }
   const tab = tabs.find(t => t.id === activeTabId)
   if (!tab) { addSystemMsg('No active tab.'); return }
 
@@ -1855,6 +1882,321 @@ async function sendChatStreaming (text, pageContext) {
   saveChatHistory()
 }
 
+// ── Voice Input / Output ──────────────────────────────────────────────
+
+const btnVoice = document.getElementById('btn-voice')
+let recognition = null
+let isListening = false
+
+function initSpeechRecognition () {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SR) return null
+  const rec = new SR()
+  rec.continuous = false
+  rec.interimResults = true
+  rec.lang = 'en-US'
+
+  rec.onstart = () => {
+    isListening = true
+    btnVoice.classList.add('listening')
+    btnVoice.title = 'Listening... (click to stop)'
+  }
+
+  rec.onresult = (e) => {
+    let transcript = ''
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      transcript += e.results[i][0].transcript
+    }
+    chatInput.value = transcript
+    // If final result, auto-send
+    if (e.results[e.results.length - 1].isFinal) {
+      stopListening()
+      if (transcript.trim()) sendChat()
+    }
+  }
+
+  rec.onerror = (e) => {
+    if (e.error !== 'aborted') addSystemMsg('Voice error: ' + e.error)
+    stopListening()
+  }
+
+  rec.onend = () => { stopListening() }
+
+  return rec
+}
+
+function startListening () {
+  if (!recognition) recognition = initSpeechRecognition()
+  if (!recognition) { addSystemMsg('Speech recognition not available in this browser.'); return }
+  try {
+    recognition.start()
+  } catch (e) {
+    addSystemMsg('Could not start voice input: ' + e.message)
+  }
+}
+
+function stopListening () {
+  isListening = false
+  btnVoice.classList.remove('listening')
+  btnVoice.title = 'Voice input (click to speak)'
+  try { if (recognition) recognition.stop() } catch (_) {}
+}
+
+function speakText (text) {
+  if (!window.speechSynthesis) return
+  const utt = new SpeechSynthesisUtterance(text.slice(0, 500))
+  utt.rate = 1.1
+  utt.pitch = 1
+  window.speechSynthesis.speak(utt)
+}
+
+btnVoice.addEventListener('click', () => {
+  if (isListening) { stopListening() } else { startListening() }
+})
+
+// ── AI Skills ─────────────────────────────────────────────────────────
+
+const DEFAULT_SKILLS = [
+  { id: 'summarize', name: 'Summarize', icon: '\u2211', prompt: 'Summarize this page concisely in 3-5 bullet points.' },
+  { id: 'extract', name: 'Extract', icon: '\u2913', prompt: 'Extract all key data points from this page as a structured JSON object.' },
+  { id: 'translate', name: 'Translate', icon: '\uD83C\uDF10', prompt: 'Translate this page content to Spanish.' },
+  { id: 'explain', name: 'Explain', icon: '\uD83D\uDCA1', prompt: 'Explain this page content simply, as if to a non-technical person.' },
+]
+
+function getCustomSkills () {
+  try { return JSON.parse(localStorage.getItem(KEY_AI_SKILLS) || '[]') } catch (_) { return [] }
+}
+
+function saveCustomSkills (arr) {
+  try { localStorage.setItem(KEY_AI_SKILLS, JSON.stringify(arr)) } catch (_) {}
+}
+
+function getAllSkills () {
+  return [...DEFAULT_SKILLS, ...getCustomSkills()]
+}
+
+function renderSkillsTray () {
+  const tray = document.getElementById('skills-tray')
+  if (!tray) return
+  tray.innerHTML = ''
+
+  getAllSkills().forEach(skill => {
+    const btn = document.createElement('button')
+    btn.className = 'skill-btn' + (skill.custom ? ' custom' : '')
+    btn.dataset.skill = skill.id
+    btn.title = skill.prompt
+    btn.textContent = (skill.icon || '\u26A1') + ' ' + skill.name
+    btn.addEventListener('click', () => runSkill(skill))
+    // Right-click to delete custom skills
+    if (skill.custom) {
+      btn.addEventListener('contextmenu', (e) => {
+        e.preventDefault()
+        if (confirm(`Delete skill "${skill.name}"?`)) {
+          const cs = getCustomSkills().filter(s => s.id !== skill.id)
+          saveCustomSkills(cs)
+          renderSkillsTray()
+        }
+      })
+    }
+    tray.appendChild(btn)
+  })
+
+  // Add skill button
+  const addBtn = document.createElement('button')
+  addBtn.id = 'btn-add-skill'
+  addBtn.title = 'Create custom skill'
+  addBtn.textContent = '+'
+  addBtn.addEventListener('click', openSkillEditor)
+  tray.appendChild(addBtn)
+}
+
+async function runSkill (skill) {
+  if (!aiEndpoint) { addSystemMsg('No AI endpoint configured.'); return }
+  if (isAiBlockedForCurrentPage()) { addSystemMsg('AI is blocked for this page.'); return }
+
+  const tab = tabs.find(t => t.id === activeTabId)
+  if (!tab) { addSystemMsg('No active tab.'); return }
+
+  addSystemMsg(`Running skill: ${skill.name}...`)
+
+  let pageText = ''
+  if (tab.type === 'stealth' && tab.sessionId) {
+    try {
+      const r = await fetch(`${BROWSER_SERVICE}/sessions/${tab.sessionId}/evaluate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ script: 'document.body.innerText.slice(0, 8000)' }),
+      })
+      const d = await r.json()
+      pageText = d.result || ''
+    } catch (_) {}
+  } else if (tab.webview) {
+    try { pageText = await tab.webview.executeJavaScript('document.body.innerText.slice(0, 8000)') } catch (_) {}
+  }
+
+  if (!pageText) { addSystemMsg('Could not extract page text.'); return }
+
+  try {
+    const r = await fetch(aiEndpoint, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: skill.prompt + '\n\n' + pageText,
+        pageContext: { url: tab.url, title: tab.title },
+      }),
+    })
+    const d = await r.json()
+    addAiMsg(d.response || d.message || 'No response.')
+  } catch (e) { addErrorMsg('Skill failed: ' + e.message) }
+}
+
+function openSkillEditor () {
+  const existing = document.getElementById('skills-editor')
+  if (existing) existing.remove()
+
+  const overlay = document.createElement('div')
+  overlay.id = 'skills-editor'
+  overlay.innerHTML = `
+    <div id="skills-editor-dialog">
+      <h3>Create Custom Skill</h3>
+      <label>Name</label>
+      <input id="skill-name" type="text" placeholder="e.g. Find Bugs" maxlength="30">
+      <label>Icon (emoji or symbol)</label>
+      <input id="skill-icon" type="text" placeholder="e.g. 🐛" maxlength="4">
+      <label>Prompt Template</label>
+      <textarea id="skill-prompt" rows="4" placeholder="e.g. Find potential bugs and security issues in this code..."></textarea>
+      <div class="skills-editor-actions">
+        <button class="btn-cancel" id="skill-cancel">Cancel</button>
+        <button class="btn-save" id="skill-save">Save Skill</button>
+      </div>
+    </div>
+  `
+  document.body.appendChild(overlay)
+
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove() })
+  document.getElementById('skill-cancel').addEventListener('click', () => overlay.remove())
+  document.getElementById('skill-save').addEventListener('click', () => {
+    const name = document.getElementById('skill-name').value.trim()
+    const icon = document.getElementById('skill-icon').value.trim() || '\u26A1'
+    const prompt = document.getElementById('skill-prompt').value.trim()
+    if (!name || !prompt) { addSystemMsg('Skill needs a name and prompt.'); return }
+    const cs = getCustomSkills()
+    cs.push({ id: 'custom_' + Date.now().toString(36), name, icon, prompt, custom: true })
+    saveCustomSkills(cs)
+    renderSkillsTray()
+    overlay.remove()
+    addSystemMsg(`Skill "${name}" created!`)
+  })
+  document.getElementById('skill-name').focus()
+}
+
+// ── AI Page Visibility / Privacy ──────────────────────────────────────
+
+const btnAiEye = document.getElementById('btn-ai-eye')
+
+function getBlockedDomains () {
+  try { return JSON.parse(localStorage.getItem(KEY_AI_BLOCKED) || '[]') } catch (_) { return [] }
+}
+
+function saveBlockedDomains (arr) {
+  try { localStorage.setItem(KEY_AI_BLOCKED, JSON.stringify(arr)) } catch (_) {}
+}
+
+function getCurrentDomain () {
+  const tab = tabs.find(t => t.id === activeTabId)
+  if (!tab || !tab.url) return null
+  try { return new URL(tab.url).hostname } catch (_) { return null }
+}
+
+function isAiBlockedForCurrentPage () {
+  const domain = getCurrentDomain()
+  if (!domain) return false
+  return getBlockedDomains().includes(domain)
+}
+
+function toggleAiVisibility () {
+  const domain = getCurrentDomain()
+  if (!domain) { addSystemMsg('No active page.'); return }
+  const blocked = getBlockedDomains()
+  const idx = blocked.indexOf(domain)
+  if (idx >= 0) {
+    blocked.splice(idx, 1)
+    addSystemMsg(`AI can now see pages on ${domain}`)
+  } else {
+    blocked.push(domain)
+    addSystemMsg(`AI blocked from seeing pages on ${domain}`)
+  }
+  saveBlockedDomains(blocked)
+  updateAiEyeIcon()
+}
+
+function updateAiEyeIcon () {
+  if (isAiBlockedForCurrentPage()) {
+    btnAiEye.classList.remove('ai-visible')
+    btnAiEye.classList.add('ai-blocked')
+    btnAiEye.innerHTML = '&#128683;'  // no entry sign
+    btnAiEye.title = 'AI is blocked for this site (click to allow)'
+  } else {
+    btnAiEye.classList.remove('ai-blocked')
+    btnAiEye.classList.add('ai-visible')
+    btnAiEye.innerHTML = '&#128065;'  // eye
+    btnAiEye.title = 'AI can see this page (click to block)'
+  }
+}
+
+btnAiEye.addEventListener('click', toggleAiVisibility)
+
+// ── Cross-Tab Context ─────────────────────────────────────────────────
+
+async function getTabContext (tabId) {
+  const tab = tabs.find(t => t.id === tabId)
+  if (!tab) return null
+  try {
+    if (tab.type === 'stealth' && tab.sessionId) {
+      const r = await fetch(`${BROWSER_SERVICE}/sessions/${tab.sessionId}/evaluate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ script: '({ url: location.href, title: document.title, text: document.body.innerText.slice(0, 3000) })' }),
+      })
+      const d = await r.json()
+      return d.result || null
+    } else if (tab.webview) {
+      return await tab.webview.executeJavaScript(`({
+        url: location.href, title: document.title, text: document.body.innerText.slice(0, 3000),
+      })`)
+    }
+  } catch (_) {}
+  return null
+}
+
+async function resolveTabReferences (text) {
+  // Match @tab:N or @all-tabs
+  const allTabsMatch = text.match(/@all[_-]?tabs/i)
+  const tabRefMatches = [...text.matchAll(/@tab:(\d+)/gi)]
+
+  if (!allTabsMatch && tabRefMatches.length === 0) return { text, contexts: [] }
+
+  const contexts = []
+
+  if (allTabsMatch) {
+    for (let i = 0; i < Math.min(tabs.length, 5); i++) {
+      const ctx = await getTabContext(tabs[i].id)
+      if (ctx) contexts.push({ tabIndex: i + 1, ...ctx })
+    }
+    text = text.replace(/@all[_-]?tabs/gi, `[Content from ${contexts.length} tabs included below]`)
+  }
+
+  for (const match of tabRefMatches) {
+    const idx = parseInt(match[1]) - 1
+    if (idx >= 0 && idx < tabs.length) {
+      const ctx = await getTabContext(tabs[idx].id)
+      if (ctx) {
+        contexts.push({ tabIndex: idx + 1, ...ctx })
+        text = text.replace(match[0], `[Tab ${idx + 1}: "${ctx.title}"]`)
+      }
+    }
+  }
+
+  return { text, contexts }
+}
+
 // ── Background Agent Task Queue ───────────────────────────────────────
 
 const KEY_TASKS = 'yamil_agent_tasks'
@@ -2045,6 +2387,7 @@ window._yamil.agentTasks = {
 
 loadAgentTasks()
 renderTaskQueue()
+renderSkillsTray()
 loadChatHistory()
 
 // Restore tabs or create initial tab
@@ -2073,6 +2416,7 @@ updateBookmarkStar()
     sb.style.borderRight = '1px solid var(--border)'
   }
   renderTabGroups()
+  updateAiEyeIcon()
 })()
 
 downloads = getDownloads()

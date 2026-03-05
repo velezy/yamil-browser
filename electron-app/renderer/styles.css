@@ -874,6 +874,141 @@ body.fullscreen #main {
 .tab-group-label .group-collapse { font-size: 8px; opacity: .7; }
 .tab.grouped { border-top: 2px solid var(--group-color, var(--blue)); }
 
+/* ── Voice input button ────────────────────────────────────────── */
+#btn-voice {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all .2s;
+}
+#btn-voice:hover { background: var(--bg3); color: var(--text); }
+#btn-voice.listening {
+  color: var(--red);
+  background: rgba(248,113,113,.15);
+  animation: voice-pulse 1s ease-in-out infinite;
+}
+@keyframes voice-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,.4); }
+  50% { box-shadow: 0 0 0 8px rgba(248,113,113,0); }
+}
+
+/* ── AI Skills tray ───────────────────────────────────────────── */
+#skills-tray {
+  display: flex;
+  gap: 4px;
+  padding: 4px 10px;
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+#skills-tray::-webkit-scrollbar { display: none; }
+.skill-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+.skill-btn:hover {
+  background: var(--bg3);
+  color: var(--text);
+  border-color: var(--green);
+}
+.skill-btn.custom { border-color: var(--blue); color: var(--blue); }
+#btn-add-skill {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+#btn-add-skill:hover { border-color: var(--green); color: var(--green); }
+
+/* Skills editor modal */
+#skills-editor {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center;
+}
+#skills-editor-dialog {
+  width: 400px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px; box-shadow: 0 8px 32px rgba(0,0,0,.6);
+}
+#skills-editor-dialog h3 {
+  font-size: 13px; color: var(--green); margin-bottom: 10px; font-weight: 700;
+}
+#skills-editor-dialog label {
+  display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;
+}
+#skills-editor-dialog input,
+#skills-editor-dialog textarea {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text); font-size: 12px;
+  padding: 6px 8px; outline: none; margin-bottom: 8px; font-family: inherit;
+}
+#skills-editor-dialog input:focus,
+#skills-editor-dialog textarea:focus { border-color: var(--green); }
+.skills-editor-actions {
+  display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px;
+}
+.skills-editor-actions button {
+  padding: 4px 12px; border-radius: 4px; border: none;
+  font-size: 11px; cursor: pointer;
+}
+.skills-editor-actions .btn-save { background: var(--green); color: #000; }
+.skills-editor-actions .btn-cancel { background: var(--bg3); color: var(--text); }
+
+/* ── AI page visibility (eye icon) ─────────────────────────────── */
+#navbar #btn-ai-eye {
+  background: transparent;
+  width: auto; height: auto;
+  font-size: 13px;
+  padding: 2px 5px;
+  color: var(--text-muted);
+  transition: color .15s;
+}
+#navbar #btn-ai-eye:hover { background: var(--bg3); }
+#navbar #btn-ai-eye.ai-visible { color: var(--green); }
+#navbar #btn-ai-eye.ai-blocked { color: var(--red); opacity: .6; }
+
+/* AI blocked indicator in sidebar */
+.ai-blocked-notice {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 12px; color: var(--text-muted); font-size: 11px; font-style: italic;
+  text-align: center;
+}
+
+/* ── Cross-tab context pills ──────────────────────────────────── */
+#tab-context-indicator {
+  display: flex; gap: 3px; align-items: center;
+  padding: 0 4px; flex-shrink: 0;
+}
+.tab-ctx-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  display: inline-block; opacity: .7;
+}
+.tab-ctx-label {
+  font-size: 9px; color: var(--text-muted); margin-left: 2px;
+}
+
 /* ── Scrollbar ───────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
