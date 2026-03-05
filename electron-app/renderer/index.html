@@ -13,7 +13,12 @@
     <div id="tab-bar">
       <div id="tabs-list"></div>
       <button id="btn-new-tab" title="New Tab (Ctrl+T)">&#43;</button>
-      <button id="btn-new-stealth-tab" title="New Stealth Tab (Ctrl+Shift+N)">&#128737;&#65039;</button>
+      <button id="btn-new-stealth-tab" title="New Stealth Tab (Ctrl+Shift+N)"><span class="stealth-btn-icon"></span></button>
+      <div id="window-controls">
+        <button id="wc-minimize" title="Minimize">&#x2500;</button>
+        <button id="wc-maximize" title="Maximize">&#x25A1;</button>
+        <button id="wc-close" title="Close">&#x2715;</button>
+      </div>
     </div>
 
     <!-- ── Navigation bar ─────────────────────────────────────── -->
@@ -26,12 +31,12 @@
       <button id="btn-forward" title="Forward">&#8594;</button>
       <button id="btn-refresh" title="Refresh">&#8635;</button>
       <div id="address-wrap">
-        <span id="lock-icon">🔒</span>
+        <span id="lock-icon"><span class="lock-svg-icon"></span></span>
         <input id="address-bar" type="text" placeholder="Enter URL..." autocomplete="off" spellcheck="false">
         <div id="addr-autocomplete"></div>
       </div>
       <div id="nav-right">
-        <button id="btn-ai-eye" title="Toggle AI page visibility" class="ai-visible">&#128065;</button>
+        <button id="btn-ai-eye" title="Toggle AI page visibility" class="ai-visible"><span class="ai-eye-icon"></span></button>
         <button id="btn-bookmark" title="Bookmark this page (Ctrl+D)">&#9734;</button>
         <button id="btn-sidebar-open" title="Open AI sidebar" style="display:none">&#x276F;</button>
         <span id="conn-dot" class="dot connected" title="Ready"></span>
@@ -211,14 +216,14 @@
         <div id="skills-tray">
           <button class="skill-btn" data-skill="summarize" title="Summarize page">&#x2211; Summarize</button>
           <button class="skill-btn" data-skill="extract" title="Extract data">&#x2913; Extract</button>
-          <button class="skill-btn" data-skill="translate" title="Translate page">&#x1F310; Translate</button>
-          <button class="skill-btn" data-skill="explain" title="Explain like I'm 5">&#x1F4A1; Explain</button>
+          <button class="skill-btn" data-skill="translate" title="Translate page"><span class="skill-icon skill-icon-translate"></span> Translate</button>
+          <button class="skill-btn" data-skill="explain" title="Explain like I'm 5"><span class="skill-icon skill-icon-explain"></span> Explain</button>
           <button id="btn-add-skill" title="Create custom skill">+</button>
         </div>
 
         <div id="chat-footer">
           <textarea id="chat-input" rows="2" placeholder="Ask AI to browse, extract, or automate..."></textarea>
-          <button id="btn-voice" title="Voice input (hold to speak)">&#x1F3A4;</button>
+          <button id="btn-voice" title="Voice input (hold to speak)"><span class="voice-icon"></span></button>
           <label id="bg-toggle" title="Run in background">
             <input id="bg-check" type="checkbox">
             <span>BG</span>

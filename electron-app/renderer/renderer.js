@@ -1619,6 +1619,17 @@ if (window.YAMIL_IPC && window.YAMIL_IPC.onFullscreenChange) {
   })
 }
 
+// ── Window control buttons ────────────────────────────────────────────
+document.getElementById('wc-minimize')?.addEventListener('click', () => {
+  if (window.YAMIL_IPC?.minimize) window.YAMIL_IPC.minimize()
+})
+document.getElementById('wc-maximize')?.addEventListener('click', () => {
+  if (window.YAMIL_IPC?.maximize) window.YAMIL_IPC.maximize()
+})
+document.getElementById('wc-close')?.addEventListener('click', () => {
+  if (window.YAMIL_IPC?.close) window.YAMIL_IPC.close()
+})
+
 // ── Settings panel ───────────────────────────────────────────────────
 
 const KEY_SETTINGS = 'yamil_settings'
@@ -1959,8 +1970,8 @@ btnVoice.addEventListener('click', () => {
 const DEFAULT_SKILLS = [
   { id: 'summarize', name: 'Summarize', icon: '\u2211', prompt: 'Summarize this page concisely in 3-5 bullet points.' },
   { id: 'extract', name: 'Extract', icon: '\u2913', prompt: 'Extract all key data points from this page as a structured JSON object.' },
-  { id: 'translate', name: 'Translate', icon: '\uD83C\uDF10', prompt: 'Translate this page content to Spanish.' },
-  { id: 'explain', name: 'Explain', icon: '\uD83D\uDCA1', prompt: 'Explain this page content simply, as if to a non-technical person.' },
+  { id: 'translate', name: 'Translate', icon: '\u2300', prompt: 'Translate this page content to Spanish.', svgClass: 'skill-icon-translate' },
+  { id: 'explain', name: 'Explain', icon: '\u2604', prompt: 'Explain this page content simply, as if to a non-technical person.', svgClass: 'skill-icon-explain' },
 ]
 
 function getCustomSkills () {
@@ -1985,7 +1996,14 @@ function renderSkillsTray () {
     btn.className = 'skill-btn' + (skill.custom ? ' custom' : '')
     btn.dataset.skill = skill.id
     btn.title = skill.prompt
-    btn.textContent = (skill.icon || '\u26A1') + ' ' + skill.name
+    if (skill.svgClass) {
+      const iconSpan = document.createElement('span')
+      iconSpan.className = 'skill-icon ' + skill.svgClass
+      btn.appendChild(iconSpan)
+      btn.appendChild(document.createTextNode(' ' + skill.name))
+    } else {
+      btn.textContent = (skill.icon || '\u26A1') + ' ' + skill.name
+    }
     btn.addEventListener('click', () => runSkill(skill))
     // Right-click to delete custom skills
     if (skill.custom) {
@@ -2132,12 +2150,10 @@ function updateAiEyeIcon () {
   if (isAiBlockedForCurrentPage()) {
     btnAiEye.classList.remove('ai-visible')
     btnAiEye.classList.add('ai-blocked')
-    btnAiEye.innerHTML = '&#128683;'  // no entry sign
     btnAiEye.title = 'AI is blocked for this site (click to allow)'
   } else {
     btnAiEye.classList.remove('ai-blocked')
     btnAiEye.classList.add('ai-visible')
-    btnAiEye.innerHTML = '&#128065;'  // eye
     btnAiEye.title = 'AI can see this page (click to block)'
   }
 }

@@ -9,4 +9,7 @@ contextBridge.exposeInMainWorld('YAMIL_CONFIG', {
 contextBridge.exposeInMainWorld('YAMIL_IPC', {
   toggleFullscreen: () => ipcRenderer.send('toggle-fullscreen'),
   onFullscreenChange: (cb) => ipcRenderer.on('fullscreen-changed', (_e, isFs) => cb(isFs)),
+  minimize: () => ipcRenderer.send('window-minimize'),
+  maximize: () => ipcRenderer.send('window-maximize'),
+  close: () => ipcRenderer.send('window-close'),
 })

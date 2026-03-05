@@ -12,10 +12,18 @@ const START_MINIMIZED = process.argv.includes('--minimized')
 let mainWindow
 let tray = null
 
-// ── Fullscreen IPC ──────────────────────────────────────────────────
+// ── Window control IPC ──────────────────────────────────────────────
 ipcMain.on('toggle-fullscreen', () => {
   if (mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen())
 })
+ipcMain.on('window-minimize', () => { if (mainWindow) mainWindow.minimize() })
+ipcMain.on('window-maximize', () => {
+  if (mainWindow) {
+    if (mainWindow.isMaximized()) mainWindow.unmaximize()
+    else mainWindow.maximize()
+  }
+})
+ipcMain.on('window-close', () => { if (mainWindow) mainWindow.close() })
 
 // ── Custom URL protocol: yamil-browser:// ─────────────────────────────
 if (process.platform === 'win32') {
@@ -828,6 +836,9 @@ function saveWindowState () {
 function createWindow () {
   const state = loadWindowState()
 
+  const isMac = process.platform === 'darwin'
+  const isWin = process.platform === 'win32'
+
   mainWindow = new BrowserWindow({
     width:  state.width  || 1440,
     height: state.height || 900,
@@ -836,8 +847,9 @@ function createWindow () {
     minWidth:  900,
     minHeight: 600,
     backgroundColor: '#0f172a',
-    icon: path.join(__dirname, 'assets', process.platform === 'darwin' ? 'icon.icns' : process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    icon: path.join(__dirname, 'assets', isMac ? 'icon.icns' : isWin ? 'icon.ico' : 'icon.png'),
+    titleBarStyle: isMac ? 'hiddenInset' : 'default',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -846,6 +858,9 @@ function createWindow () {
       sandbox: false,
     },
   })
+
+  // Hide menu bar on Windows/Linux for a clean browser look (Alt shows it)
+  if (!isMac) mainWindow.setMenuBarVisibility(false)
 
   mainWindow.loadFile('renderer/index.html')
   mainWindow.setTitle(APP_TITLE)
