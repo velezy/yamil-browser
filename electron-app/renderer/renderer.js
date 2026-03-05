@@ -500,7 +500,7 @@ function wireWebviewEvents (tab) {
   wv.addEventListener('did-start-loading', () => {
     if (tab.id === activeTabId) {
       statusLoad.textContent = 'Loading...'
-      connDot.className = 'dot connecting'
+      if (connDot) connDot.className = 'dot connecting'
       showProgressBar()
     }
   })
@@ -508,7 +508,7 @@ function wireWebviewEvents (tab) {
   wv.addEventListener('did-stop-loading', () => {
     if (tab.id === activeTabId) {
       statusLoad.textContent = ''
-      connDot.className = 'dot connected'
+      if (connDot) connDot.className = 'dot connected'
       hideProgressBar()
     }
   })
@@ -535,7 +535,7 @@ function wireWebviewEvents (tab) {
   wv.addEventListener('did-fail-load', (e) => {
     if (e.errorCode !== -3 && tab.id === activeTabId) {
       statusLoad.textContent = `Error: ${e.errorDescription}`
-      connDot.className = 'dot disconnected'
+      if (connDot) connDot.className = 'dot disconnected'
     }
   })
 

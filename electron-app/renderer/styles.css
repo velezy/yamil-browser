@@ -43,22 +43,22 @@ body { background: var(--bg); color: var(--text); font-size: 13px; }
   display: flex;
   height: 100%;
   align-items: stretch;
-  margin-left: auto;
+  margin-left: 8px;
   flex-shrink: 0;
 }
 #window-controls button {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  width: 40px;
-  font-size: 12px;
+  width: 36px;
+  font-size: 11px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background .1s, color .1s;
 }
-#window-controls button:hover { background: var(--bg3); color: var(--text); }
+#window-controls button:hover { background: rgba(255,255,255,.08); color: var(--text); }
 #wc-close:hover { background: #e81123 !important; color: #fff !important; }
 
 #tabs-list {
@@ -138,10 +138,10 @@ body { background: var(--bg); color: var(--text); font-size: 13px; }
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 18px;
+  font-size: 16px;
   cursor: pointer;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -156,8 +156,8 @@ body { background: var(--bg); color: var(--text); font-size: 13px; }
   background: transparent;
   border: none;
   cursor: pointer;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -167,13 +167,13 @@ body { background: var(--bg); color: var(--text); font-size: 13px; }
   transition: background .15s;
   -webkit-app-region: no-drag;
 }
-#btn-new-stealth-tab:hover { background: rgba(168,85,247,.2); }
+#btn-new-stealth-tab:hover { background: rgba(168,85,247,.15); }
 
-/* Stealth icon via inline SVG background — spy/incognito glasses */
+/* Stealth icon via inline SVG — incognito eye-slash */
 .stealth-btn-icon {
-  width: 18px; height: 18px;
+  width: 14px; height: 14px;
   display: inline-block;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a855f7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12z'/%3E%3Cline x1='2' y1='2' x2='22' y2='22'/%3E%3C/svg%3E") center/contain no-repeat;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12z'/%3E%3Cline x1='2' y1='2' x2='22' y2='22'/%3E%3C/svg%3E") center/contain no-repeat;
 }
 #btn-new-stealth-tab:hover .stealth-btn-icon {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c084fc' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12z'/%3E%3Cline x1='2' y1='2' x2='22' y2='22'/%3E%3C/svg%3E");
@@ -1153,13 +1153,16 @@ body.fullscreen #main {
 
 /* AI eye icon via inline SVG */
 .ai-eye-icon {
-  width: 16px; height: 16px;
+  width: 14px; height: 14px;
   display: inline-block;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234ade80' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E") center/contain no-repeat;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+#btn-ai-eye:hover .ai-eye-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234ade80' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
 }
 #btn-ai-eye.ai-blocked .ai-eye-icon {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f87171' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94'/%3E%3Cpath d='M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19'/%3E%3Cline x1='1' y1='1' x2='23' y2='23'/%3E%3C/svg%3E");
-  opacity: .7;
+  opacity: .6;
 }
 
 /* AI blocked indicator in sidebar */
