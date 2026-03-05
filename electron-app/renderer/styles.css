@@ -192,6 +192,11 @@ body { background: var(--bg); color: var(--text); font-size: 13px; }
 }
 
 #navbar button, #address-wrap, #nav-right, #nav-logo { -webkit-app-region: no-drag; }
+#nav-right {
+  display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+  margin-right: var(--sidebar-w);
+}
+#nav-right.sidebar-collapsed { margin-right: 0; }
 
 /* ── Logo ────────────────────────────────────────────────────── */
 #nav-logo {

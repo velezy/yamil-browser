@@ -731,13 +731,17 @@ const sidebar        = document.getElementById('sidebar')
 const btnToggle      = document.getElementById('btn-sidebar-toggle')
 const btnSidebarOpen = document.getElementById('btn-sidebar-open')
 
+const navRight = document.getElementById('nav-right')
+
 function setSidebarOpen (open) {
   if (open) {
     sidebar.classList.remove('collapsed')
     btnSidebarOpen.style.display = 'none'
+    if (navRight) navRight.classList.remove('sidebar-collapsed')
   } else {
     sidebar.classList.add('collapsed')
     btnSidebarOpen.style.display = ''
+    if (navRight) navRight.classList.add('sidebar-collapsed')
   }
   try { localStorage.setItem(KEY_SIDEBAR_OPEN, open ? '1' : '0') } catch (_) {}
 }
