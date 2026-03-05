@@ -1992,7 +1992,14 @@ function initSpeechRecognition () {
   }
 
   rec.onerror = (e) => {
-    if (e.error !== 'aborted') addSystemMsg('Voice error: ' + e.error)
+    if (e.error === 'network') {
+      if (!rec._networkErrShown) {
+        addSystemMsg('Voice input unavailable — speech service requires internet access.')
+        rec._networkErrShown = true
+      }
+    } else if (e.error !== 'aborted' && e.error !== 'no-speech') {
+      addSystemMsg('Voice error: ' + e.error)
+    }
     stopListening()
   }
 
