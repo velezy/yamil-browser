@@ -187,14 +187,28 @@
           </span>
           <div id="sidebar-actions">
             <button id="btn-summarize" title="Summarize page">&#x2211;</button>
+            <button id="btn-tasks-toggle" title="Toggle task queue">&#x2630;</button>
             <button id="btn-sidebar-toggle" title="Collapse">&#x276E;</button>
           </div>
         </div>
 
         <div id="chat-log"></div>
 
+        <!-- Task queue panel (collapsible) -->
+        <div id="task-queue" style="display:none">
+          <div id="tq-header">
+            <span>Background Tasks</span>
+            <span id="tq-count">0</span>
+          </div>
+          <div id="tq-list"></div>
+        </div>
+
         <div id="chat-footer">
           <textarea id="chat-input" rows="2" placeholder="Ask AI to browse, extract, or automate..."></textarea>
+          <label id="bg-toggle" title="Run in background">
+            <input id="bg-check" type="checkbox">
+            <span>BG</span>
+          </label>
           <button id="chat-send">&#9658;</button>
         </div>
       </div>

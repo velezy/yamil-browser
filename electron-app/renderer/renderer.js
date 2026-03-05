@@ -904,6 +904,16 @@ async function sendChat () {
     return
   }
 
+  // Background task mode
+  if (bgCheck && bgCheck.checked) {
+    bgCheck.checked = false
+    const task = createAgentTask(text)
+    taskQueue.style.display = 'block'
+    addSystemMsg(`Running in background: "${text}"`)
+    runBackgroundTask(task)
+    return
+  }
+
   const navMatch = text.match(/^(?:go\s+to|navigate\s+to|open|visit)\s+([^\s,]+)/i)
   if (navMatch) {
     const url = resolveUrl(navMatch[1])
@@ -1845,8 +1855,196 @@ async function sendChatStreaming (text, pageContext) {
   saveChatHistory()
 }
 
+// ── Background Agent Task Queue ───────────────────────────────────────
+
+const KEY_TASKS = 'yamil_agent_tasks'
+const taskQueue = document.getElementById('task-queue')
+const tqList = document.getElementById('tq-list')
+const tqCount = document.getElementById('tq-count')
+const bgCheck = document.getElementById('bg-check')
+let agentTasks = []
+let taskIdCounter2 = 0
+
+function loadAgentTasks () {
+  try { agentTasks = JSON.parse(localStorage.getItem(KEY_TASKS) || '[]') } catch (_) { agentTasks = [] }
+  taskIdCounter2 = agentTasks.reduce((max, t) => Math.max(max, t.id || 0), 0)
+}
+
+function saveAgentTasks () {
+  try { localStorage.setItem(KEY_TASKS, JSON.stringify(agentTasks.slice(-50))) } catch (_) {}
+}
+
+function createAgentTask (goal) {
+  const task = {
+    id: ++taskIdCounter2,
+    goal,
+    status: 'queued',   // queued | running | done | failed
+    steps: [],
+    progress: 0,
+    createdAt: Date.now(),
+    result: null,
+  }
+  agentTasks.push(task)
+  saveAgentTasks()
+  renderTaskQueue()
+  return task
+}
+
+function updateAgentTask (taskId, updates) {
+  const task = agentTasks.find(t => t.id === taskId)
+  if (!task) return
+  Object.assign(task, updates)
+  saveAgentTasks()
+  renderTaskQueue()
+}
+
+function renderTaskQueue () {
+  tqList.innerHTML = ''
+  const active = agentTasks.filter(t => t.status === 'running' || t.status === 'queued')
+  const recent = agentTasks.filter(t => t.status === 'done' || t.status === 'failed').slice(-5)
+  const show = [...active, ...recent.reverse()]
+
+  tqCount.textContent = active.length
+  tqCount.classList.toggle('active', active.length > 0)
+
+  if (show.length === 0) {
+    tqList.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:12px;font-size:11px;">No background tasks. Check "BG" next to send to run tasks in background.</div>'
+    return
+  }
+
+  show.forEach(task => {
+    const el = document.createElement('div')
+    el.className = 'tq-item ' + task.status
+    el.innerHTML = `
+      <div class="tq-item-goal" title="${task.goal}">${task.goal}</div>
+      <div class="tq-item-status">${task.status === 'running' ? 'Running...' : task.status === 'queued' ? 'Queued' : task.status === 'done' ? 'Completed' : 'Failed'}</div>
+      ${task.status === 'running' ? `<div class="tq-item-progress"><div class="tq-item-progress-fill" style="width:${task.progress}%"></div></div>` : ''}
+    `
+    if (task.steps.length > 0) {
+      const stepsEl = document.createElement('div')
+      stepsEl.className = 'tq-item-steps'
+      task.steps.slice(-3).forEach((s, i, arr) => {
+        const stepEl = document.createElement('div')
+        stepEl.className = 'tq-item-step' + (i === arr.length - 1 && task.status === 'running' ? ' current' : '')
+        stepEl.textContent = (i === arr.length - 1 && task.status === 'running' ? '▸ ' : '✓ ') + s
+        stepsEl.appendChild(stepEl)
+      })
+      el.appendChild(stepsEl)
+    }
+
+    if (task.status === 'done' && task.result) {
+      const resultBtn = document.createElement('div')
+      resultBtn.className = 'tq-item-actions'
+      const btn = document.createElement('button')
+      btn.textContent = 'Show Result'
+      btn.addEventListener('click', () => addAiMsg(`[Task "${task.goal}"] ${task.result}`))
+      resultBtn.appendChild(btn)
+      el.appendChild(resultBtn)
+    }
+
+    if (task.status === 'running' || task.status === 'queued') {
+      const actionsEl = document.createElement('div')
+      actionsEl.className = 'tq-item-actions'
+      const cancelBtn = document.createElement('button')
+      cancelBtn.textContent = 'Cancel'
+      cancelBtn.addEventListener('click', () => {
+        updateAgentTask(task.id, { status: 'failed', result: 'Cancelled by user' })
+      })
+      actionsEl.appendChild(cancelBtn)
+      el.appendChild(actionsEl)
+    }
+
+    tqList.appendChild(el)
+  })
+}
+
+// Toggle task queue visibility
+document.getElementById('btn-tasks-toggle').addEventListener('click', () => {
+  const visible = taskQueue.style.display !== 'none'
+  taskQueue.style.display = visible ? 'none' : 'block'
+  if (!visible) renderTaskQueue()
+})
+
+// Run a task in the background
+async function runBackgroundTask (task) {
+  updateAgentTask(task.id, { status: 'running', progress: 10 })
+  updateAgentTask(task.id, { steps: ['Preparing request...'] })
+
+  const tab = tabs.find(t => t.id === activeTabId)
+  let pageContext = {}
+  if (tab && tab.type === 'stealth' && tab.sessionId) {
+    try {
+      const r = await fetch(`${BROWSER_SERVICE}/sessions/${tab.sessionId}/evaluate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ script: '({ url: location.href, title: document.title, text: document.body.innerText.slice(0, 4000) })' }),
+      })
+      const d = await r.json()
+      pageContext = d.result || {}
+    } catch (_) {}
+  } else if (tab && tab.webview) {
+    try {
+      pageContext = await tab.webview.executeJavaScript(`({
+        url: location.href, title: document.title, text: document.body.innerText.slice(0, 4000),
+      })`)
+    } catch (_) {}
+  }
+
+  updateAgentTask(task.id, { steps: [...task.steps, 'Sending to AI...'], progress: 30 })
+
+  const memory = getAiMemory()
+  const memCtx = memory.length > 0 ? '\n\n[User memories: ' + memory.map(m => m.fact).join('; ') + ']' : ''
+
+  try {
+    const res = await fetch(aiEndpoint, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: task.goal + memCtx,
+        pageContext,
+        background: true,
+      }),
+    })
+
+    updateAgentTask(task.id, { steps: [...task.steps, 'Processing response...'], progress: 70 })
+
+    const data = await res.json()
+    const reply = data.response || data.message || JSON.stringify(data)
+
+    if (data.navigatedUrl) navigateWebview(data.navigatedUrl)
+
+    updateAgentTask(task.id, {
+      status: 'done',
+      progress: 100,
+      result: reply,
+      steps: [...task.steps, 'Complete'],
+    })
+
+    // Desktop notification
+    if (Notification.permission === 'granted') {
+      new Notification('YAMIL Task Complete', { body: task.goal, icon: '../assets/yamil-logo.png' })
+    }
+    addSystemMsg(`Background task completed: "${task.goal}"`)
+  } catch (e) {
+    updateAgentTask(task.id, {
+      status: 'failed',
+      result: e.message,
+      steps: [...task.steps, 'Failed: ' + e.message],
+    })
+    addSystemMsg(`Background task failed: "${task.goal}" — ${e.message}`)
+  }
+}
+
+// Expose for window._yamil
+window._yamil.agentTasks = {
+  create: createAgentTask,
+  list: () => agentTasks,
+  get: (id) => agentTasks.find(t => t.id === id),
+  cancel: (id) => updateAgentTask(id, { status: 'failed', result: 'Cancelled' }),
+}
+
 // ── Init ──────────────────────────────────────────────────────────────
 
+loadAgentTasks()
+renderTaskQueue()
 loadChatHistory()
 
 // Restore tabs or create initial tab

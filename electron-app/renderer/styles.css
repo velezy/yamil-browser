@@ -801,6 +801,69 @@ body.fullscreen #main {
   height: 100%; background: var(--green); transition: width .2s;
 }
 
+/* ── Background task queue ──────────────────────────────────────── */
+#task-queue {
+  border-top: 1px solid var(--border);
+  max-height: 200px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+#tq-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px; font-size: 11px; font-weight: 700;
+  color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em;
+}
+#tq-count {
+  background: var(--bg3); border-radius: 8px; padding: 1px 6px;
+  font-size: 10px; color: var(--text-muted);
+}
+#tq-count.active { background: var(--green); color: #000; }
+#tq-list { padding: 0 8px 6px; }
+.tq-item {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 6px 8px; margin-bottom: 4px;
+  background: var(--bg); border-radius: 4px; border-left: 3px solid var(--blue);
+  font-size: 11px;
+}
+.tq-item.running { border-left-color: var(--green); }
+.tq-item.done { border-left-color: var(--text-muted); opacity: .7; }
+.tq-item.failed { border-left-color: var(--red); }
+.tq-item-goal {
+  color: var(--text); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tq-item-status { color: var(--text-muted); font-size: 10px; }
+.tq-item-progress {
+  height: 3px; background: var(--bg3); border-radius: 2px; overflow: hidden;
+}
+.tq-item-progress-fill {
+  height: 100%; background: var(--green); transition: width .3s;
+}
+.tq-item-steps {
+  font-size: 10px; color: var(--text-muted); max-height: 40px; overflow-y: auto;
+}
+.tq-item-step { padding: 1px 0; }
+.tq-item-step.current { color: var(--blue); }
+.tq-item-actions { display: flex; gap: 4px; margin-top: 2px; }
+.tq-item-actions button {
+  background: var(--bg3); border: none; color: var(--text-muted); font-size: 10px;
+  padding: 2px 6px; border-radius: 3px; cursor: pointer;
+}
+.tq-item-actions button:hover { background: #475569; color: var(--text); }
+
+#btn-tasks-toggle {
+  background: transparent; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 14px; padding: 2px 4px; border-radius: 4px;
+}
+#btn-tasks-toggle:hover { background: var(--bg3); color: var(--text); }
+
+#bg-toggle {
+  display: flex; align-items: center; gap: 3px;
+  font-size: 10px; color: var(--text-muted); cursor: pointer;
+  user-select: none; flex-shrink: 0;
+}
+#bg-toggle input { accent-color: var(--green); width: 13px; height: 13px; }
+
 /* ── Tab groups ────────────────────────────────────────────────── */
 .tab-group-label {
   font-size: 9px; font-weight: 700; padding: 2px 6px;
