@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require('electron')
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session } = require('electron')
 const path = require('path')
 const http  = require('http')
 const fs    = require('fs')
@@ -926,6 +926,12 @@ app.on('certificate-error', (event, webContents, url, error, certificate, callba
 })
 
 app.whenReady().then(() => {
+  // Grant microphone/media permissions for webviews (needed for voice input)
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    const allowed = ['media', 'audioCapture', 'microphone', 'display-capture']
+    callback(allowed.includes(permission))
+  })
+
   startControlServer()
   createWindow()
   createTray()
