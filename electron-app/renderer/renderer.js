@@ -1959,71 +1959,12 @@ async function sendChatStreaming (text, pageContext) {
 }
 
 // ── Voice Input / Output ──────────────────────────────────────────────
+// Note: Web Speech Recognition API does not work in Electron (requires
+// Google's backend which is only available in Chrome browser). The voice
+// button is hidden. TTS (speechSynthesis) still works for AI responses.
 
 const btnVoice = document.getElementById('btn-voice')
-let recognition = null
-let isListening = false
-
-function initSpeechRecognition () {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-  if (!SR) return null
-  const rec = new SR()
-  rec.continuous = false
-  rec.interimResults = true
-  rec.lang = 'en-US'
-
-  rec.onstart = () => {
-    isListening = true
-    btnVoice.classList.add('listening')
-    btnVoice.title = 'Listening... (click to stop)'
-  }
-
-  rec.onresult = (e) => {
-    let transcript = ''
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      transcript += e.results[i][0].transcript
-    }
-    chatInput.value = transcript
-    // If final result, auto-send
-    if (e.results[e.results.length - 1].isFinal) {
-      stopListening()
-      if (transcript.trim()) sendChat()
-    }
-  }
-
-  rec.onerror = (e) => {
-    if (e.error === 'network') {
-      if (!rec._networkErrShown) {
-        addSystemMsg('Voice input unavailable — speech service requires internet access.')
-        rec._networkErrShown = true
-      }
-    } else if (e.error !== 'aborted' && e.error !== 'no-speech') {
-      addSystemMsg('Voice error: ' + e.error)
-    }
-    stopListening()
-  }
-
-  rec.onend = () => { stopListening() }
-
-  return rec
-}
-
-function startListening () {
-  if (!recognition) recognition = initSpeechRecognition()
-  if (!recognition) { addSystemMsg('Speech recognition not available in this browser.'); return }
-  try {
-    recognition.start()
-  } catch (e) {
-    addSystemMsg('Could not start voice input: ' + e.message)
-  }
-}
-
-function stopListening () {
-  isListening = false
-  btnVoice.classList.remove('listening')
-  btnVoice.title = 'Voice input (click to speak)'
-  try { if (recognition) recognition.stop() } catch (_) {}
-}
+if (btnVoice) btnVoice.style.display = 'none'  // hidden — not supported in Electron
 
 function speakText (text) {
   if (!window.speechSynthesis) return
@@ -2032,10 +1973,6 @@ function speakText (text) {
   utt.pitch = 1
   window.speechSynthesis.speak(utt)
 }
-
-btnVoice.addEventListener('click', () => {
-  if (isListening) { stopListening() } else { startListening() }
-})
 
 // ── AI Skills ─────────────────────────────────────────────────────────
 
