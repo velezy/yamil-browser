@@ -612,35 +612,45 @@ body { background: var(--bg); color: var(--text); font-size: 13px; }
 .chat-msg.error   { color: var(--red); font-size: 11px; }
 
 #chat-footer {
-  padding: 10px;
+  padding: 8px 10px;
   border-top: 1px solid var(--border);
   display: flex;
-  gap: 6px;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 4px;
 }
 
 #chat-input {
-  flex: 1;
+  width: 100%;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
   font-size: 12px;
-  padding: 6px 8px;
+  padding: 8px 10px;
   resize: none;
   font-family: inherit;
   outline: none;
+  box-sizing: border-box;
 }
 #chat-input:focus { border-color: var(--green); }
+
+
+
+#chat-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
 
 #chat-send {
   background: var(--green);
   color: #000;
   border: none;
   border-radius: var(--radius);
-  width: 32px; height: 32px;
+  width: 28px; height: 28px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
   transition: opacity .15s;
@@ -1025,39 +1035,6 @@ body.fullscreen #main {
 }
 .tab-group-label .group-collapse { font-size: 8px; opacity: .7; }
 .tab.grouped { border-top: 2px solid var(--group-color, var(--blue)); }
-
-/* ── Voice input button ────────────────────────────────────────── */
-#btn-voice {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-size: 14px;
-  cursor: pointer;
-  width: 28px; height: 28px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 50%;
-  flex-shrink: 0;
-  transition: all .2s;
-}
-#btn-voice:hover { background: var(--bg3); color: var(--text); }
-#btn-voice.listening {
-  color: var(--red);
-  background: rgba(248,113,113,.15);
-  animation: voice-pulse 1s ease-in-out infinite;
-}
-@keyframes voice-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,.4); }
-  50% { box-shadow: 0 0 0 8px rgba(248,113,113,0); }
-}
-
-/* Voice icon via inline SVG — microphone */
-.voice-icon {
-  width: 14px; height: 14px; display: inline-block;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z'/%3E%3Cpath d='M19 10v2a7 7 0 0 1-14 0v-2'/%3E%3Cline x1='12' y1='19' x2='12' y2='23'/%3E%3Cline x1='8' y1='23' x2='16' y2='23'/%3E%3C/svg%3E") center/contain no-repeat;
-}
-#btn-voice.listening .voice-icon {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f87171' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z'/%3E%3Cpath d='M19 10v2a7 7 0 0 1-14 0v-2'/%3E%3Cline x1='12' y1='19' x2='12' y2='23'/%3E%3Cline x1='8' y1='23' x2='16' y2='23'/%3E%3C/svg%3E");
-}
 
 /* Skill icons via inline SVG */
 .skill-icon { width: 12px; height: 12px; display: inline-block; vertical-align: middle; }

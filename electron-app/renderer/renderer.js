@@ -764,8 +764,20 @@ function saveChatHistory () {
 function loadChatHistory () {
   try {
     const stored = JSON.parse(localStorage.getItem(KEY_CHAT_HISTORY) || '[]')
-    if (stored.length) {
-      stored.forEach(m => _appendMsg(m.role, m.text))
+    // Filter out old voice error messages and dedupe consecutive system messages
+    const clean = stored
+      .filter(m => !m.text?.startsWith('Voice error:') && !m.text?.startsWith('Voice input unavailable'))
+      .filter((m, i, arr) => {
+        if (i === 0) return true
+        // Remove consecutive duplicate system messages (e.g. repeated "YAMIL Browser ready")
+        const prev = arr[i - 1]
+        return !(m.role === prev.role && m.text === prev.text && m.role === 'system')
+      })
+    if (clean.length !== stored.length) {
+      try { localStorage.setItem(KEY_CHAT_HISTORY, JSON.stringify(clean)) } catch (_) {}
+    }
+    if (clean.length) {
+      clean.forEach(m => _appendMsg(m.role, m.text))
       chatLog.scrollTop = chatLog.scrollHeight
     }
   } catch (_) {}
@@ -1958,95 +1970,7 @@ async function sendChatStreaming (text, pageContext) {
   saveChatHistory()
 }
 
-// ── Voice Input / Output ──────────────────────────────────────────────
-// Web Speech API doesn't work in Electron's renderer (file:// context).
-// Workaround: run speech recognition inside the active webview (HTTPS context).
-
-const btnVoice = document.getElementById('btn-voice')
-let isListening = false
-
-const VOICE_INJECT_SCRIPT = `
-(function() {
-  if (window._yamilVoiceActive) return 'already-active';
-  window._yamilVoiceActive = true;
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { window._yamilVoiceActive = false; return 'no-api'; }
-  const rec = new SR();
-  rec.continuous = false;
-  rec.interimResults = false;
-  rec.lang = 'en-US';
-  rec.onresult = (e) => {
-    let t = '';
-    for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
-    window._yamilVoiceResult = t;
-    window._yamilVoiceActive = false;
-  };
-  rec.onerror = (e) => {
-    window._yamilVoiceError = e.error;
-    window._yamilVoiceActive = false;
-  };
-  rec.onend = () => { window._yamilVoiceActive = false; };
-  try { rec.start(); return 'started'; }
-  catch(e) { window._yamilVoiceActive = false; return 'error:' + e.message; }
-})()
-`
-
-async function startListening () {
-  if (isListening) return
-  const tab = tabs.find(t => t.id === activeTabId)
-  if (!tab || !tab.webview) { addSystemMsg('Open a page first to use voice input.'); return }
-
-  isListening = true
-  if (btnVoice) { btnVoice.classList.add('listening'); btnVoice.title = 'Listening...' }
-
-  try {
-    const result = await tab.webview.executeJavaScript(VOICE_INJECT_SCRIPT)
-    if (result === 'no-api') { addSystemMsg('Speech recognition not available on this page.'); stopListening(); return }
-    if (result === 'already-active') return
-    if (result && result.startsWith('error:')) { addSystemMsg('Voice: ' + result); stopListening(); return }
-
-    // Poll for result (speech recognition runs async in webview)
-    let attempts = 0
-    const poll = setInterval(async () => {
-      attempts++
-      if (attempts > 100) { clearInterval(poll); stopListening(); return } // 10s timeout
-      try {
-        const data = await tab.webview.executeJavaScript(
-          '(function(){ var r = window._yamilVoiceResult; var e = window._yamilVoiceError; ' +
-          'if (r) { delete window._yamilVoiceResult; return {text: r}; } ' +
-          'if (e) { delete window._yamilVoiceError; return {error: e}; } ' +
-          'if (!window._yamilVoiceActive) return {done: true}; return null; })()'
-        )
-        if (!data) return // still listening
-        clearInterval(poll)
-        stopListening()
-        if (data.text) {
-          chatInput.value = data.text
-          sendChat()
-        } else if (data.error && data.error !== 'no-speech' && data.error !== 'aborted') {
-          addSystemMsg('Voice error: ' + data.error)
-        }
-      } catch (_) { clearInterval(poll); stopListening() }
-    }, 100)
-  } catch (e) {
-    addSystemMsg('Voice input failed: ' + e.message)
-    stopListening()
-  }
-}
-
-function stopListening () {
-  isListening = false
-  if (btnVoice) { btnVoice.classList.remove('listening'); btnVoice.title = 'Voice input (click to speak)' }
-  const tab = tabs.find(t => t.id === activeTabId)
-  if (tab && tab.webview) {
-    tab.webview.executeJavaScript('try{if(window._yamilVoiceActive){window._yamilVoiceActive=false;}}catch(_){}').catch(() => {})
-  }
-}
-
-if (btnVoice) btnVoice.addEventListener('click', () => {
-  if (isListening) stopListening(); else startListening()
-})
-
+// ── Text-to-Speech (output only) ─────────────────────────────────────
 function speakText (text) {
   if (!window.speechSynthesis) return
   const utt = new SpeechSynthesisUtterance(text.slice(0, 500))
