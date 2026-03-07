@@ -1,7 +1,13 @@
 import { createSession, getSession, listSessions, closeSession, touch } from './sessions.js'
+import { logAction, cleanupSession, searchKnowledge, getKnowledgeStats, distillSession, flushSession } from './knowledge.js'
 
 function notFound(reply, id) {
   return reply.code(404).send({ error: `Session ${id} not found` })
+}
+
+/** Log action + return result (non-blocking) */
+function withLog(sessionId, action, params, pageUrl) {
+  try { logAction(sessionId, action, params, pageUrl) } catch {}
 }
 
 export async function registerRoutes(app) {
@@ -18,6 +24,7 @@ export async function registerRoutes(app) {
   })
 
   app.delete('/sessions/:id', async (req, reply) => {
+    cleanupSession(req.params.id)  // flush learned knowledge before closing
     await closeSession(req.params.id)
     return { ok: true }
   })
@@ -30,7 +37,9 @@ export async function registerRoutes(app) {
     const allowed = ['networkidle', 'load', 'domcontentloaded', 'commit']
     const waitUntil = allowed.includes(req.body.waitUntil) ? req.body.waitUntil : 'domcontentloaded'
     await s.page.goto(req.body.url, { waitUntil, timeout: 30000 })
-    return { url: s.page.url(), title: await s.page.title() }
+    const result = { url: s.page.url(), title: await s.page.title() }
+    withLog(req.params.id, 'navigate', { url: req.body.url }, result.url)
+    return result
   })
 
   app.get('/sessions/:id/url', async (req, reply) => {
@@ -56,6 +65,7 @@ export async function registerRoutes(app) {
     const opts = { button, clickCount, timeout: 10000 }
     if (text) await s.page.getByText(text, { exact: false }).first().click(opts)
     else await s.page.click(selector, opts)
+    withLog(req.params.id, 'click', { selector: selector || text }, s.page.url())
     return { ok: true }
   })
 
@@ -64,6 +74,7 @@ export async function registerRoutes(app) {
     if (!s) return notFound(reply, req.params.id)
     touch(s)
     await s.page.fill(req.body.selector, req.body.value, { timeout: 10000 })
+    withLog(req.params.id, 'fill', { selector: req.body.selector, value: (req.body.value || '').substring(0, 50) }, s.page.url())
     return { ok: true }
   })
 
@@ -72,6 +83,7 @@ export async function registerRoutes(app) {
     if (!s) return notFound(reply, req.params.id)
     touch(s)
     await s.page.keyboard.press(req.body.key)
+    withLog(req.params.id, 'press', { value: req.body.key }, s.page.url())
     return { ok: true }
   })
 
@@ -89,6 +101,7 @@ export async function registerRoutes(app) {
     if (!s) return notFound(reply, req.params.id)
     touch(s)
     await s.page.hover(req.body.selector, { timeout: 10000 })
+    withLog(req.params.id, 'hover', { selector: req.body.selector }, s.page.url())
     return { ok: true }
   })
 
@@ -97,6 +110,7 @@ export async function registerRoutes(app) {
     if (!s) return notFound(reply, req.params.id)
     touch(s)
     await s.page.selectOption(req.body.selector, req.body.value, { timeout: 10000 })
+    withLog(req.params.id, 'select', { selector: req.body.selector, value: req.body.value }, s.page.url())
     return { ok: true }
   })
 
@@ -162,6 +176,7 @@ export async function registerRoutes(app) {
     if (!s) return notFound(reply, req.params.id)
     touch(s)
     await s.page.keyboard.type(req.body.text, { delay: req.body.delay || 0 })
+    withLog(req.params.id, 'type', { value: (req.body.text || '').substring(0, 50) }, s.page.url())
     return { ok: true }
   })
 
@@ -269,6 +284,7 @@ export async function registerRoutes(app) {
     const { selector, text } = req.body
     if (text) await s.page.getByText(text, { exact: false }).first().dblclick({ timeout: 10000 })
     else await s.page.dblclick(selector, { timeout: 10000 })
+    withLog(req.params.id, 'dblclick', { selector: selector || text }, s.page.url())
     return { ok: true }
   })
 
@@ -437,5 +453,55 @@ export async function registerRoutes(app) {
     } catch (e) {
       return reply.code(500).send({ error: e.message })
     }
+  })
+
+  // ── Knowledge API (RAG Learning Pipeline) ────────────────────────────
+  // Used by AI sidebar, AI Builder Orchestra, and any client that wants
+  // to query or contribute to the browser's learned knowledge.
+
+  /** Search learned knowledge by similarity */
+  app.post('/knowledge/search', async (req) => {
+    const { query, domain, category, topK } = req.body || {}
+    if (!query) return { error: 'query required', entries: [] }
+    const results = await searchKnowledge(query, domain, category, topK || 5)
+    return { entries: results, count: results.length }
+  })
+
+  /** Get knowledge base stats */
+  app.get('/knowledge/stats', async () => {
+    return getKnowledgeStats()
+  })
+
+  /** Manually contribute knowledge (e.g., from AI sidebar analysis) */
+  app.post('/knowledge/contribute', async (req) => {
+    const { goal, url, steps, outcome } = req.body || {}
+    if (!goal || !url) return { error: 'goal and url required' }
+    const entries = await distillSession({
+      goal,
+      url,
+      steps: steps || [],
+      outcome: outcome || 'contributed',
+      durationMs: 0,
+    })
+    return { ok: true, entriesAdded: entries?.length || 0 }
+  })
+
+  /** Flush a session's passive knowledge now (don't wait for idle timer) */
+  app.post('/sessions/:id/knowledge/flush', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    flushSession(req.params.id, 'manual')
+    return { ok: true }
+  })
+
+  /** Get knowledge relevant to the current page (for AI sidebar context) */
+  app.get('/sessions/:id/knowledge/context', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    const url = s.page.url()
+    let domain
+    try { domain = new URL(url).hostname } catch { domain = null }
+    const results = await searchKnowledge(url, domain, null, 3)
+    return { url, domain, entries: results, count: results.length }
   })
 }
