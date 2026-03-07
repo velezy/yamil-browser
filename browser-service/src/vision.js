@@ -46,7 +46,7 @@ async function ollamaVision(imageBase64, prompt) {
       }],
       stream: false,
     }),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(120000),
   })
   if (!res.ok) throw new Error(`Ollama vision HTTP ${res.status}`)
   const data = await res.json()
