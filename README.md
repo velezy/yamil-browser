@@ -190,4 +190,114 @@ GitHub Actions (`.github/workflows/docker.yml`) builds and pushes to GHCR on eve
 ```
 ghcr.io/velezy/yamil-browser:latest
 ghcr.io/velezy/yamil-browser:sha-<short>
+
+
+___________________________________
+
+ Databricks CDC: Optimal Approach for YAMIL
+
+  The Bottom Line
+
+  Your current polling approach is the correct enterprise pattern.   
+  Databricks does NOT offer native push notifications when a Delta   
+  table changes. Every integration platform (MuleSoft, etc.) uses the
+   same polling pattern you're using.
+
+  ---
+  What Databricks Actually Offers
+
+  ┌────────────────┬───────────┬──────────────┬────────────────┐     
+  │    Approach    │ Real-time │  Practical?  │     Notes      │     
+  │                │     ?     │              │                │     
+  ├────────────────┼───────────┼──────────────┼────────────────┤     
+  │ Polling via ta │ 30-60s    │ Best for     │ No Databricks- │     
+  │ ble_changes()  │ latency   │ external     │ side infra     │     
+  │ (your current) │           │ platforms    │ needed         │     
+  ├────────────────┼───────────┼──────────────┼────────────────┤     
+  │ Structured     │           │ Only if      │ Requires       │     
+  │ Streaming +    │ 10s - sub │ running code │ always-on      │     
+  │ CDF            │ -second   │  inside      │ Spark cluster  │     
+  │                │           │ Databricks   │                │     
+  ├────────────────┼───────────┼──────────────┼────────────────┤     
+  │                │           │              │ Notifications  │     
+  │ Databricks Job │ 1 min+    │ Marginal     │ are about job  │     
+  │  webhooks      │           │ improvement  │ status, not    │     
+  │                │           │              │ table changes  │     
+  ├────────────────┼───────────┼──────────────┼────────────────┤     
+  │                │           │              │ 1 alert per    │     
+  │ SQL Alerts     │ 1-5 min   │ Not scalable │ table, max ~50 │     
+  │                │           │              │  alerts        │     
+  ├────────────────┼───────────┼──────────────┼────────────────┤     
+  │                │           │              │ Tells you      │     
+  │ Unity Catalog  │ Minutes   │ Supplementar │ something      │     
+  │ audit logs     │ to hours  │ y only       │ changed, not   │     
+  │                │           │              │ what changed   │     
+  ├────────────────┼───────────┼──────────────┼────────────────┤     
+  │                │           │              │ S3 file        │     
+  │ AWS            │ Near      │ File-level   │ events, not    │     
+  │ EventBridge    │ real-time │ only         │ Delta          │     
+  │                │           │              │ operations     │     
+  └────────────────┴───────────┴──────────────┴────────────────┘     
+
+  There is no Databricks webhook that fires "table X changed, here's 
+  the data."
+
+  ---
+  Scalability of Your Current Architecture
+
+  ┌────────────────┬────────────────────┬────────────────────────┐   
+  │   Dimension    │  Current Capacity  │ Max with Optimization  │   
+  ├────────────────┼────────────────────┼────────────────────────┤   
+  │ Tables         │ ~400 (4 workers x  │ ~1,000 (increase       │   
+  │ monitored      │ 20/batch)          │ workers, batch         │   
+  │                │                    │ queries)               │   
+  ├────────────────┼────────────────────┼────────────────────────┤   
+  │ Polling        │ 30-60s             │ 10-15s (keep warehouse │   
+  │ latency        │                    │  warm)                 │   
+  ├────────────────┼────────────────────┼────────────────────────┤   
+  │ Downstream API │ Unlimited per flow │ Hundreds per change    │   
+  │  recipients    │  (fan-out in       │ event                  │   
+  │                │ nodes)             │                        │   
+  ├────────────────┼────────────────────┼────────────────────────┤   
+  │ Concurrent     │ 4 Python           │ Scale with more        │   
+  │ flows          │ Transforms         │ flow-execution         │   
+  │                │                    │ containers             │   
+  └────────────────┴────────────────────┴────────────────────────┘   
+
+  ---
+  Recommended Optimizations (Short-term)
+
+  1. Keep warehouse warm — Set auto-stop to 10+ minutes (eliminates  
+  5-15s cold start)
+  2. Batch DESCRIBE HISTORY — Check multiple tables in one SQL call  
+  with UNION ALL before fetching actual changes
+  3. Adaptive polling — Reduce interval for frequently-changing      
+  tables, increase for stable ones (your backoff already does this   
+  for errors)
+
+  Future Enhancement (Medium-term): Push-Triggered Pull
+
+  Add a lightweight Databricks Job (runs every 1-2 min) that:        
+  1. Checks DESCRIBE HISTORY for all monitored tables
+  2. POSTs a webhook to YAMIL with only the table names that changed 
+  3. YAMIL immediately polls only those tables
+
+  This reduces unnecessary polling by ~80% and cuts latency to ~1-2  
+  minutes.
+
+  Long-term (Only if Premium/Enterprise Tier)
+
+  Deploy Structured Streaming inside Databricks → push to Kafka →    
+  YAMIL consumes. Only worth it at 500+ tables with sub-30s latency  
+  requirements.
+
+  ---
+  Your cdc_coordinator.py is well-architected and production-grade.  
+  The industry standard for external platforms monitoring Databricks 
+  is exactly what you're doing — intelligent polling with
+  checkpointing, batching, and error recovery.
+
+
+
+
 ```

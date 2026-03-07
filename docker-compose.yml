@@ -9,5 +9,32 @@ services:
     environment:
       - PORT=4000
       - SESSION_TIMEOUT_MS=900000   # 15 min idle timeout
+      - DATABASE_URL=postgresql://yamil_browser:yamil_browser_secret@browser-db:5432/yamil_browser
+      - OLLAMA_URL=http://host.docker.internal:11434
+    depends_on:
+      browser-db:
+        condition: service_healthy
     shm_size: "2gb"                 # Chrome needs extra shared memory
     restart: unless-stopped
+
+  browser-db:
+    image: pgvector/pgvector:pg17
+    container_name: yamil-browser-db
+    ports:
+      - "5433:5432"                 # 5433 to avoid conflict with other postgres instances
+    environment:
+      - POSTGRES_DB=yamil_browser
+      - POSTGRES_USER=yamil_browser
+      - POSTGRES_PASSWORD=yamil_browser_secret
+    volumes:
+      - browser-db-data:/var/lib/postgresql/data
+      - ./browser-service/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yamil_browser"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  browser-db-data:

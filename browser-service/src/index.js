@@ -2,7 +2,7 @@ import Fastify from 'fastify'
 import websocket from '@fastify/websocket'
 import { registerRoutes } from './routes.js'
 import { registerWebSockets } from './ws.js'
-import { probeOllama } from './knowledge.js'
+import { probeOllama, initDb } from './knowledge.js'
 
 const PORT = parseInt(process.env.PORT || '4000')
 const HOST = process.env.HOST || '0.0.0.0'
@@ -19,7 +19,8 @@ await app.register(websocket)
 await registerRoutes(app)
 await registerWebSockets(app)
 
-// Probe Ollama for knowledge pipeline models (non-blocking)
+// Initialize knowledge pipeline: database + Ollama models
+initDb().catch(e => console.error('[KNOWLEDGE] DB init failed:', e.message))
 probeOllama().catch(() => {})
 
 await app.listen({ port: PORT, host: HOST })

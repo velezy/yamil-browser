@@ -1,29 +1,49 @@
 /**
- * YAMIL Browser RAG Knowledge Pipeline
+ * YAMIL Browser RAG Knowledge Pipeline — PostgreSQL + pgvector
  *
  * Passively learns from every browser action (navigate, click, fill, etc.).
  * Distills structured knowledge via Ollama (qwen3:8b) and generates embeddings
- * (nomic-embed-text) for cosine similarity search.
+ * (nomic-embed-text) stored in pgvector for cosine similarity search.
  *
- * Knowledge persists to JSON on disk. All clients (YAMIL, DriveSentinel,
- * Memobytes) benefit automatically since this runs in the browser service.
+ * All clients (YAMIL, DriveSentinel, Memobytes) benefit automatically.
+ *
+ * SECURITY: Password fields are scrubbed before storage.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
-import { join } from 'path'
+import pg from 'pg'
 import crypto from 'crypto'
+
+const { Pool } = pg
 
 // ── Config ───────────────────────────────────────────────────────────
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434'
 const OLLAMA_EXTRACT_MODEL = process.env.OLLAMA_EXTRACT_MODEL || 'qwen3:8b'
 const OLLAMA_EMBED_MODEL   = process.env.OLLAMA_EMBED_MODEL   || 'nomic-embed-text'
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://yamil_browser:yamil_browser_secret@localhost:5433/yamil_browser'
 
-const KNOWLEDGE_DIR  = process.env.KNOWLEDGE_DIR || join(process.cwd(), 'data', 'knowledge')
-const KNOWLEDGE_FILE = join(KNOWLEDGE_DIR, 'browser-knowledge.json')
+const PASSIVE_IDLE_MS     = 30000  // 30s idle → auto distill
+const PASSIVE_MIN_ACTIONS = 5     // minimum actions before auto-distill
 
-const PASSIVE_IDLE_MS    = 30000  // 30s idle → auto distill
-const PASSIVE_MIN_ACTIONS = 5    // minimum actions before auto-distill
-const MAX_ENTRIES = 1000          // LRU cap
+// ── Database pool ────────────────────────────────────────────────────
+let pool = null
+let dbReady = false
+
+async function getPool() {
+  if (pool) return pool
+  pool = new Pool({ connectionString: DATABASE_URL, max: 5 })
+  pool.on('error', (err) => console.error('[KNOWLEDGE DB] Pool error:', err.message))
+  // Test connection
+  try {
+    const client = await pool.connect()
+    client.release()
+    dbReady = true
+    console.log('[KNOWLEDGE DB] Connected to PostgreSQL + pgvector')
+  } catch (e) {
+    console.error(`[KNOWLEDGE DB] Connection failed: ${e.message}`)
+    dbReady = false
+  }
+  return pool
+}
 
 // ── Model availability (probed on startup) ───────────────────────────
 let _extractAvailable = false
@@ -47,6 +67,10 @@ export async function probeOllama() {
   } catch {
     console.log('[KNOWLEDGE] Ollama not reachable — knowledge distillation disabled')
   }
+}
+
+export async function initDb() {
+  await getPool()
 }
 
 // ── Ollama helpers ───────────────────────────────────────────────────
@@ -85,7 +109,6 @@ async function ollamaEmbed(text) {
   return data?.embeddings?.[0] || null
 }
 
-/** Balanced-brace JSON extractor — handles trailing text from LLMs */
 function extractJSON(raw) {
   let cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
   cleaned = cleaned.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
@@ -104,19 +127,16 @@ function extractJSON(raw) {
   return null
 }
 
-// ── Knowledge store (JSON file) ──────────────────────────────────────
-function loadKnowledge() {
-  try {
-    if (existsSync(KNOWLEDGE_FILE)) return JSON.parse(readFileSync(KNOWLEDGE_FILE, 'utf8'))
-  } catch {}
-  return { entries: [], version: 2 }
-}
+// ── Security: scrub sensitive values ─────────────────────────────────
+const SENSITIVE_PATTERNS = /password|passwd|secret|token|api.?key|authorization|credit.?card|ssn|cvv/i
 
-function saveKnowledge(store) {
-  try {
-    if (!existsSync(KNOWLEDGE_DIR)) mkdirSync(KNOWLEDGE_DIR, { recursive: true })
-    writeFileSync(KNOWLEDGE_FILE, JSON.stringify(store, null, 2), 'utf8')
-  } catch (e) { console.error(`[KNOWLEDGE] Save failed: ${e.message}`) }
+function scrubValue(action, selector, value) {
+  if (!value) return value
+  // Scrub fill/type actions on password-like fields
+  if ((action === 'fill' || action === 'type') && SENSITIVE_PATTERNS.test(selector || '')) {
+    return '***'
+  }
+  return value.substring(0, 100)  // truncate long values
 }
 
 // ── Distillation template ────────────────────────────────────────────
@@ -132,6 +152,7 @@ const DISTILLATION_TEMPLATE = {
 export async function distillSession(session) {
   if (!_extractAvailable) return null
   if (!session?.steps?.length) return null
+  if (!dbReady) { console.error('[KNOWLEDGE] DB not ready, skipping distillation'); return null }
 
   try {
     console.log(`[KNOWLEDGE] Distilling: "${session.goal}" (${session.steps.length} steps)`)
@@ -142,7 +163,7 @@ export async function distillSession(session) {
       `Outcome: ${session.outcome}`,
       'Steps:',
       ...session.steps.map((s, i) =>
-        `${i + 1}. ${s.action} ${s.selector || ''} ${s.value || ''} - ${s.result}`.replace(/\s+/g, ' ').trim()
+        `${i + 1}. ${s.action} ${s.selector || ''} ${scrubValue(s.action, s.selector, s.value) || ''} - ${s.result}`.replace(/\s+/g, ' ').trim()
       ),
     ].join('\n')
 
@@ -152,9 +173,9 @@ export async function distillSession(session) {
       return null
     }
 
-    const knowledgeEntries = []
     const domain = (() => { try { return new URL(session.url).hostname } catch { return 'unknown' } })()
-    const timestamp = new Date().toISOString()
+    const p = await getPool()
+    let savedCount = 0
 
     const categories = ['page_schemas', 'action_recipes', 'field_maps', 'error_recoveries', 'api_patterns']
     for (const cat of categories) {
@@ -172,105 +193,98 @@ export async function distillSession(session) {
           try { embedding = await ollamaEmbed(`${cat}: ${title} — ${contentStr}`) } catch {}
         }
 
-        knowledgeEntries.push({
-          id: crypto.randomUUID(),
-          domain,
-          category: cat,
-          title,
-          content: item,
-          source_goal: session.goal,
-          source_url: session.url,
-          embedding,
-          confidence: session.outcome === 'success' ? 1.0 : session.outcome === 'passive' ? 0.7 : 0.5,
-          access_count: 0,
-          created_at: timestamp,
-        })
+        const confidence = session.outcome === 'success' ? 1.0 : session.outcome === 'passive' ? 0.7 : 0.5
+
+        const embeddingStr = embedding ? `[${embedding.join(',')}]` : null
+
+        await p.query(
+          `INSERT INTO browser_knowledge (domain, category, title, content, source_goal, source_url, embedding, confidence)
+           VALUES ($1, $2, $3, $4, $5, $6, $7::vector, $8)`,
+          [domain, cat, title, JSON.stringify(item), session.goal, session.url, embeddingStr, confidence]
+        )
+        savedCount++
       }
     }
 
-    if (knowledgeEntries.length === 0) {
+    if (savedCount === 0) {
       console.log('[KNOWLEDGE] No meaningful knowledge extracted')
       return null
     }
 
-    const store = loadKnowledge()
-    store.entries.push(...knowledgeEntries)
-    if (store.entries.length > MAX_ENTRIES) store.entries = store.entries.slice(-MAX_ENTRIES)
-    store.version++
-    saveKnowledge(store)
-
-    console.log(`[KNOWLEDGE] Saved ${knowledgeEntries.length} entries from "${session.goal}" (domain: ${domain})`)
-    return knowledgeEntries
+    console.log(`[KNOWLEDGE] Saved ${savedCount} entries from "${session.goal}" (domain: ${domain})`)
+    return savedCount
   } catch (e) {
     console.error(`[KNOWLEDGE] Distillation failed: ${e.message}`)
     return null
   }
 }
 
-// ── Search knowledge (cosine similarity) ─────────────────────────────
-function cosineSim(a, b) {
-  if (!a || !b || a.length !== b.length) return 0
-  let dot = 0, na = 0, nb = 0
-  for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i] }
-  return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1)
-}
-
+// ── Search knowledge (pgvector cosine similarity) ────────────────────
 export async function searchKnowledge(query, domain, category, topK = 5) {
-  const store = loadKnowledge()
-  if (!store.entries.length) return []
-
-  let candidates = store.entries
-  if (domain) candidates = candidates.filter(e => e.domain === domain)
-  if (category) candidates = candidates.filter(e => e.category === category)
+  if (!dbReady) return []
+  const p = await getPool()
 
   let queryEmbedding = null
   if (_embedAvailable) {
     try { queryEmbedding = await ollamaEmbed(query) } catch {}
   }
 
-  const scored = candidates.map(entry => {
-    let score = 0
-    if (queryEmbedding && entry.embedding) {
-      score = cosineSim(queryEmbedding, entry.embedding)
-    } else {
-      // Keyword fallback
-      const lower = query.toLowerCase()
-      const text = `${entry.title} ${entry.domain} ${entry.category} ${JSON.stringify(entry.content)}`.toLowerCase()
-      const words = lower.split(/\s+/)
-      score = words.filter(w => text.includes(w)).length / (words.length || 1)
-    }
-    return { ...entry, score }
-  })
+  if (queryEmbedding) {
+    // Vector similarity search
+    const embStr = `[${queryEmbedding.join(',')}]`
+    let sql = `SELECT *, 1 - (embedding <=> $1::vector) AS score FROM browser_knowledge WHERE embedding IS NOT NULL`
+    const params = [embStr]
+    let idx = 2
+    if (domain) { sql += ` AND domain = $${idx++}`; params.push(domain) }
+    if (category) { sql += ` AND category = $${idx++}`; params.push(category) }
+    sql += ` ORDER BY embedding <=> $1::vector LIMIT $${idx}`
+    params.push(topK)
 
-  scored.sort((a, b) => b.score - a.score)
-  return scored.slice(0, topK)
+    const { rows } = await p.query(sql, params)
+    return rows.map(r => ({ ...r, content: r.content, score: parseFloat(r.score) || 0 }))
+  } else {
+    // Keyword fallback
+    let sql = `SELECT *, 0.5 AS score FROM browser_knowledge WHERE title ILIKE $1 OR source_goal ILIKE $1`
+    const params = [`%${query}%`]
+    let idx = 2
+    if (domain) { sql += ` AND domain = $${idx++}`; params.push(domain) }
+    if (category) { sql += ` AND category = $${idx++}`; params.push(category) }
+    sql += ` ORDER BY created_at DESC LIMIT $${idx}`
+    params.push(topK)
+
+    const { rows } = await p.query(sql, params)
+    return rows
+  }
 }
 
-export function getKnowledgeStats() {
-  const store = loadKnowledge()
-  const byDomain = {}, byCategory = {}
-  for (const e of store.entries) {
-    byDomain[e.domain] = (byDomain[e.domain] || 0) + 1
-    byCategory[e.category] = (byCategory[e.category] || 0) + 1
-  }
+export async function getKnowledgeStats() {
+  if (!dbReady) return { total: 0, version: 0, byDomain: {}, byCategory: {}, models: { extract: OLLAMA_EXTRACT_MODEL, embed: OLLAMA_EMBED_MODEL }, extractAvailable: _extractAvailable, embedAvailable: _embedAvailable, db: false }
+
+  const p = await getPool()
+  const { rows: [{ count }] } = await p.query('SELECT COUNT(*) AS count FROM browser_knowledge')
+  const { rows: domains } = await p.query('SELECT domain, COUNT(*) AS count FROM browser_knowledge GROUP BY domain ORDER BY count DESC')
+  const { rows: cats } = await p.query('SELECT category, COUNT(*) AS count FROM browser_knowledge GROUP BY category ORDER BY count DESC')
+  const { rows: actions } = await p.query('SELECT COUNT(*) AS count FROM browser_actions')
+
+  const byDomain = {}
+  for (const r of domains) byDomain[r.domain] = parseInt(r.count)
+  const byCategory = {}
+  for (const r of cats) byCategory[r.category] = parseInt(r.count)
+
   return {
-    total: store.entries.length,
-    version: store.version,
+    total: parseInt(count),
+    actions: parseInt(actions[0]?.count || 0),
     byDomain,
     byCategory,
     models: { extract: OLLAMA_EXTRACT_MODEL, embed: OLLAMA_EMBED_MODEL },
     extractAvailable: _extractAvailable,
     embedAvailable: _embedAvailable,
+    db: true,
   }
 }
 
 // ── Passive session tracker (per-session) ────────────────────────────
-// Each browser session gets its own action log. Distillation fires on:
-//   - 5+ actions and 30s idle
-//   - Domain change
-//   - Session close
-
-const sessionTrackers = new Map()  // sessionId → tracker
+const sessionTrackers = new Map()
 
 function getTracker(sessionId) {
   if (!sessionTrackers.has(sessionId)) {
@@ -284,18 +298,32 @@ function getTracker(sessionId) {
   return sessionTrackers.get(sessionId)
 }
 
-/** Log an action from a browser session */
-export function logAction(sessionId, action, params = {}, pageUrl = '') {
+/** Log an action — writes to DB + in-memory tracker for batch distillation */
+export async function logAction(sessionId, action, params = {}, pageUrl = '') {
   const tracker = getTracker(sessionId)
-  tracker.actions.push({
+  const scrubbedValue = scrubValue(action, params.selector || params.text || '', params.value || params.url || '')
+
+  const entry = {
     action,
     selector: params.selector || params.text || '',
-    value: params.value || params.url || '',
+    value: scrubbedValue,
     result: 'ok',
     timestamp: new Date().toISOString(),
-  })
+  }
+  tracker.actions.push(entry)
 
-  // Track domain
+  // Write to DB (non-blocking)
+  if (dbReady) {
+    let domain = null
+    try { domain = new URL(pageUrl).hostname } catch {}
+    const p = await getPool()
+    p.query(
+      'INSERT INTO browser_actions (session_id, action, selector, value, page_url, domain) VALUES ($1, $2, $3, $4, $5, $6)',
+      [sessionId, action, entry.selector, scrubbedValue, pageUrl, domain]
+    ).catch(e => console.error(`[KNOWLEDGE] Action log DB error: ${e.message}`))
+  }
+
+  // Track domain changes
   try {
     const domain = new URL(pageUrl).hostname
     if (tracker.startDomain && tracker.startDomain !== domain) {
@@ -338,7 +366,6 @@ export function flushSession(sessionId, trigger = 'manual') {
   }).catch(e => console.error(`[KNOWLEDGE] Passive distillation error: ${e.message}`))
 }
 
-/** Clean up tracker when session closes */
 export function cleanupSession(sessionId) {
   flushSession(sessionId, 'session-close')
   sessionTrackers.delete(sessionId)

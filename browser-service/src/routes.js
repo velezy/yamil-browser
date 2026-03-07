@@ -483,7 +483,7 @@ export async function registerRoutes(app) {
       outcome: outcome || 'contributed',
       durationMs: 0,
     })
-    return { ok: true, entriesAdded: entries?.length || 0 }
+    return { ok: true, entriesAdded: entries || 0 }
   })
 
   /** Flush a session's passive knowledge now (don't wait for idle timer) */
