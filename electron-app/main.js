@@ -64,13 +64,36 @@ function execInActiveWebview (script) {
   )
 }
 
-function captureActiveWebview () {
+function captureActiveWebview ({ quality = 80, maxWidth = 1280, maxBytes = 10_000_000 } = {}) {
   if (!mainWindow) return Promise.reject(new Error('no window'))
   return mainWindow.webContents.executeJavaScript(
     `(function(){
       const wv = window._yamil && window._yamil.getActiveWebview()
       if (!wv) return Promise.resolve(null)
-      return wv.capturePage().then(img => img.toDataURL())
+      return wv.capturePage().then(img => {
+        const MAX_BYTES = ${maxBytes}
+        let w = ${maxWidth}
+        let q = ${quality}
+        const orig = img.getSize()
+        // Adaptive loop: shrink until under budget
+        for (let attempt = 0; attempt < 5; attempt++) {
+          let ni = img
+          if (orig.width > w) {
+            const scale = w / orig.width
+            ni = ni.resize({ width: w, height: Math.round(orig.height * scale) })
+          }
+          const jpegBuf = ni.toJPEG(q)
+          if (jpegBuf.length <= MAX_BYTES) {
+            return 'data:image/jpeg;base64,' + jpegBuf.toString('base64')
+          }
+          // Reduce quality first, then resolution
+          if (q > 30) { q = Math.max(30, q - 20) }
+          else { w = Math.round(w * 0.7) }
+        }
+        // Final fallback: smallest possible
+        let ni = img.resize({ width: Math.min(w, 640), height: Math.round(orig.height * (Math.min(w, 640) / orig.width)) })
+        return 'data:image/jpeg;base64,' + ni.toJPEG(20).toString('base64')
+      })
     })()`
   )
 }
@@ -290,16 +313,20 @@ function startControlServer () {
       getActiveTabInfo().then(async (info) => {
         if (info && info.type === 'stealth' && info.sessionId) {
           try {
-            const r = await browserServiceRaw('GET', `/sessions/${info.sessionId}/screenshot`)
+            const qs = url.search || '?quality=40&scale=0.5'
+            const r = await browserServiceRaw('GET', `/sessions/${info.sessionId}/screenshot${qs}`)
             res.setHeader('Content-Type', r.headers['content-type'] || 'image/jpeg')
             res.writeHead(r.status)
             res.end(r.buf)
           } catch (e) { json(res, { error: e.message }, 500) }
         } else {
-          captureActiveWebview().then(dataUrl => {
+          const quality = parseInt(url.searchParams.get('quality')) || 80
+          const maxWidth = parseInt(url.searchParams.get('maxWidth')) || 1280
+          const maxBytes = parseInt(url.searchParams.get('maxBytes')) || 10_000_000
+          captureActiveWebview({ quality, maxWidth, maxBytes }).then(dataUrl => {
             if (!dataUrl) { json(res, { error: 'webview not ready' }, 503); return }
             const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '')
-            res.setHeader('Content-Type', 'image/png')
+            res.setHeader('Content-Type', 'image/jpeg')
             res.writeHead(200)
             res.end(Buffer.from(base64, 'base64'))
           }).catch(e => json(res, { error: e.message }, 500))

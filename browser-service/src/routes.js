@@ -120,7 +120,9 @@ export async function registerRoutes(app) {
     const s = getSession(req.params.id)
     if (!s) return notFound(reply, req.params.id)
     touch(s)
-    const buf = await s.page.screenshot({ type: 'jpeg', quality: 85 })
+    const quality = Math.min(100, Math.max(1, parseInt(req.query.quality) || 85))
+    const scale = parseFloat(req.query.scale) || 1
+    const buf = await s.page.screenshot({ type: 'jpeg', quality, scale: Math.min(1, scale) })
     reply.header('content-type', 'image/jpeg')
     return reply.send(buf)
   })
