@@ -1,5 +1,6 @@
 import { createSession, getSession, listSessions, closeSession, touch } from './sessions.js'
 import { logAction, cleanupSession, searchKnowledge, getKnowledgeStats, distillSession, flushSession } from './knowledge.js'
+import { runTask, isVisionAvailable } from './vision.js'
 
 function notFound(reply, id) {
   return reply.code(404).send({ error: `Session ${id} not found` })
@@ -453,6 +454,27 @@ export async function registerRoutes(app) {
     } catch (e) {
       return reply.code(500).send({ error: e.message })
     }
+  })
+
+  // ── Autonomous agent (vision + action loop) ──────────────────────────
+
+  app.post('/sessions/:id/run-task', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    if (!isVisionAvailable()) {
+      return reply.code(503).send({ error: 'Vision model not available. Ensure Ollama is running with qwen3-vl:8b.' })
+    }
+    const { goal, maxSteps = 15 } = req.body || {}
+    if (!goal) return reply.code(400).send({ error: 'goal required' })
+
+    const result = await runTask(s.page, req.params.id, goal, maxSteps)
+    return result
+  })
+
+  /** Check if vision/run-task is available */
+  app.get('/vision/status', async () => {
+    return { available: isVisionAvailable() }
   })
 
   // ── Knowledge API (RAG Learning Pipeline) ────────────────────────────
