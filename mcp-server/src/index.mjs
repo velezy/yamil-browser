@@ -541,6 +541,33 @@ function logMcpAction(action, params = {}, pageUrl = '') {
   }).catch(() => {});
 }
 
+/** Search knowledge base for relevant context (returns formatted string or null) */
+async function ragLookup(query, domain, category, topK = 3) {
+  try {
+    const res = await fetch(`${BROWSER_SVC_URL}/knowledge/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, domain, category, topK }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.entries || data.entries.length === 0) return null;
+    return data.entries
+      .filter(e => (e.score || 0) > 0.3)
+      .map(e => {
+        const content = typeof e.content === 'string' ? JSON.parse(e.content) : e.content;
+        return `[${e.category}] ${e.title}: ${JSON.stringify(content)}`;
+      })
+      .join('\n');
+  } catch { return null; }
+}
+
+/** Get domain from URL */
+function extractDomain(url) {
+  try { return new URL(url).hostname; } catch { return null; }
+}
+
 // ── Phase 1: MutationObserver backbone ─────────────────────────────────
 const YAMIL_OBSERVER_SCRIPT = `(function(){
   if (window.__yamil_observer) return { already: true, version: window.__yamil_snapshot_version };
@@ -803,7 +830,12 @@ server.tool(
     const urlRes = await yamilGet("/url");
     const { url: finalUrl } = await urlRes.json();
     logMcpAction("navigate", { url }, finalUrl);
-    return { content: [{ type: "text", text: `Navigated → ${finalUrl}${ready ? "" : " (page may still be loading)"}` }] };
+    // RAG: include learned knowledge about this domain
+    const domain = extractDomain(finalUrl);
+    const knowledge = domain ? await ragLookup(finalUrl, domain, null, 3) : null;
+    const parts = [`Navigated → ${finalUrl}${ready ? "" : " (page may still be loading)"}`];
+    if (knowledge) parts.push(`\n📚 Learned knowledge about ${domain}:\n${knowledge}`);
+    return { content: [{ type: "text", text: parts.join("") }] };
   }
 );
 
@@ -843,6 +875,10 @@ server.tool(
       `Inputs: ${JSON.stringify((data.inputs || []).slice(0, 20))}`,
       `Buttons:${JSON.stringify((data.buttons || []).slice(0, 30))}`,
     ].join("\n");
+    // RAG: append relevant knowledge about this page
+    const domain = extractDomain(data.url);
+    const knowledge = domain ? await ragLookup(data.url, domain, null, 2) : null;
+    if (knowledge) return { content: [{ type: "text", text: `${summary}\n\n📚 Learned:\n${knowledge}` }] };
     return { content: [{ type: "text", text: summary }] };
   }
 );
@@ -1004,9 +1040,14 @@ server.tool(
         }
       }
     }
+    const pageUrl = await yamilPageUrl();
     const errMsg = `Element not found after 3 attempts: ${selector || text}${near ? ` near "${near}"` : ""}`;
-    logToolError("yamil_browser_click", { selector, text, near }, errMsg, await yamilPageUrl());
-    return { content: [{ type: "text", text: errMsg }], isError: true };
+    logToolError("yamil_browser_click", { selector, text, near }, errMsg, pageUrl);
+    // RAG: check for error recovery knowledge
+    const recovery = await ragLookup(`click failed ${selector || text}`, extractDomain(pageUrl), "error_recoveries", 2);
+    const parts = [errMsg];
+    if (recovery) parts.push(`\n📚 Known recovery steps:\n${recovery}`);
+    return { content: [{ type: "text", text: parts.join("") }], isError: true };
   }
 );
 
@@ -2134,7 +2175,14 @@ server.tool("yamil_browser_observe", "List interactive elements on the YAMIL Bro
     })()`);
     const text = JSON.stringify(elements, null, 2);
     const a11y = await getYamilA11yTree();
-    if (!instruction) return { content: [{ type: "text", text: text }] };
+    // RAG: include learned page schema
+    const pageUrl = await yamilPageUrl();
+    const pageKnowledge = await ragLookup(pageUrl, extractDomain(pageUrl), "page_schemas", 2);
+    if (!instruction) {
+      const parts = [text];
+      if (pageKnowledge) parts.push(`\n📚 Learned page knowledge:\n${pageKnowledge}`);
+      return { content: [{ type: "text", text: parts.join("") }] };
+    }
     if (!_ollamaAvailable && !_usingGemini && !getAnthropic()) {
       return { content: [{ type: "text", text: `Instruction: ${instruction}\n\nInteractive elements on page:\n${text}${a11y ? `\n\nAccessibility Tree:\n${a11y}` : ""}` }] };
     }
@@ -2599,8 +2647,9 @@ server.tool(
     if (_usingGemini) {
       try {
         const a11y = await getYamilA11yTree();
-        const cuInstruction = a11y ? `${instruction}\n\nAccessibility Tree:\n${a11y}` : instruction;
-        console.error(`[CU] yamil_browser_act: "${instruction}"${a11y ? " [A11Y]" : ""}`);
+        const ragCtx = await ragLookup(instruction + " " + pageUrl, extractDomain(pageUrl), null, 3);
+        const cuInstruction = [instruction, a11y ? `\nAccessibility Tree:\n${a11y}` : "", ragCtx ? `\nLearned knowledge:\n${ragCtx}` : ""].join("");
+        console.error(`[CU] yamil_browser_act: "${instruction}"${a11y ? " [A11Y]" : ""}${ragCtx ? " [RAG]" : ""}`);
         const cu = await geminiComputerUse(ssBase64, cuInstruction);
         if (cu?.action) {
           if (cu.safetyDecision === "blocked") {
@@ -2622,10 +2671,13 @@ server.tool(
     }
     console.error(`[CU-FALLBACK] yamil_browser_act: using prompt-based approach`);
     const a11y = await getYamilA11yTree();
+    // RAG: search for relevant action recipes and page knowledge
+    const domain = extractDomain(pageUrl);
+    const ragContext = await ragLookup(instruction + " " + pageUrl, domain, null, 3);
     const prompt = `You are controlling a web browser. Analyze the screenshot and HTML to determine the best action.
 Current page: ${pageUrl}
 Page HTML (partial): ${html}
-${a11y ? `\nAccessibility Tree:\n${a11y}\n` : ""}
+${a11y ? `\nAccessibility Tree:\n${a11y}\n` : ""}${ragContext ? `\nLearned knowledge from previous visits:\n${ragContext}\n` : ""}
 User instruction: "${instruction}"
 Return ONLY valid JSON (no markdown fences):
 - {"action":"click","selector":"CSS_SELECTOR"}

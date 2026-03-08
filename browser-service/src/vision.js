@@ -197,12 +197,31 @@ export async function runTask(page, sessionId, goal, maxSteps = 15, onStep = nul
     }
     lastUrlHash = currentHash
 
+    // RAG: search for relevant knowledge on first step
+    let ragContext = ''
+    if (step === 1) {
+      try {
+        const domain = new URL(currentUrl).hostname
+        const { searchKnowledge } = await import('./knowledge.js')
+        const entries = await searchKnowledge(goal + ' ' + currentUrl, domain, null, 3)
+        if (entries.length > 0) {
+          const tips = entries
+            .filter(e => (e.score || 0) > 0.3)
+            .map(e => {
+              const content = typeof e.content === 'string' ? JSON.parse(e.content) : e.content
+              return `- [${e.category}] ${e.title}: ${JSON.stringify(content)}`
+            }).join('\n')
+          if (tips) ragContext = `\nLearned knowledge from previous visits:\n${tips}`
+        }
+      } catch {}
+    }
+
     // Vision prompt
     const histText = history.length ? `\nCompleted steps:\n${history.map((h, i) => `${i + 1}. ${h}`).join('\n')}` : ''
     const stuckWarning = stuckCount > 0 ? `\nWARNING: Page state unchanged for ${stuckCount} steps — try a different approach!` : ''
 
     const prompt = `/no_think\nAutonomous browser agent. Goal: "${goal}"
-Step ${step}/${maxSteps} | Page: ${currentUrl}${histText}${stuckWarning}
+Step ${step}/${maxSteps} | Page: ${currentUrl}${histText}${stuckWarning}${ragContext}
 Analyze the screenshot carefully. Return ONLY valid JSON (no markdown fences):
 If goal achieved: {"done":true,"result":"SUMMARY_OF_WHAT_WAS_ACCOMPLISHED"}
 If impossible: {"action":"fail","reason":"WHY_IT_CANNOT_BE_DONE"}
