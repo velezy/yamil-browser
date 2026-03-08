@@ -16,6 +16,15 @@ export async function registerRoutes(app) {
   // ── Health ────────────────────────────────────────────────────────────
   app.get('/health', async () => ({ ok: true, sessions: listSessions().length }))
 
+  // ── External action logging (for MCP tools that bypass browser-service) ──
+  app.post('/log-action', async (req) => {
+    const { sessionId, action, params, pageUrl } = req.body || {}
+    if (!action) return { ok: false, error: 'action required' }
+    const sid = sessionId || 'mcp-' + Date.now().toString(36)
+    logAction(sid, action, params || {}, pageUrl || '')
+    return { ok: true }
+  })
+
   // ── Session lifecycle ─────────────────────────────────────────────────
   app.get('/sessions', async () => listSessions())
 

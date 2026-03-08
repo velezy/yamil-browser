@@ -531,6 +531,16 @@ async function yamilPageUrl() {
   try { const r = await yamilGet("/url").then(r => r.json()); return r.url || "unknown"; } catch { return "unknown"; }
 }
 
+/** Log action to browser-service knowledge pipeline (non-blocking) */
+function logMcpAction(action, params = {}, pageUrl = '') {
+  fetch(`${BROWSER_SVC_URL}/log-action`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId: "mcp", action, params, pageUrl }),
+    signal: AbortSignal.timeout(3000),
+  }).catch(() => {});
+}
+
 // ── Phase 1: MutationObserver backbone ─────────────────────────────────
 const YAMIL_OBSERVER_SCRIPT = `(function(){
   if (window.__yamil_observer) return { already: true, version: window.__yamil_snapshot_version };
@@ -792,6 +802,7 @@ server.tool(
     }
     const urlRes = await yamilGet("/url");
     const { url: finalUrl } = await urlRes.json();
+    logMcpAction("navigate", { url }, finalUrl);
     return { content: [{ type: "text", text: `Navigated → ${finalUrl}${ready ? "" : " (page may still be loading)"}` }] };
   }
 );
@@ -966,7 +977,7 @@ server.tool(
     })()`;
     for (let attempt = 0; attempt < 3; attempt++) {
       const r = await ye(clickScript);
-      if (r?.found) { return { content: [{ type: "text", text: `Clicked ${r.tag}${r.id ? "#" + r.id : ""} (${selector || text}${near ? ` near "${near}"` : ""})` }] }; }
+      if (r?.found) { logMcpAction("click", { selector: selector || text, near }, await yamilPageUrl()); return { content: [{ type: "text", text: `Clicked ${r.tag}${r.id ? "#" + r.id : ""} (${selector || text}${near ? ` near "${near}"` : ""})` }] }; }
       if (attempt < 2) await new Promise(r => setTimeout(r, 500));
     }
     if (selector && !text) {
@@ -1087,6 +1098,7 @@ server.tool(
       logToolError("yamil_browser_fill", { selector, value: value.substring(0, 100) }, `Input not found after DOM fill: ${selector}`, await yamilPageUrl());
       return { content: [{ type: "text", text: `Input not found: ${selector}` }], isError: true };
     }
+    logMcpAction("fill", { selector, value: value.substring(0, 50) }, await yamilPageUrl());
     return { content: [{ type: "text", text: `Filled ${selector} with "${value}"` }] };
   }
 );
@@ -1516,7 +1528,7 @@ server.tool(
       logToolError("yamil_browser_select", { selector, value, label, index }, `Select not found: ${selector}`, await yamilPageUrl());
       return { content: [{ type: "text", text: `Select not found: ${selector}` }], isError: true };
     }
-    if (nr.native && !nr.error) { return { content: [{ type: "text", text: `Selected "${nr.selected}" in ${selector}` }] }; }
+    if (nr.native && !nr.error) { logMcpAction("select", { selector, value: nr.selected }, await yamilPageUrl()); return { content: [{ type: "text", text: `Selected "${nr.selected}" in ${selector}` }] }; }
     if (nr.native && nr.error) {
       logToolError("yamil_browser_select", { selector, value, label, index }, nr.error, await yamilPageUrl());
       return { content: [{ type: "text", text: nr.error }], isError: true };
@@ -1716,6 +1728,7 @@ server.tool(
         });
         const r = await res.json();
         if (!r?.found) return { content: [{ type: "text", text: `Ref ${ref} not found on page. Run a11y_snapshot again.` }], isError: true };
+        logMcpAction("click", { selector: ref, text: r.text }, await yamilPageUrl());
         return { content: [{ type: "text", text: `Clicked ${ref} → ${r.tag} "${r.text}"` }] };
       }
     } catch (_) { /* fall through to eval-based click */ }
@@ -1780,6 +1793,7 @@ server.tool(
         });
         const r = await res.json();
         if (!r?.found) return { content: [{ type: "text", text: `Ref ${ref} not found on page. Run a11y_snapshot again.` }], isError: true };
+        logMcpAction("fill", { selector: ref, value: value.substring(0, 50) }, await yamilPageUrl());
         return { content: [{ type: "text", text: `Filled ${ref} → ${r.tag} with "${value}"` }] };
       }
     } catch (_) { /* fall through to eval-based fill */ }

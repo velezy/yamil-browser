@@ -21,8 +21,8 @@ const OLLAMA_EXTRACT_MODEL = process.env.OLLAMA_EXTRACT_MODEL || 'qwen3:8b'
 const OLLAMA_EMBED_MODEL   = process.env.OLLAMA_EMBED_MODEL   || 'nomic-embed-text'
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://yamil_browser:yamil_browser_secret@localhost:5433/yamil_browser'
 
-const PASSIVE_IDLE_MS     = 30000  // 30s idle → auto distill
-const PASSIVE_MIN_ACTIONS = 5     // minimum actions before auto-distill
+const PASSIVE_IDLE_MS     = 20000  // 20s idle → auto distill
+const PASSIVE_MIN_ACTIONS = 3     // minimum actions before auto-distill
 
 // ── Database pool ────────────────────────────────────────────────────
 let pool = null
