@@ -34,13 +34,18 @@ server.tool(
       const root = ${selector ? `document.querySelector(${JSON.stringify(selector)})` : `document.body`};
       if (!root) return { error: "Root not found" };
       const refs = {};
+      // Use a Map for direct DOM element references — survives SPA re-renders
+      if (!window.__yamil_ref_elements) window.__yamil_ref_elements = new Map();
+      const refElements = window.__yamil_ref_elements;
+      refElements.clear();
       const lines = [];
       let refId = 1;
       const INTERACTIVE = new Set(["A","BUTTON","INPUT","TEXTAREA","SELECT","DETAILS","SUMMARY"]);
       const SEMANTIC = new Set(["H1","H2","H3","H4","H5","H6","NAV","MAIN","ASIDE","HEADER","FOOTER","SECTION","ARTICLE","FORM","TABLE","THEAD","TBODY","TR","TH","TD","UL","OL","LI","LABEL","IMG","FIGURE","FIGCAPTION","DIALOG"]);
       const ROLES_INTERACTIVE = new Set(["button","link","textbox","combobox","listbox","option","menuitem","menuitemradio","menuitemcheckbox","checkbox","radio","switch","slider","spinbutton","searchbox","tab","tabpanel","dialog","alertdialog","tree","treeitem","grid","gridcell","row"]);
       const ROLES_SEMANTIC = new Set(["heading","navigation","main","complementary","banner","contentinfo","region","form","table","list","listitem","img","figure","alert","status","log","marquee","timer","toolbar","menu","menubar","tablist"]);
-      const version = window.__yamil_snapshot_version || 1;
+      const version = (window.__yamil_snapshot_version || 0) + 1;
+      window.__yamil_snapshot_version = version;
       function walk(el, depth, frameIndex) {
         if (depth > 25 || lines.length > 600) return;
         const tag = el.tagName;
@@ -48,12 +53,10 @@ server.tool(
         if (tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT" || tag === "SVG" || tag === "PATH") return;
         const style = getComputedStyle(el);
         if (style.display === "none" || style.visibility === "hidden") return;
-        // display:contents elements have no box (0x0 rect) but their children render normally
         if (style.display !== "contents") {
           const rect = el.getBoundingClientRect();
           if (rect.width === 0 && rect.height === 0) return;
         }
-        // Traverse into same-origin iframes
         if (tag === "IFRAME") {
           try {
             const iframeDoc = el.contentDocument || el.contentWindow?.document;
@@ -62,11 +65,11 @@ server.tool(
               const indent = "  ".repeat(Math.min(depth, 8));
               const src = el.src ? el.src.split("?")[0].split("/").pop() : "";
               lines.push(indent + ref + ' iframe' + (src ? ' "' + src.slice(0, 40) + '"' : ''));
-              el.setAttribute("data-yamil-ref", ref);
-              refs[ref] = { tag: "IFRAME", id: el.id || null, selector: el.id ? "#" + el.id : null, frame: true };
+              refElements.set(ref, el);
+              refs[ref] = { tag: "IFRAME", id: el.id || null, frame: true };
               for (const child of iframeDoc.body.children) walk(child, depth + 1, ref);
             }
-          } catch(e) { /* cross-origin, skip */ }
+          } catch(e) {}
           return;
         }
         const role = el.getAttribute("role") || "";
@@ -86,8 +89,8 @@ server.tool(
           if (ariaLabel) parts.push('"' + ariaLabel.slice(0, 60) + '"');
           else if (title) parts.push('"' + title.slice(0, 60) + '"');
           else {
-            const directText = Array.from(el.childNodes).filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join(" ").slice(0, 60);
-            if (directText) parts.push('"' + directText.replace(/"/g, "'") + '"');
+            const dt = Array.from(el.childNodes).filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join(" ").slice(0, 60);
+            if (dt) parts.push('"' + dt.replace(/"/g, "'") + '"');
             else if (tag === "IMG") {
               const imgLabel = el.alt || el.title || "";
               if (imgLabel) parts.push('"' + imgLabel.slice(0, 40) + '"');
@@ -103,8 +106,10 @@ server.tool(
           if (el.type) parts.push("type=" + el.type);
           if (tag === "A" && el.href) parts.push("href=" + JSON.stringify(el.href.slice(0, 60)));
           lines.push(indent + parts.join(" "));
-          el.setAttribute("data-yamil-ref", ref);
-          refs[ref] = { tag, id: el.id || null, selector: el.id ? "#" + el.id : null, frame: frameIndex || null };
+          // Store direct DOM reference in Map (survives SPA re-renders)
+          refElements.set(ref, el);
+          const labelText = ariaLabel || title || (el.innerText || "").trim().slice(0, 60);
+          refs[ref] = { tag, label: labelText, role: role || null, frame: frameIndex || null };
         }
         for (const child of el.children) walk(child, depth + 1, frameIndex);
         if (el.shadowRoot) { for (const child of el.shadowRoot.children) walk(child, depth + 1, frameIndex); }
@@ -128,7 +133,9 @@ server.tool(
     ref:     z.string().describe("Element ref from a11y snapshot, e.g. '@e5'"),
     version: z.number().optional().describe("Snapshot version for stale detection"),
   },
-  async ({ ref, version }) => {
+  async ({ ref: rawRef, version }) => {
+    // Normalize ref: ensure it starts with @
+    const ref = rawRef.startsWith("@") ? rawRef : "@" + rawRef;
     if (!(await yamilPing())) return { content: [{ type: "text", text: "YAMIL Browser is not running." }], isError: true };
 
     // For stealth tabs, use Playwright-based click (handles cross-origin iframes)
@@ -152,20 +159,29 @@ server.tool(
     const r = await ye(`(function(){
       const refVersion = window.__yamil_refs_version;
       if (${version ?? -1} > 0 && refVersion !== ${version ?? -1}) return { stale: true, expected: ${version ?? -1}, actual: refVersion };
-      // Search in main document and same-origin iframes
-      function findRef(doc) {
-        const el = doc.querySelector('[data-yamil-ref="${ref}"]');
-        if (el) return el;
-        const iframes = doc.querySelectorAll("iframe");
-        for (const iframe of iframes) {
-          try {
-            const iDoc = iframe.contentDocument || iframe.contentWindow?.document;
-            if (iDoc) { const found = findRef(iDoc); if (found) return found; }
-          } catch(e) {}
+      // Primary: direct DOM reference from Map (like Chrome's node IDs)
+      const refMap = window.__yamil_ref_elements;
+      let el = refMap && refMap.get("${ref}");
+      // Check element is still in the document (not detached by SPA)
+      if (el && !el.isConnected) el = null;
+      // Fallback: metadata-based search for re-rendered elements
+      if (!el) {
+        const meta = window.__yamil_refs && window.__yamil_refs["${ref}"];
+        if (meta && meta.label) {
+          const candidates = meta.role
+            ? document.querySelectorAll("[role='" + meta.role + "'], " + (meta.tag || "div").toLowerCase())
+            : document.querySelectorAll((meta.tag || "div").toLowerCase());
+          const targetLabel = meta.label.toLowerCase();
+          for (const c of candidates) {
+            const cLabel = (c.getAttribute("aria-label") || c.getAttribute("title") || "").toLowerCase();
+            const cText = (c.innerText || "").trim().toLowerCase().slice(0, 80);
+            if (cLabel === targetLabel || cText === targetLabel || (targetLabel.length > 3 && cText.includes(targetLabel))) {
+              const rect = c.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0) { el = c; break; }
+            }
+          }
         }
-        return null;
       }
-      const el = findRef(document);
       if (!el) return { found: false };
       el.scrollIntoView({ block: "center", behavior: "instant" });
       el.focus();
@@ -193,7 +209,9 @@ server.tool(
     value:   z.string().describe("Value to fill"),
     version: z.number().optional().describe("Snapshot version for stale detection"),
   },
-  async ({ ref, value, version }) => {
+  async ({ ref: rawRef, value, version }) => {
+    // Normalize ref: ensure it starts with @
+    const ref = rawRef.startsWith("@") ? rawRef : "@" + rawRef;
     if (!(await yamilPing())) return { content: [{ type: "text", text: "YAMIL Browser is not running." }], isError: true };
 
     // For stealth tabs, use Playwright-based fill (handles cross-origin iframes)
@@ -217,19 +235,28 @@ server.tool(
     const r = await ye(`(function(){
       const refVersion = window.__yamil_refs_version;
       if (${version ?? -1} > 0 && refVersion !== ${version ?? -1}) return { stale: true, expected: ${version ?? -1}, actual: refVersion };
-      function findRef(doc) {
-        const el = doc.querySelector('[data-yamil-ref="${ref}"]');
-        if (el) return el;
-        const iframes = doc.querySelectorAll("iframe");
-        for (const iframe of iframes) {
-          try {
-            const iDoc = iframe.contentDocument || iframe.contentWindow?.document;
-            if (iDoc) { const found = findRef(iDoc); if (found) return found; }
-          } catch(e) {}
+      // Primary: direct DOM reference from Map (like Chrome's node IDs)
+      const refMap = window.__yamil_ref_elements;
+      let el = refMap && refMap.get("${ref}");
+      if (el && !el.isConnected) el = null;
+      // Fallback: metadata-based search
+      if (!el) {
+        const meta = window.__yamil_refs && window.__yamil_refs["${ref}"];
+        if (meta && meta.label) {
+          const candidates = meta.role
+            ? document.querySelectorAll("[role='" + meta.role + "'], " + (meta.tag || "div").toLowerCase())
+            : document.querySelectorAll((meta.tag || "div").toLowerCase());
+          const targetLabel = meta.label.toLowerCase();
+          for (const c of candidates) {
+            const cLabel = (c.getAttribute("aria-label") || c.getAttribute("title") || "").toLowerCase();
+            const cText = (c.innerText || "").trim().toLowerCase().slice(0, 80);
+            if (cLabel === targetLabel || cText === targetLabel || (targetLabel.length > 3 && cText.includes(targetLabel))) {
+              const rect = c.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0) { el = c; break; }
+            }
+          }
         }
-        return null;
       }
-      const el = findRef(document);
       if (!el) return { found: false };
       el.scrollIntoView({ block: "center", behavior: "instant" });
       el.focus();
