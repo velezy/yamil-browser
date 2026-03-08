@@ -878,6 +878,55 @@ function startControlServer () {
       return
     }
 
+    // ── POST /credentials/auto-save ── auto-save from login form detection
+    if (req.method === 'POST' && url.pathname === '/credentials/auto-save') {
+      readBody(req, async (body) => {
+        const { domain, username, password, formUrl, formRecipe } = body
+        if (!domain || !username || !password) {
+          json(res, { error: 'domain, username, password required' }, 400); return
+        }
+        if (!safeStorage.isEncryptionAvailable()) {
+          json(res, { error: 'OS keychain not available' }, 503); return
+        }
+        try {
+          // Step 1: Encrypt password via OS keychain
+          const encrypted = safeStorage.encryptString(password).toString('base64')
+          // Step 2: Store in DB via browser-service
+          const svcUrl = process.env.YAMIL_BROWSER_URL || 'http://127.0.0.1:4000'
+          const saveRes = await fetch(`${svcUrl}/credentials`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain, username, passwordEncrypted: encrypted, formUrl }),
+            signal: AbortSignal.timeout(5000),
+          })
+          const saveData = await saveRes.json()
+          if (saveData.error) {
+            json(res, { error: saveData.error }, 500); return
+          }
+          // Step 3: Log login form recipe to RAG knowledge pipeline
+          if (formRecipe) {
+            fetch(`${svcUrl}/log-action`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                source: 'auto-credential',
+                action: 'login_recipe_learned',
+                details: { domain, username, formRecipe },
+                url: formUrl || `https://${domain}`,
+                status: 'ok',
+              }),
+              signal: AbortSignal.timeout(3000),
+            }).catch(() => {})
+          }
+          console.log(`[YAMIL cred] Auto-saved credentials for ${domain} (user: ${username})`)
+          json(res, { saved: true, domain, username })
+        } catch (e) {
+          json(res, { error: e.message }, 500)
+        }
+      })
+      return
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // ── ZOOM ENDPOINTS ──────────────────────────────────────────
     // ═══════════════════════════════════════════════════════════════
@@ -1044,6 +1093,12 @@ app.on('certificate-error', (event, webContents, url, error, certificate, callba
 })
 
 app.whenReady().then(() => {
+  // Spoof user agent to Chrome — prevents "Incompatible browser" blocks on sites
+  const chromeUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+  session.defaultSession.setUserAgent(chromeUA)
+  const yamilSession = session.fromPartition('persist:yamil')
+  yamilSession.setUserAgent(chromeUA)
+
   // Grant microphone/media permissions for webviews (needed for voice input)
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     const allowed = ['media', 'audioCapture', 'microphone', 'display-capture']

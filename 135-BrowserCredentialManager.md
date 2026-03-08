@@ -91,4 +91,43 @@ CREATE INDEX idx_credentials_domain ON browser_credentials(domain);
 - [x] Phase 2: Electron endpoints (encrypt/decrypt via safeStorage)
 - [x] Phase 3: MCP tools (credential_save, credential_get, credential_list, credential_delete)
 - [x] Phase 4: Wire into index.mjs
-- [ ] Phase 5: Test with real credentials
+- [x] Phase 5: Test with real credentials (QNAP + Synology saved, autonomous QNAP login tested)
+- [x] Phase 6: Auto-save credentials on login form submission
+
+## 7. Auto-Save (Phase 6)
+
+The browser now automatically detects login forms and saves credentials on submission — no manual `credential_save` call needed.
+
+### How it works
+
+1. **Observer script injected** into every webview on page load
+2. Detects `<input type="password">` fields on the page
+3. Watches for form submit, Enter key, or login button click
+4. Captures domain + username + password at submission time
+5. Sends to `POST /credentials/auto-save` on Electron (port 9300)
+6. Electron encrypts via safeStorage → stores in pgvector DB
+7. MutationObserver re-scans for dynamically added password fields (SPA support)
+
+### Flow
+
+```
+User types credentials → clicks Login
+  │
+  └── Observer script captures { domain, username, password }
+        └── POST http://127.0.0.1:9300/credentials/auto-save
+              └── Electron: safeStorage.encryptString(password)
+                    └── POST http://127.0.0.1:4000/credentials (browser-service)
+                          └── UPSERT into browser_credentials
+```
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `electron-app/renderer/renderer.js` | Inject credential observer into webviews on `did-stop-loading` |
+| `electron-app/main.js` | Add `POST /credentials/auto-save` endpoint (encrypt + store in one call) |
+
+## 8. Additional Improvements
+
+- **Chrome user agent spoof** — `session.setUserAgent()` on both default and `persist:yamil` sessions to prevent "Incompatible browser" blocks
+- **SPA-resilient a11y_click** — Uses direct DOM Map references instead of `data-yamil-ref` attributes (which SPAs strip on re-render)

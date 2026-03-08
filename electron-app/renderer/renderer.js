@@ -109,6 +109,7 @@ function createTab (url, activate = true, type = 'yamil') {
     const wv = document.createElement('webview')
     wv.setAttribute('allowpopups', '')
     wv.setAttribute('partition', 'persist:yamil')
+    wv.setAttribute('webpreferences', 'contextIsolation=yes, sandbox=no')
     wv.src = url
     container.appendChild(wv)
     tab.webview = wv
@@ -537,6 +538,97 @@ function wireWebviewEvents (tab) {
       statusLoad.textContent = `Error: ${e.errorDescription}`
       if (connDot) connDot.className = 'dot disconnected'
     }
+  })
+
+  // ── Auto-save credentials: detect login form submissions ─────────────
+  wv.addEventListener('did-stop-loading', () => {
+    wv.executeJavaScript(`(function() {
+      if (window.__yamil_cred_observer) return; // already injected
+      window.__yamil_cred_observer = true;
+
+      // Find password fields and watch for form submissions
+      function watchForms() {
+        const pwFields = document.querySelectorAll('input[type="password"]');
+        if (!pwFields.length) return;
+
+        pwFields.forEach(pw => {
+          if (pw.__yamil_watched) return;
+          pw.__yamil_watched = true;
+
+          // Find the form or nearest container
+          const form = pw.closest('form') || pw.parentElement?.closest('div');
+          if (!form) return;
+
+          // Capture credentials on submit
+          function captureAndSave(e) {
+            const password = pw.value;
+            if (!password) return;
+
+            // Find username: look for email/text input near the password field
+            let username = '';
+            const container = pw.closest('form') || document.body;
+            const inputs = container.querySelectorAll('input[type="email"], input[type="text"], input[name*="user"], input[name*="email"], input[name*="login"], input[name*="account"], input[autocomplete="username"]');
+            for (const inp of inputs) {
+              if (inp.value && inp.value.trim()) { username = inp.value.trim(); break; }
+            }
+            // Fallback: any text/email input on the page with a value
+            if (!username) {
+              for (const inp of document.querySelectorAll('input[type="email"], input[type="text"]')) {
+                if (inp.value && inp.value.trim() && inp !== pw && !inp.type.match(/hidden|search/)) {
+                  username = inp.value.trim(); break;
+                }
+              }
+            }
+            if (!username || !password) return;
+
+            const domain = location.hostname.replace(/^www\\./, '');
+            // Build login form recipe — selectors the AI can use to replay login
+            function bestSelector(el) {
+              if (el.id) return '#' + el.id;
+              if (el.name) return el.tagName.toLowerCase() + '[name="' + el.name + '"]';
+              if (el.type) return el.tagName.toLowerCase() + '[type="' + el.type + '"]';
+              return el.tagName.toLowerCase();
+            }
+            const usernameField = container.querySelector('input[type="email"], input[type="text"], input[name*="user"], input[name*="email"]');
+            const submitBtn = container.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
+            const formRecipe = {
+              usernameSelector: usernameField ? bestSelector(usernameField) : null,
+              passwordSelector: bestSelector(pw),
+              submitSelector: submitBtn ? bestSelector(submitBtn) : null,
+            };
+            // Send to Electron control server for encryption + storage
+            fetch('http://127.0.0.1:9300/credentials/auto-save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ domain, username, password, formUrl: location.href, formRecipe }),
+            }).catch(() => {}); // fire and forget
+          }
+
+          // Watch form submit
+          if (pw.closest('form')) {
+            pw.closest('form').addEventListener('submit', captureAndSave, { once: true });
+          }
+
+          // Also watch Enter key on password field and button clicks
+          pw.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') setTimeout(() => captureAndSave(e), 100);
+          }, { once: true });
+
+          // Watch submit/login buttons
+          const btns = (pw.closest('form') || pw.parentElement?.closest('div') || document).querySelectorAll('button[type="submit"], button:not([type]), input[type="submit"], [role="button"]');
+          btns.forEach(btn => {
+            const txt = (btn.textContent || btn.value || '').toLowerCase();
+            if (txt.match(/log.?in|sign.?in|submit|continue|next/)) {
+              btn.addEventListener('click', (e) => setTimeout(() => captureAndSave(e), 100), { once: true });
+            }
+          });
+        });
+      }
+
+      // Run immediately and re-run on DOM changes (SPAs add password fields dynamically)
+      watchForms();
+      new MutationObserver(() => watchForms()).observe(document.body, { childList: true, subtree: true });
+    })()`, true).catch(() => {});
   })
 
   // Handle new-window requests (e.g. target="_blank") by opening in a new tab

@@ -739,6 +739,8 @@ export async function registerRoutes(app) {
     }
     try {
       const result = await saveCredential({ domain, username, passwordEncrypted, label, formUrl, notes })
+      // Log to RAG knowledge pipeline — browser learns login patterns
+      logAction('credential_saved', 'credential_saved', { domain, username, label: label || domain }, formUrl || `https://${domain}`, 'ok')
       return { ok: true, credential: result }
     } catch (e) {
       return { error: e.message }
@@ -750,6 +752,9 @@ export async function registerRoutes(app) {
     if (!domain) return { error: 'domain query parameter required' }
     try {
       const creds = await getCredentials(domain)
+      if (creds.length > 0) {
+        logAction('credential_retrieved', 'credential_retrieved', { domain, username: creds[0].username }, `https://${domain}`, 'ok')
+      }
       return { credentials: creds }
     } catch (e) {
       return { error: e.message }
