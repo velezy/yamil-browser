@@ -75,6 +75,12 @@ function captureActiveWebview ({ quality = 80, maxWidth = 1280, maxBytes = 10_00
         let w = ${maxWidth}
         let q = ${quality}
         const orig = img.getSize()
+        // Cap height to avoid extremely tall images that Claude API rejects
+        const maxH = 900
+        if (orig.height > maxH) {
+          const cropScale = maxH / orig.height
+          img = img.resize({ width: Math.round(orig.width * cropScale), height: maxH })
+        }
         // Adaptive loop: shrink until under budget
         for (let attempt = 0; attempt < 5; attempt++) {
           let ni = img
