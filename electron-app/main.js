@@ -343,24 +343,67 @@ function startControlServer () {
           // For stealth tabs, use browser-service evaluate
           try {
             const r = await browserServicePost(`/sessions/${info.sessionId}/evaluate`, {
-              script: `({
-                url:      location.href,
-                title:    document.title,
-                text:     document.body.innerText.slice(0, 8000),
-                inputs:   Array.from(document.querySelectorAll('input,textarea,select')).slice(0,50).map(el=>({tag:el.tagName,type:el.type||null,name:el.name||null,placeholder:el.placeholder||null,id:el.id||null})),
-                buttons:  Array.from(document.querySelectorAll('button,[role=button],a')).slice(0,80).map(el=>({tag:el.tagName,text:(el.innerText||el.getAttribute('aria-label')||'').slice(0,80),href:el.href||null,id:el.id||null})),
-              })`
+              script: `(function(){
+                function collectFromDoc(doc) {
+                  let text = (doc.body?.innerText || '').slice(0, 4000);
+                  let inputs = Array.from(doc.querySelectorAll('input,textarea,select')).slice(0,30).map(el=>({tag:el.tagName,type:el.type||null,name:el.name||null,placeholder:el.placeholder||null,id:el.id||null}));
+                  let buttons = Array.from(doc.querySelectorAll('button,[role=button],a')).slice(0,50).map(el=>({tag:el.tagName,text:(el.innerText||el.getAttribute('aria-label')||'').slice(0,80),href:el.href||null,id:el.id||null}));
+                  const iframes = doc.querySelectorAll('iframe');
+                  for (const iframe of iframes) {
+                    try {
+                      const iDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                      if (iDoc && iDoc.body) {
+                        const sub = collectFromDoc(iDoc);
+                        text += '\\n' + sub.text;
+                        inputs = inputs.concat(sub.inputs);
+                        buttons = buttons.concat(sub.buttons);
+                      }
+                    } catch(e) {}
+                  }
+                  return { text, inputs, buttons };
+                }
+                const collected = collectFromDoc(document);
+                return {
+                  url:      location.href,
+                  title:    document.title,
+                  text:     collected.text.slice(0, 8000),
+                  inputs:   collected.inputs.slice(0, 50),
+                  buttons:  collected.buttons.slice(0, 80),
+                };
+              })()`
             })
             json(res, r.json?.result || {})
           } catch (e) { json(res, { error: e.message }, 500) }
         } else {
-          execInActiveWebview(`({
-            url:      location.href,
-            title:    document.title,
-            text:     document.body.innerText.slice(0, 8000),
-            inputs:   Array.from(document.querySelectorAll('input,textarea,select')).slice(0,50).map(el=>({tag:el.tagName,type:el.type||null,name:el.name||null,placeholder:el.placeholder||null,id:el.id||null})),
-            buttons:  Array.from(document.querySelectorAll('button,[role=button],a')).slice(0,80).map(el=>({tag:el.tagName,text:(el.innerText||el.getAttribute('aria-label')||'').slice(0,80),href:el.href||null,id:el.id||null})),
-          })`)
+          execInActiveWebview(`(function(){
+            function collectFromDoc(doc) {
+              let text = (doc.body?.innerText || '').slice(0, 4000);
+              let inputs = Array.from(doc.querySelectorAll('input,textarea,select')).slice(0,30).map(el=>({tag:el.tagName,type:el.type||null,name:el.name||null,placeholder:el.placeholder||null,id:el.id||null}));
+              let buttons = Array.from(doc.querySelectorAll('button,[role=button],a')).slice(0,50).map(el=>({tag:el.tagName,text:(el.innerText||el.getAttribute('aria-label')||'').slice(0,80),href:el.href||null,id:el.id||null}));
+              // Traverse same-origin iframes
+              const iframes = doc.querySelectorAll('iframe');
+              for (const iframe of iframes) {
+                try {
+                  const iDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                  if (iDoc && iDoc.body) {
+                    const sub = collectFromDoc(iDoc);
+                    text += '\\n' + sub.text;
+                    inputs = inputs.concat(sub.inputs);
+                    buttons = buttons.concat(sub.buttons);
+                  }
+                } catch(e) {}
+              }
+              return { text, inputs, buttons };
+            }
+            const collected = collectFromDoc(document);
+            return {
+              url:      location.href,
+              title:    document.title,
+              text:     collected.text.slice(0, 8000),
+              inputs:   collected.inputs.slice(0, 50),
+              buttons:  collected.buttons.slice(0, 80),
+            };
+          })()`)
             .then(d => json(res, d || {}))
             .catch(e => json(res, { error: e.message }, 500))
         }

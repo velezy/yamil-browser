@@ -150,6 +150,170 @@ export async function registerRoutes(app) {
     return { result }
   })
 
+  // ── Accessibility snapshot with cross-origin frame traversal ────────
+  app.get('/sessions/:id/a11y-snapshot', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const selectorScope = req.query.selector || null
+
+    const SNAPSHOT_SCRIPT = (rootSelector) => `(function(){
+      const root = ${rootSelector ? `document.querySelector(${JSON.stringify(rootSelector)})` : `document.body`};
+      if (!root) return { elements: [] };
+      const INTERACTIVE = new Set(["A","BUTTON","INPUT","TEXTAREA","SELECT","DETAILS","SUMMARY"]);
+      const SEMANTIC = new Set(["H1","H2","H3","H4","H5","H6","NAV","MAIN","ASIDE","HEADER","FOOTER","SECTION","ARTICLE","FORM","TABLE","THEAD","TBODY","TR","TH","TD","UL","OL","LI","LABEL","IMG","FIGURE","FIGCAPTION","DIALOG"]);
+      const ROLES_INTERACTIVE = new Set(["button","link","textbox","combobox","listbox","option","menuitem","menuitemradio","menuitemcheckbox","checkbox","radio","switch","slider","spinbutton","searchbox","tab","tabpanel","dialog","alertdialog","tree","treeitem","grid","gridcell","row"]);
+      const ROLES_SEMANTIC = new Set(["heading","navigation","main","complementary","banner","contentinfo","region","form","table","list","listitem","img","figure","alert","status","log","marquee","timer","toolbar","menu","menubar","tablist"]);
+      const elements = [];
+      function walk(el, depth) {
+        if (depth > 20 || elements.length > 400) return;
+        const tag = el.tagName;
+        if (!tag) return;
+        if (tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT" || tag === "SVG" || tag === "PATH" || tag === "IFRAME") return;
+        try {
+          const rect = el.getBoundingClientRect();
+          if (rect.width === 0 && rect.height === 0) return;
+          const style = getComputedStyle(el);
+          if (style.display === "none" || style.visibility === "hidden") return;
+        } catch(e) { return; }
+        const role = el.getAttribute("role") || "";
+        const ariaLabel = el.getAttribute("aria-label") || "";
+        const title = el.getAttribute("title") || "";
+        const placeholder = el.getAttribute("placeholder") || "";
+        const ariaExpanded = el.getAttribute("aria-expanded");
+        const ariaSelected = el.getAttribute("aria-selected");
+        const isInteractive = INTERACTIVE.has(tag) || ROLES_INTERACTIVE.has(role) || el.hasAttribute("onclick") || el.hasAttribute("tabindex");
+        const isSemantic = SEMANTIC.has(tag) || ROLES_SEMANTIC.has(role);
+        if (isInteractive || isSemantic) {
+          const parts = [];
+          if (role) parts.push(role);
+          else parts.push(tag.toLowerCase());
+          if (ariaLabel) parts.push('"' + ariaLabel.slice(0, 60) + '"');
+          else if (title) parts.push('"' + title.slice(0, 60) + '"');
+          else {
+            const directText = Array.from(el.childNodes).filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join(" ").slice(0, 60);
+            if (directText) parts.push('"' + directText.replace(/"/g, "'") + '"');
+            else if (tag === "IMG") { const l = el.alt || el.title || ""; if (l) parts.push('"' + l.slice(0, 40) + '"'); }
+          }
+          if (el.value && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) parts.push("value=" + JSON.stringify(el.value.slice(0, 30)));
+          if (placeholder) parts.push("placeholder=" + JSON.stringify(placeholder.slice(0, 30)));
+          if (ariaExpanded !== null) parts.push(ariaExpanded === "true" ? "[expanded]" : "[collapsed]");
+          if (ariaSelected === "true") parts.push("[selected]");
+          if (el.disabled) parts.push("[disabled]");
+          if (el.checked) parts.push("[checked]");
+          if (el.type) parts.push("type=" + el.type);
+          if (tag === "A" && el.href) parts.push("href=" + JSON.stringify(el.href.slice(0, 60)));
+          elements.push({ depth, desc: parts.join(" "), selector: el.id ? "#" + el.id : null });
+        }
+        for (const child of el.children) walk(child, depth + 1);
+      }
+      walk(root, 0);
+      return { elements };
+    })()`
+
+    // Collect from all frames (including cross-origin) via Playwright frame API
+    const lines = []
+    let refId = 1
+    const refs = {}
+
+    for (const frame of s.page.frames()) {
+      const frameUrl = frame.url()
+      const isMain = frame === s.page.mainFrame()
+      const baseDepth = isMain ? 0 : 1
+
+      if (!isMain) {
+        const ref = '@e' + refId++
+        const name = frameUrl.split('?')[0].split('/').pop() || frameUrl.slice(0, 50)
+        lines.push('  ' + ref + ` iframe "${name}"`)
+        refs[ref] = { tag: 'IFRAME', frame: frameUrl }
+      }
+
+      try {
+        const result = await frame.evaluate(SNAPSHOT_SCRIPT(isMain ? selectorScope : null)).catch(() => null)
+        if (result && result.elements) {
+          for (const el of result.elements) {
+            const ref = '@e' + refId++
+            const indent = '  '.repeat(Math.min(el.depth + baseDepth, 8))
+            lines.push(indent + ref + ' ' + el.desc)
+            refs[ref] = { selector: el.selector, frame: isMain ? null : frameUrl }
+          }
+        }
+      } catch { /* frame navigated or crashed, skip */ }
+    }
+
+    // Store refs on main frame for click/fill
+    await s.page.evaluate((data) => {
+      window.__yamil_refs = data.refs
+      window.__yamil_snapshot_version = (window.__yamil_snapshot_version || 0) + 1
+      window.__yamil_refs_version = window.__yamil_snapshot_version
+    }, { refs }).catch(() => {})
+
+    const version = await s.page.evaluate(() => window.__yamil_snapshot_version).catch(() => 1)
+    return { tree: lines.join('\n'), count: refId - 1, version, refs }
+  })
+
+  // ── Click element by ref (with cross-origin frame support) ──────────
+  app.post('/sessions/:id/a11y-click', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const { ref, frameUrl } = req.body
+    if (!ref) return reply.code(400).send({ error: 'ref required' })
+
+    // Find the right frame
+    let targetFrame = s.page.mainFrame()
+    if (frameUrl) {
+      const match = s.page.frames().find(f => f.url() === frameUrl || f.url().includes(frameUrl))
+      if (match) targetFrame = match
+    }
+
+    try {
+      const el = await targetFrame.locator(`[data-yamil-ref="${ref}"]`).first()
+      await el.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {})
+      await el.click({ timeout: 5000 })
+      const text = await el.innerText().catch(() => '')
+      const tag = await el.evaluate(e => e.tagName).catch(() => '')
+      return { found: true, tag, text: (text || '').trim().slice(0, 40) }
+    } catch (e) {
+      // Fallback: try all frames
+      for (const frame of s.page.frames()) {
+        try {
+          const el = await frame.locator(`[data-yamil-ref="${ref}"]`).first()
+          const visible = await el.isVisible().catch(() => false)
+          if (!visible) continue
+          await el.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {})
+          await el.click({ timeout: 5000 })
+          const text = await el.innerText().catch(() => '')
+          const tag = await el.evaluate(e => e.tagName).catch(() => '')
+          return { found: true, tag, text: (text || '').trim().slice(0, 40) }
+        } catch { continue }
+      }
+      return { found: false, error: e.message }
+    }
+  })
+
+  // ── Fill element by ref (with cross-origin frame support) ───────────
+  app.post('/sessions/:id/a11y-fill', async (req, reply) => {
+    const s = getSession(req.params.id)
+    if (!s) return notFound(reply, req.params.id)
+    touch(s)
+    const { ref, value, frameUrl } = req.body
+    if (!ref) return reply.code(400).send({ error: 'ref required' })
+
+    for (const frame of s.page.frames()) {
+      try {
+        const el = await frame.locator(`[data-yamil-ref="${ref}"]`).first()
+        const visible = await el.isVisible().catch(() => false)
+        if (!visible) continue
+        await el.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {})
+        await el.fill(value || '', { timeout: 5000 })
+        const tag = await el.evaluate(e => e.tagName).catch(() => '')
+        return { found: true, tag, value }
+      } catch { continue }
+    }
+    return { found: false, error: `Ref ${ref} not found in any frame` }
+  })
+
   app.get('/sessions/:id/cookies', async (req, reply) => {
     const s = getSession(req.params.id)
     if (!s) return notFound(reply, req.params.id)
