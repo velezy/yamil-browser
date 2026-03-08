@@ -1,6 +1,7 @@
 import { createSession, getSession, listSessions, closeSession, touch } from './sessions.js'
 import { logAction, cleanupSession, searchKnowledge, getKnowledgeStats, distillSession, flushSession } from './knowledge.js'
 import { runTask, isVisionAvailable } from './vision.js'
+import { saveCredential, getCredentials, listCredentials, deleteCredential } from './credentials.js'
 
 function notFound(reply, id) {
   return reply.code(404).send({ error: `Session ${id} not found` })
@@ -727,5 +728,50 @@ export async function registerRoutes(app) {
     try { domain = new URL(url).hostname } catch { domain = null }
     const results = await searchKnowledge(url, domain, null, 3)
     return { url, domain, entries: results, count: results.length }
+  })
+
+  // ── Credential Store (AI-first) ──────────────────────────────────────
+
+  app.post('/credentials', async (req) => {
+    const { domain, username, passwordEncrypted, label, formUrl, notes } = req.body || {}
+    if (!domain || !username || !passwordEncrypted) {
+      return { error: 'domain, username, and passwordEncrypted required' }
+    }
+    try {
+      const result = await saveCredential({ domain, username, passwordEncrypted, label, formUrl, notes })
+      return { ok: true, credential: result }
+    } catch (e) {
+      return { error: e.message }
+    }
+  })
+
+  app.get('/credentials', async (req) => {
+    const domain = req.query.domain
+    if (!domain) return { error: 'domain query parameter required' }
+    try {
+      const creds = await getCredentials(domain)
+      return { credentials: creds }
+    } catch (e) {
+      return { error: e.message }
+    }
+  })
+
+  app.get('/credentials/list', async () => {
+    try {
+      const creds = await listCredentials()
+      return { credentials: creds }
+    } catch (e) {
+      return { error: e.message }
+    }
+  })
+
+  app.delete('/credentials', async (req) => {
+    const { domain, username, id } = req.body || {}
+    try {
+      const result = await deleteCredential({ domain, username, id })
+      return result
+    } catch (e) {
+      return { error: e.message }
+    }
   })
 }

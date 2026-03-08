@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session } = require('electron')
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, safeStorage } = require('electron')
 const path = require('path')
 const http  = require('http')
 const fs    = require('fs')
@@ -833,6 +833,48 @@ function startControlServer () {
         `(function(){ if(window._yamil && window._yamil.history) { window._yamil.history.clear(); return {ok:true} } return {error:'not ready'} })()`
       ).then(result => json(res, result))
         .catch(e => json(res, { error: e.message }, 500))
+      return
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ── CREDENTIAL CRYPTO ENDPOINTS (safeStorage / OS keychain) ──
+    // ═══════════════════════════════════════════════════════════════
+
+    // ── POST /credentials/encrypt ─────────────────────────────────
+    if (req.method === 'POST' && url.pathname === '/credentials/encrypt') {
+      readBody(req, body => {
+        if (!safeStorage.isEncryptionAvailable()) {
+          json(res, { error: 'OS keychain not available' }, 503)
+          return
+        }
+        const { password } = body
+        if (!password) { json(res, { error: 'password required' }, 400); return }
+        try {
+          const encrypted = safeStorage.encryptString(password).toString('base64')
+          json(res, { encrypted })
+        } catch (e) {
+          json(res, { error: e.message }, 500)
+        }
+      })
+      return
+    }
+
+    // ── POST /credentials/decrypt ─────────────────────────────────
+    if (req.method === 'POST' && url.pathname === '/credentials/decrypt') {
+      readBody(req, body => {
+        if (!safeStorage.isEncryptionAvailable()) {
+          json(res, { error: 'OS keychain not available' }, 503)
+          return
+        }
+        const { encrypted } = body
+        if (!encrypted) { json(res, { error: 'encrypted required' }, 400); return }
+        try {
+          const password = safeStorage.decryptString(Buffer.from(encrypted, 'base64'))
+          json(res, { password })
+        } catch (e) {
+          json(res, { error: e.message }, 500)
+        }
+      })
       return
     }
 

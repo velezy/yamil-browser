@@ -43,3 +43,20 @@ CREATE TABLE IF NOT EXISTS browser_actions (
 CREATE INDEX IF NOT EXISTS idx_actions_session ON browser_actions (session_id);
 CREATE INDEX IF NOT EXISTS idx_actions_domain ON browser_actions (domain);
 CREATE INDEX IF NOT EXISTS idx_actions_created ON browser_actions (created_at DESC);
+
+-- AI-managed credential store — passwords encrypted via Electron safeStorage (OS keychain)
+CREATE TABLE IF NOT EXISTS browser_credentials (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  domain TEXT NOT NULL,
+  username TEXT NOT NULL,
+  password_encrypted TEXT NOT NULL,
+  label TEXT,
+  form_url TEXT,
+  notes TEXT,
+  last_used TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(domain, username)
+);
+
+CREATE INDEX IF NOT EXISTS idx_credentials_domain ON browser_credentials (domain);
