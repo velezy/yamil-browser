@@ -7,8 +7,8 @@ function notFound(reply, id) {
 }
 
 /** Log action + return result (non-blocking) */
-function withLog(sessionId, action, params, pageUrl) {
-  try { logAction(sessionId, action, params, pageUrl) } catch {}
+function withLog(sessionId, action, params, pageUrl, result = 'ok') {
+  try { logAction(sessionId, action, params, pageUrl, result) } catch {}
 }
 
 export async function registerRoutes(app) {
@@ -48,7 +48,7 @@ export async function registerRoutes(app) {
     const waitUntil = allowed.includes(req.body.waitUntil) ? req.body.waitUntil : 'domcontentloaded'
     await s.page.goto(req.body.url, { waitUntil, timeout: 30000 })
     const result = { url: s.page.url(), title: await s.page.title() }
-    withLog(req.params.id, 'navigate', { url: req.body.url }, result.url)
+    withLog(req.params.id, 'navigate', { url: req.body.url, title: result.title }, result.url)
     return result
   })
 
@@ -103,6 +103,7 @@ export async function registerRoutes(app) {
     touch(s)
     const delta = req.body.direction === 'down' ? (req.body.amount || 500) : -(req.body.amount || 500)
     await s.page.mouse.wheel(0, delta)
+    withLog(req.params.id, 'scroll', { direction: req.body.direction, amount: req.body.amount }, s.page.url())
     return { ok: true }
   })
 
@@ -130,14 +131,16 @@ export async function registerRoutes(app) {
     if (!s) return notFound(reply, req.params.id)
     touch(s)
     let quality = Math.min(100, Math.max(1, parseInt(req.query.quality) || 85))
-    const scale = parseFloat(req.query.scale) || 1
     const maxBytes = parseInt(req.query.maxBytes) || 0
-    let buf = await s.page.screenshot({ type: 'jpeg', quality, scale: Math.min(1, scale) })
+    // Clip to safe dimensions for Claude API (max 1280x900)
+    const vp = s.page.viewportSize() || { width: 1280, height: 800 }
+    const clip = { x: 0, y: 0, width: Math.min(vp.width, 1280), height: Math.min(vp.height, 900) }
+    let buf = await s.page.screenshot({ type: 'jpeg', quality, scale: 'css', clip })
     // Adaptive quality reduction to stay within maxBytes budget
     if (maxBytes > 0) {
-      for (let attempt = 0; attempt < 4 && buf.length > maxBytes && quality > 10; attempt++) {
+      while (buf.length > maxBytes && quality > 10) {
         quality = Math.max(10, Math.round(quality * 0.6))
-        buf = await s.page.screenshot({ type: 'jpeg', quality, scale: Math.min(1, scale * 0.7) })
+        buf = await s.page.screenshot({ type: 'jpeg', quality, scale: 'css', clip })
       }
     }
     reply.header('content-type', 'image/jpeg')
@@ -175,15 +178,17 @@ export async function registerRoutes(app) {
       const ROLES_SEMANTIC = new Set(["heading","navigation","main","complementary","banner","contentinfo","region","form","table","list","listitem","img","figure","alert","status","log","marquee","timer","toolbar","menu","menubar","tablist"]);
       const elements = [];
       function walk(el, depth) {
-        if (depth > 20 || elements.length > 400) return;
+        if (depth > 25 || elements.length > 600) return;
         const tag = el.tagName;
         if (!tag) return;
         if (tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT" || tag === "SVG" || tag === "PATH" || tag === "IFRAME") return;
         try {
-          const rect = el.getBoundingClientRect();
-          if (rect.width === 0 && rect.height === 0) return;
           const style = getComputedStyle(el);
           if (style.display === "none" || style.visibility === "hidden") return;
+          if (style.display !== "contents") {
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) return;
+          }
         } catch(e) { return; }
         const role = el.getAttribute("role") || "";
         const ariaLabel = el.getAttribute("aria-label") || "";
@@ -215,6 +220,7 @@ export async function registerRoutes(app) {
           elements.push({ depth, desc: parts.join(" "), selector: el.id ? "#" + el.id : null });
         }
         for (const child of el.children) walk(child, depth + 1);
+        if (el.shadowRoot) { for (const child of el.shadowRoot.children) walk(child, depth + 1); }
       }
       walk(root, 0);
       return { elements };
@@ -282,6 +288,7 @@ export async function registerRoutes(app) {
       await el.click({ timeout: 5000 })
       const text = await el.innerText().catch(() => '')
       const tag = await el.evaluate(e => e.tagName).catch(() => '')
+      withLog(req.params.id, 'a11y-click', { ref, tag, text: (text || '').trim().slice(0, 40) }, s.page.url())
       return { found: true, tag, text: (text || '').trim().slice(0, 40) }
     } catch (e) {
       // Fallback: try all frames
@@ -294,6 +301,7 @@ export async function registerRoutes(app) {
           await el.click({ timeout: 5000 })
           const text = await el.innerText().catch(() => '')
           const tag = await el.evaluate(e => e.tagName).catch(() => '')
+          withLog(req.params.id, 'a11y-click', { ref, tag, text: (text || '').trim().slice(0, 40) }, s.page.url())
           return { found: true, tag, text: (text || '').trim().slice(0, 40) }
         } catch { continue }
       }
@@ -317,6 +325,7 @@ export async function registerRoutes(app) {
         await el.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {})
         await el.fill(value || '', { timeout: 5000 })
         const tag = await el.evaluate(e => e.tagName).catch(() => '')
+        withLog(req.params.id, 'a11y-fill', { ref, tag, value: (value || '').substring(0, 50) }, s.page.url())
         return { found: true, tag, value }
       } catch { continue }
     }
@@ -481,6 +490,7 @@ export async function registerRoutes(app) {
     const opts = { button: 'right', timeout: 10000 }
     if (text) await s.page.getByText(text, { exact: false }).first().click(opts)
     else await s.page.click(selector, opts)
+    withLog(req.params.id, 'rightclick', { selector: selector || text }, s.page.url())
     return { ok: true }
   })
 
@@ -500,6 +510,7 @@ export async function registerRoutes(app) {
     if (!s) return notFound(reply, req.params.id)
     touch(s)
     await s.page.goForward()
+    withLog(req.params.id, 'forward', {}, s.page.url())
     return { url: s.page.url() }
   })
 
@@ -521,8 +532,13 @@ export async function registerRoutes(app) {
     const { selector } = req.body
     if (!selector) return reply.code(400).send({ error: 'selector required' })
     const el = s.page.locator(selector).first()
-    const quality = Math.min(100, Math.max(1, parseInt(req.body.quality) || 40))
-    const buf = await el.screenshot({ type: 'jpeg', quality, timeout: 10000 })
+    let quality = Math.min(100, Math.max(1, parseInt(req.body.quality) || 40))
+    let buf = await el.screenshot({ type: 'jpeg', quality, scale: 'css', timeout: 10000 })
+    // Adaptive quality reduction to keep under 350KB for Claude API safety
+    while (buf.length > 350_000 && quality > 10) {
+      quality = Math.max(10, Math.round(quality * 0.6))
+      buf = await el.screenshot({ type: 'jpeg', quality, scale: 'css', timeout: 10000 })
+    }
     reply.header('content-type', 'image/jpeg')
     return reply.send(buf)
   })
@@ -577,6 +593,7 @@ export async function registerRoutes(app) {
     const { sourceSelector, targetSelector } = req.body
     if (!sourceSelector || !targetSelector) return reply.code(400).send({ error: 'sourceSelector and targetSelector required' })
     await s.page.dragAndDrop(sourceSelector, targetSelector, { timeout: 10000 })
+    withLog(req.params.id, 'drag', { source: sourceSelector, target: targetSelector }, s.page.url())
     return { ok: true }
   })
 
@@ -588,6 +605,7 @@ export async function registerRoutes(app) {
     const { selector, filePaths } = req.body
     if (!selector || !Array.isArray(filePaths)) return reply.code(400).send({ error: 'selector and filePaths[] required' })
     await s.page.setInputFiles(selector, filePaths)
+    withLog(req.params.id, 'set-files', { selector, count: filePaths.length }, s.page.url())
     return { ok: true }
   })
 

@@ -146,6 +146,7 @@ const DISTILLATION_TEMPLATE = {
   field_maps: [{ field_label: '', selector_hint: '', input_type: '', required: '' }],
   error_recoveries: [{ error_trigger: '', recovery_action: '', outcome: '' }],
   api_patterns: [{ endpoint_hint: '', method: '', auth_type: '', response_shape: '' }],
+  navigation_maps: [{ from_page: '', to_page: '', steps: [], ui_path: '' }],
 }
 
 // ── Distill a session into knowledge ─────────────────────────────────
@@ -163,7 +164,7 @@ export async function distillSession(session) {
       `Outcome: ${session.outcome}`,
       'Steps:',
       ...session.steps.map((s, i) =>
-        `${i + 1}. ${s.action} ${s.selector || ''} ${scrubValue(s.action, s.selector, s.value) || ''} - ${s.result}`.replace(/\s+/g, ' ').trim()
+        `${i + 1}. ${s.action} ${s.selector || ''} ${scrubValue(s.action, s.selector, s.value) || ''}${s.title ? ` [page: ${s.title}]` : ''} - ${s.result}`.replace(/\s+/g, ' ').trim()
       ),
     ].join('\n')
 
@@ -177,7 +178,7 @@ export async function distillSession(session) {
     const p = await getPool()
     let savedCount = 0
 
-    const categories = ['page_schemas', 'action_recipes', 'field_maps', 'error_recoveries', 'api_patterns']
+    const categories = ['page_schemas', 'action_recipes', 'field_maps', 'error_recoveries', 'api_patterns', 'navigation_maps']
     for (const cat of categories) {
       const items = extracted[cat]
       if (!Array.isArray(items)) continue
@@ -299,15 +300,16 @@ function getTracker(sessionId) {
 }
 
 /** Log an action — writes to DB + in-memory tracker for batch distillation */
-export async function logAction(sessionId, action, params = {}, pageUrl = '') {
+export async function logAction(sessionId, action, params = {}, pageUrl = '', result = 'ok') {
   const tracker = getTracker(sessionId)
   const scrubbedValue = scrubValue(action, params.selector || params.text || '', params.value || params.url || '')
 
   const entry = {
     action,
-    selector: params.selector || params.text || '',
+    selector: params.selector || params.text || params.ref || '',
     value: scrubbedValue,
-    result: 'ok',
+    result,
+    title: params.title || '',
     timestamp: new Date().toISOString(),
   }
   tracker.actions.push(entry)
