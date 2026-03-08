@@ -43,9 +43,22 @@ export async function yamilPost (path, body = {}) {
 }
 
 export async function ye(script) {
-  const res  = await yamilPost("/eval", { script });
-  const data = await res.json();
-  return data.result;
+  try {
+    const res  = await yamilPost("/eval", { script });
+    const data = await res.json();
+    if (data.error) return undefined;
+    return data.result;
+  } catch (_) {
+    // Retry with try/catch wrapper for pages that throw (ExtJS, QNAP, etc.)
+    try {
+      const safe = `(function(){try{return ${script}}catch(e){return undefined}})()`;
+      const res  = await yamilPost("/eval", { script: safe });
+      const data = await res.json();
+      return data.error ? undefined : data.result;
+    } catch (_) {
+      return undefined;
+    }
+  }
 }
 
 export async function yamilScreenshotBuf() {

@@ -57,13 +57,41 @@ export function registerObservationTools(server, deps) {
     { script: z.string().describe("JavaScript to run in the page context") },
     async ({ script }) => {
       if (!(await yamilPing())) return { content: [{ type: "text", text: "YAMIL Browser is not running." }], isError: true };
+      const pageUrl = await yamilPageUrl();
+
+      // Attempt 1: run script as-is
       try {
-        const res    = await yamilPost("/eval", { script });
-        const data   = await res.json();
-        if (data.error) return { content: [{ type: "text", text: `Eval error: ${data.error}` }], isError: true };
-        return { content: [{ type: "text", text: JSON.stringify(data.result, null, 2) ?? "undefined" }] };
+        const res  = await yamilPost("/eval", { script });
+        const data = await res.json();
+        if (!data.error) {
+          return { content: [{ type: "text", text: JSON.stringify(data.result, null, 2) ?? "undefined" }] };
+        }
+      } catch (_) { /* fall through to recovery */ }
+
+      // Attempt 2: wrap in try/catch — some pages (ExtJS/QNAP) throw on complex DOM ops
+      try {
+        const safeScript = `(function(){try{return ${script}}catch(e){return {__evalError:e.message}}})()`;
+        const res  = await yamilPost("/eval", { script: safeScript });
+        const data = await res.json();
+        if (!data.error) {
+          if (data.result?.__evalError) {
+            logToolError("yamil_browser_eval", { script: script.slice(0, 200) }, `Page threw: ${data.result.__evalError}`, pageUrl);
+            return { content: [{ type: "text", text: `Script threw on page: ${data.result.__evalError}\nDomain: ${extractDomain(pageUrl)}\nTip: This page may block complex DOM queries. Use simpler scripts or yamil_browser_a11y_snapshot instead.` }], isError: true };
+          }
+          return { content: [{ type: "text", text: JSON.stringify(data.result, null, 2) ?? "undefined" }] };
+        }
+      } catch (_) { /* fall through */ }
+
+      // Attempt 3: minimal probe — if even wrapped fails, the page/webview is broken
+      try {
+        const res  = await yamilPost("/eval", { script: "document.title" });
+        const data = await res.json();
+        const title = data.result || "unknown";
+        logToolError("yamil_browser_eval", { script: script.slice(0, 200) }, "Eval failed after all retries", pageUrl);
+        return { content: [{ type: "text", text: `Eval failed on "${title}" (${extractDomain(pageUrl)}).\nThis page blocks JavaScript eval. Use yamil_browser_a11y_snapshot, yamil_browser_content, or yamil_browser_click instead.` }], isError: true };
       } catch (err) {
-        return { content: [{ type: "text", text: `Eval failed: ${err.message}` }], isError: true };
+        logToolError("yamil_browser_eval", { script: script.slice(0, 200) }, `Complete eval failure: ${err.message}`, pageUrl);
+        return { content: [{ type: "text", text: `Eval failed: ${err.message}. The webview may not be responding.` }], isError: true };
       }
     }
   );
