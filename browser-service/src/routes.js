@@ -120,9 +120,17 @@ export async function registerRoutes(app) {
     const s = getSession(req.params.id)
     if (!s) return notFound(reply, req.params.id)
     touch(s)
-    const quality = Math.min(100, Math.max(1, parseInt(req.query.quality) || 85))
+    let quality = Math.min(100, Math.max(1, parseInt(req.query.quality) || 85))
     const scale = parseFloat(req.query.scale) || 1
-    const buf = await s.page.screenshot({ type: 'jpeg', quality, scale: Math.min(1, scale) })
+    const maxBytes = parseInt(req.query.maxBytes) || 0
+    let buf = await s.page.screenshot({ type: 'jpeg', quality, scale: Math.min(1, scale) })
+    // Adaptive quality reduction to stay within maxBytes budget
+    if (maxBytes > 0) {
+      for (let attempt = 0; attempt < 4 && buf.length > maxBytes && quality > 10; attempt++) {
+        quality = Math.max(10, Math.round(quality * 0.6))
+        buf = await s.page.screenshot({ type: 'jpeg', quality, scale: Math.min(1, scale * 0.7) })
+      }
+    }
     reply.header('content-type', 'image/jpeg')
     return reply.send(buf)
   })
@@ -340,7 +348,8 @@ export async function registerRoutes(app) {
     const { selector } = req.body
     if (!selector) return reply.code(400).send({ error: 'selector required' })
     const el = s.page.locator(selector).first()
-    const buf = await el.screenshot({ type: 'jpeg', quality: 85, timeout: 10000 })
+    const quality = Math.min(100, Math.max(1, parseInt(req.body.quality) || 40))
+    const buf = await el.screenshot({ type: 'jpeg', quality, timeout: 10000 })
     reply.header('content-type', 'image/jpeg')
     return reply.send(buf)
   })

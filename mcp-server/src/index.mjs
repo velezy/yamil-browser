@@ -523,7 +523,7 @@ async function ye(script) {
 }
 
 async function yamilScreenshotBuf() {
-  const res = await yamilGet("/screenshot?quality=40&maxWidth=800&maxBytes=500000&scale=0.5");
+  const res = await yamilGet("/screenshot?quality=40&maxWidth=800&maxBytes=400000&scale=0.5");
   return Buffer.from(await res.arrayBuffer());
 }
 
@@ -803,10 +803,10 @@ server.tool(
   {},
   async () => {
     if (!(await yamilPing())) return { content: [{ type: "text", text: "YAMIL Browser is not running." }], isError: true };
-    const res = await yamilGet("/screenshot?quality=40&maxWidth=800&maxBytes=500000&scale=0.5");
+    const res = await yamilGet("/screenshot?quality=40&maxWidth=800&maxBytes=400000&scale=0.5");
     const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length > 1_000_000) {
-      return { content: [{ type: "text", text: `Screenshot too large for API (${(buf.length/1024).toFixed(0)}KB). Try zooming out or scrolling to a simpler area.` }], isError: true };
+    if (buf.length > 500_000) {
+      return { content: [{ type: "text", text: `Screenshot too large for API (${(buf.length/1024).toFixed(0)}KB). Use yamil_browser_a11y_snapshot or yamil_browser_dom instead.` }], isError: true };
     }
     const b64 = buf.toString("base64");
     if (!b64 || b64.length < 100) {

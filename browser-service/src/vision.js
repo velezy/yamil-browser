@@ -173,7 +173,7 @@ export async function runTask(page, sessionId, goal, maxSteps = 15, onStep = nul
     // Take screenshot
     let ssBase64
     try {
-      const buf = await page.screenshot({ type: 'jpeg', quality: 85 })
+      const buf = await page.screenshot({ type: 'jpeg', quality: 40, scale: 0.5 })
       ssBase64 = buf.toString('base64')
     } catch (e) {
       history.push(`[SCREENSHOT_ERROR] ${e.message}`)
