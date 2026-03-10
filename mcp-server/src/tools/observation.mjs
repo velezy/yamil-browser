@@ -13,16 +13,38 @@ export function registerObservationTools(server, deps) {
     {},
     async () => {
       if (!(await yamilPing())) return { content: [{ type: "text", text: "YAMIL Browser is not running." }], isError: true };
-      const res = await yamilGet("/screenshot?quality=35&maxBytes=350000");
-      const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.length > 400_000) {
-        return { content: [{ type: "text", text: `Screenshot too large for API (${(buf.length/1024).toFixed(0)}KB). Use yamil_browser_a11y_snapshot or yamil_browser_dom instead.` }], isError: true };
+      try {
+        const isValidImage = (b) => b && b.length >= 200 &&
+          ((b[0] === 0xFF && b[1] === 0xD8) || (b[0] === 0x89 && b[1] === 0x50));
+
+        let buf;
+        // Try webview screenshot first
+        try {
+          const res = await yamilGet("/screenshot?quality=35&maxBytes=350000");
+          buf = Buffer.from(await res.arrayBuffer());
+        } catch (_) { buf = null; }
+
+        // Fall back to whole-window capture if webview failed or returned invalid data
+        if (!isValidImage(buf)) {
+          try {
+            const wres = await yamilGet("/window-screenshot");
+            buf = Buffer.from(await wres.arrayBuffer());
+          } catch (e2) {
+            return { content: [{ type: "text", text: `Screenshot failed (webview + window): ${e2.message}. Use yamil_browser_dom instead.` }], isError: true };
+          }
+        }
+
+        if (!isValidImage(buf)) {
+          return { content: [{ type: "text", text: "Screenshot returned invalid image data from both webview and window capture. Use yamil_browser_dom instead." }], isError: true };
+        }
+        if (buf.length > 500_000) {
+          return { content: [{ type: "text", text: `Screenshot too large for API (${(buf.length/1024).toFixed(0)}KB). Use yamil_browser_a11y_snapshot or yamil_browser_dom instead.` }], isError: true };
+        }
+        const mime = (buf[0] === 0x89 && buf[1] === 0x50) ? "image/png" : "image/jpeg";
+        return { content: [{ type: "image", data: buf.toString("base64"), mimeType: mime }] };
+      } catch (e) {
+        return { content: [{ type: "text", text: `Screenshot failed: ${e.message}` }], isError: true };
       }
-      const b64 = buf.toString("base64");
-      if (!b64 || b64.length < 100) {
-        return { content: [{ type: "text", text: "Screenshot returned empty image. The page may not be loaded yet." }], isError: true };
-      }
-      return { content: [{ type: "image", data: b64, mimeType: "image/jpeg" }] };
     }
   );
 

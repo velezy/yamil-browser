@@ -62,8 +62,25 @@ export async function ye(script) {
 }
 
 export async function yamilScreenshotBuf() {
-  const res = await yamilGet("/screenshot?quality=40&maxBytes=400000");
-  return Buffer.from(await res.arrayBuffer());
+  const isValidImage = (b) => b && b.length >= 200 &&
+    ((b[0] === 0xFF && b[1] === 0xD8) || (b[0] === 0x89 && b[1] === 0x50));
+
+  let buf;
+  try {
+    const res = await yamilGet("/screenshot?quality=35&maxBytes=350000");
+    buf = Buffer.from(await res.arrayBuffer());
+  } catch (_) { buf = null; }
+
+  // Fallback: capture the entire Electron window if webview failed or returned invalid data
+  if (!isValidImage(buf)) {
+    try {
+      const wres = await yamilGet("/window-screenshot");
+      buf = Buffer.from(await wres.arrayBuffer());
+    } catch (_) { /* fall through to validation */ }
+  }
+
+  if (!isValidImage(buf)) throw new Error("Screenshot returned invalid image from both webview and window capture");
+  return buf;
 }
 
 export async function yamilPageUrl() {

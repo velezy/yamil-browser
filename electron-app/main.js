@@ -71,22 +71,26 @@ function captureActiveWebview ({ quality = 80, maxWidth = 1280, maxBytes = 10_00
       const wv = window._yamil && window._yamil.getActiveWebview()
       if (!wv) return Promise.resolve(null)
       return wv.capturePage().then(img => {
+        const sz = img.getSize()
+        // Reject empty captures (page not rendered yet)
+        if (!sz.width || !sz.height) return null
         const MAX_BYTES = ${maxBytes}
         let w = ${maxWidth}
         let q = ${quality}
-        const orig = img.getSize()
         // Cap height to avoid extremely tall images that Claude API rejects
-        const maxH = 900
-        if (orig.height > maxH) {
-          const cropScale = maxH / orig.height
-          img = img.resize({ width: Math.round(orig.width * cropScale), height: maxH })
+        const maxH = 768
+        if (sz.height > maxH) {
+          const cropScale = maxH / sz.height
+          img = img.resize({ width: Math.round(sz.width * cropScale), height: maxH })
         }
+        // Use current (possibly cropped) dimensions for resize calculations
+        const cur = img.getSize()
         // Adaptive loop: shrink until under budget
         for (let attempt = 0; attempt < 5; attempt++) {
           let ni = img
-          if (orig.width > w) {
-            const scale = w / orig.width
-            ni = ni.resize({ width: w, height: Math.round(orig.height * scale) })
+          if (cur.width > w) {
+            const scale = w / cur.width
+            ni = ni.resize({ width: w, height: Math.round(cur.height * scale) })
           }
           const jpegBuf = ni.toJPEG(q)
           if (jpegBuf.length <= MAX_BYTES) {
@@ -97,7 +101,8 @@ function captureActiveWebview ({ quality = 80, maxWidth = 1280, maxBytes = 10_00
           else { w = Math.round(w * 0.7) }
         }
         // Final fallback: smallest possible
-        let ni = img.resize({ width: Math.min(w, 640), height: Math.round(orig.height * (Math.min(w, 640) / orig.width)) })
+        const fw = Math.min(w, 640)
+        let ni = img.resize({ width: fw, height: Math.round(cur.height * (fw / cur.width)) })
         return 'data:image/jpeg;base64,' + ni.toJPEG(20).toString('base64')
       })
     })()`
@@ -442,9 +447,18 @@ function startControlServer () {
     // ── GET /window-screenshot ────────────────────────────────────
     if (req.method === 'GET' && url.pathname === '/window-screenshot') {
       if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+      const quality = parseInt(url.searchParams.get('quality')) || 40
+      const maxWidth = parseInt(url.searchParams.get('maxWidth')) || 800
       mainWindow.capturePage().then(img => {
-        const buf = img.toPNG()
-        res.setHeader('Content-Type', 'image/png')
+        const sz = img.getSize()
+        // Resize if wider than maxWidth
+        if (sz.width > maxWidth) {
+          const scale = maxWidth / sz.width
+          img = img.resize({ width: maxWidth, height: Math.round(sz.height * scale) })
+        }
+        // Return JPEG for smaller size
+        const buf = img.toJPEG(quality)
+        res.setHeader('Content-Type', 'image/jpeg')
         res.writeHead(200)
         res.end(buf)
       }).catch(e => json(res, { error: e.message }, 500))
@@ -567,13 +581,21 @@ function startControlServer () {
                     y: Math.max(0, rect.y),
                     width: Math.max(1, rect.width),
                     height: Math.max(1, rect.height)
-                  }).then(img => img.toDataURL());
+                  }).then(img => {
+                    const sz = img.getSize();
+                    let ni = img;
+                    if (sz.width > 1024) {
+                      const scale = 1024 / sz.width;
+                      ni = ni.resize({ width: 1024, height: Math.round(sz.height * scale) });
+                    }
+                    return 'data:image/jpeg;base64,' + ni.toJPEG(55).toString('base64');
+                  });
                 })
               })()
             `).then(dataUrl => {
               if (!dataUrl) { json(res, { error: 'element not found or capture failed' }, 404); return }
               const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '')
-              res.setHeader('Content-Type', 'image/png')
+              res.setHeader('Content-Type', 'image/jpeg')
               res.writeHead(200)
               res.end(Buffer.from(base64, 'base64'))
             }).catch(e => json(res, { error: e.message }, 500))
