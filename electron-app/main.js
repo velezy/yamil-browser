@@ -324,11 +324,16 @@ function startControlServer () {
       getActiveTabInfo().then(async (info) => {
         if (info && info.type === 'stealth' && info.sessionId) {
           try {
+            const maxBytes = parseInt(url.searchParams.get('maxBytes')) || 400_000
             const qs = url.search || '?quality=40&scale=0.5'
             const r = await browserServiceRaw('GET', `/sessions/${info.sessionId}/screenshot${qs}`)
-            res.setHeader('Content-Type', r.headers['content-type'] || 'image/jpeg')
-            res.writeHead(r.status)
-            res.end(r.buf)
+            if (r.buf && r.buf.length > maxBytes) {
+              json(res, { error: `Screenshot too large (${(r.buf.length/1024).toFixed(0)}KB). Use yamil_browser_a11y_snapshot instead.` }, 413)
+            } else {
+              res.setHeader('Content-Type', r.headers['content-type'] || 'image/jpeg')
+              res.writeHead(r.status)
+              res.end(r.buf)
+            }
           } catch (e) { json(res, { error: e.message }, 500) }
         } else {
           const quality = parseInt(url.searchParams.get('quality')) || 40
@@ -573,9 +578,13 @@ function startControlServer () {
             try {
               const r = await browserServiceRaw('POST', `/sessions/${info.sessionId}/screenshot-element`, { selector })
               if (r.status >= 400) { json(res, { error: 'element not found' }, r.status); return }
-              res.setHeader('Content-Type', r.headers['content-type'] || 'image/jpeg')
-              res.writeHead(r.status)
-              res.end(r.buf)
+              if (r.buf && r.buf.length > 400_000) {
+                json(res, { error: `Element screenshot too large (${(r.buf.length/1024).toFixed(0)}KB). Use yamil_browser_a11y_snapshot instead.` }, 413)
+              } else {
+                res.setHeader('Content-Type', r.headers['content-type'] || 'image/jpeg')
+                res.writeHead(r.status)
+                res.end(r.buf)
+              }
             } catch (e) { json(res, { error: e.message }, 500) }
           } else {
             mainWindow.webContents.executeJavaScript(`
