@@ -64,7 +64,7 @@ function execInActiveWebview (script) {
   )
 }
 
-function captureActiveWebview ({ quality = 80, maxWidth = 1280, maxBytes = 10_000_000 } = {}) {
+function captureActiveWebview ({ quality = 40, maxWidth = 1280, maxBytes = 400_000 } = {}) {
   if (!mainWindow) return Promise.reject(new Error('no window'))
   return mainWindow.webContents.executeJavaScript(
     `(function(){
@@ -331,9 +331,9 @@ function startControlServer () {
             res.end(r.buf)
           } catch (e) { json(res, { error: e.message }, 500) }
         } else {
-          const quality = parseInt(url.searchParams.get('quality')) || 80
+          const quality = parseInt(url.searchParams.get('quality')) || 40
           const maxWidth = parseInt(url.searchParams.get('maxWidth')) || 1280
-          const maxBytes = parseInt(url.searchParams.get('maxBytes')) || 10_000_000
+          const maxBytes = parseInt(url.searchParams.get('maxBytes')) || 400_000
           captureActiveWebview({ quality, maxWidth, maxBytes }).then(dataUrl => {
             if (!dataUrl) { json(res, { error: 'webview not ready' }, 503); return }
             const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '')
@@ -447,17 +447,31 @@ function startControlServer () {
     // ── GET /window-screenshot ────────────────────────────────────
     if (req.method === 'GET' && url.pathname === '/window-screenshot') {
       if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-      const quality = parseInt(url.searchParams.get('quality')) || 40
-      const maxWidth = parseInt(url.searchParams.get('maxWidth')) || 800
+      let quality = parseInt(url.searchParams.get('quality')) || 40
+      let maxWidth = parseInt(url.searchParams.get('maxWidth')) || 800
+      const maxBytes = parseInt(url.searchParams.get('maxBytes')) || 400_000
       mainWindow.capturePage().then(img => {
         const sz = img.getSize()
-        // Resize if wider than maxWidth
-        if (sz.width > maxWidth) {
-          const scale = maxWidth / sz.width
-          img = img.resize({ width: maxWidth, height: Math.round(sz.height * scale) })
+        if (!sz.width || !sz.height) { json(res, { error: 'empty capture' }, 503); return }
+        // Cap height to avoid oversized images
+        const maxH = 768
+        if (sz.height > maxH) {
+          const cropScale = maxH / sz.height
+          img = img.resize({ width: Math.round(sz.width * cropScale), height: maxH })
         }
-        // Return JPEG for smaller size
-        const buf = img.toJPEG(quality)
+        const cur = img.getSize()
+        // Resize if wider than maxWidth
+        if (cur.width > maxWidth) {
+          const scale = maxWidth / cur.width
+          img = img.resize({ width: maxWidth, height: Math.round(cur.height * scale) })
+        }
+        // Adaptive loop: shrink until under budget
+        let buf = img.toJPEG(quality)
+        for (let attempt = 0; attempt < 4 && buf.length > maxBytes; attempt++) {
+          if (quality > 25) { quality = Math.max(25, quality - 15) }
+          else { maxWidth = Math.round(maxWidth * 0.7) ; img = img.resize({ width: maxWidth, height: Math.round(img.getSize().height * 0.7) }) }
+          buf = img.toJPEG(quality)
+        }
         res.setHeader('Content-Type', 'image/jpeg')
         res.writeHead(200)
         res.end(buf)

@@ -37,8 +37,8 @@ export function registerObservationTools(server, deps) {
         if (!isValidImage(buf)) {
           return { content: [{ type: "text", text: "Screenshot returned invalid image data from both webview and window capture. Use yamil_browser_dom instead." }], isError: true };
         }
-        if (buf.length > 500_000) {
-          return { content: [{ type: "text", text: `Screenshot too large for API (${(buf.length/1024).toFixed(0)}KB). Use yamil_browser_a11y_snapshot or yamil_browser_dom instead.` }], isError: true };
+        if (buf.length > 400_000) {
+          return { content: [{ type: "text", text: `Screenshot too large for API (${(buf.length/1024).toFixed(0)}KB). Use yamil_browser_a11y_snapshot or yamil_browser_dom instead. DO NOT attempt to take a raw screenshot via curl — always use MCP tools.` }], isError: true };
         }
         const mime = (buf[0] === 0x89 && buf[1] === 0x50) ? "image/png" : "image/jpeg";
         return { content: [{ type: "image", data: buf.toString("base64"), mimeType: mime }] };
@@ -273,7 +273,7 @@ export function registerObservationTools(server, deps) {
     }
   );
 
-  // ── yamil_browser_screenshot_element (with empty image guard) ─────────
+  // ── yamil_browser_screenshot_element (with empty/size/validity guards) ──
   server.tool("yamil_browser_screenshot_element", "Take a screenshot of a specific element.",
     {
       selector:      z.string().describe("CSS selector of the element to screenshot"),
@@ -281,6 +281,8 @@ export function registerObservationTools(server, deps) {
     },
     async ({ selector, frameSelector }) => {
       if (!(await yamilPing())) return { content: [{ type: "text", text: "YAMIL Browser is not running." }], isError: true };
+      const isValidImage = (b) => b && b.length >= 200 &&
+        ((b[0] === 0xFF && b[1] === 0xD8) || (b[0] === 0x89 && b[1] === 0x50));
       try {
         const res = await yamilPost("/screenshot-element", { selector });
         if (!res.ok) {
@@ -289,11 +291,14 @@ export function registerObservationTools(server, deps) {
           return { content: [{ type: "text", text: `Element screenshot failed: ${err.error || res.status}` }], isError: true };
         }
         const buf = Buffer.from(await res.arrayBuffer());
-        const b64 = buf.toString("base64");
-        if (!b64 || b64.length < 100) {
-          return { content: [{ type: "text", text: "Element screenshot returned empty image." }], isError: true };
+        if (!isValidImage(buf)) {
+          return { content: [{ type: "text", text: "Element screenshot returned invalid image data. Use yamil_browser_a11y_snapshot instead." }], isError: true };
         }
-        return { content: [{ type: "image", data: b64, mimeType: "image/jpeg" }] };
+        if (buf.length > 400_000) {
+          return { content: [{ type: "text", text: `Element screenshot too large for API (${(buf.length/1024).toFixed(0)}KB). Use yamil_browser_a11y_snapshot or yamil_browser_dom instead.` }], isError: true };
+        }
+        const mime = (buf[0] === 0x89 && buf[1] === 0x50) ? "image/png" : "image/jpeg";
+        return { content: [{ type: "image", data: buf.toString("base64"), mimeType: mime }] };
       } catch (e) {
         logToolError("yamil_browser_screenshot_element", { selector, frameSelector }, e.message, await yamilPageUrl());
         return { content: [{ type: "text", text: `Screenshot error: ${e.message}` }], isError: true };
