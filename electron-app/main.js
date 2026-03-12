@@ -219,6 +219,8 @@ function startControlServer () {
       return
     }
 
+
+
     // ── POST /focus ────────────────────────────────────────────────
     if (req.method === 'POST' && url.pathname === '/focus') {
       focusWindow()

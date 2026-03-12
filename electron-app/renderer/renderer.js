@@ -627,7 +627,11 @@ function wireWebviewEvents (tab) {
 
       // Run immediately and re-run on DOM changes (SPAs add password fields dynamically)
       watchForms();
-      new MutationObserver(() => watchForms()).observe(document.body, { childList: true, subtree: true });
+      let _yamilWatchTimer = null;
+      new MutationObserver(() => {
+        if (_yamilWatchTimer) return;
+        _yamilWatchTimer = setTimeout(() => { _yamilWatchTimer = null; watchForms(); }, 2000);
+      }).observe(document.body, { childList: true, subtree: true });
     })()`, true).catch(() => {});
   })
 
@@ -798,6 +802,14 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === ',') { e.preventDefault(); openSettingsPanel() }
   // Ctrl+J → downloads
   if (e.ctrlKey && !e.shiftKey && (e.key === 'j' || e.key === 'J')) { e.preventDefault(); openDownloadsPanel() }
+  // Ctrl+P → print
+  if (e.ctrlKey && !e.shiftKey && (e.key === 'p' || e.key === 'P')) { e.preventDefault(); printPage() }
+  // Ctrl+S → save page
+  if (e.ctrlKey && !e.shiftKey && (e.key === 's' || e.key === 'S')) { e.preventDefault(); savePageAs() }
+  // Ctrl+U → view source
+  if (e.ctrlKey && !e.shiftKey && (e.key === 'u' || e.key === 'U')) { e.preventDefault(); viewPageSource() }
+  // F12 → developer tools
+  if (e.key === 'F12') { e.preventDefault(); toggleDevTools() }
   // F11 → fullscreen
   if (e.key === 'F11') { e.preventDefault(); toggleFullscreen() }
   // Escape → close overlays
@@ -1785,6 +1797,12 @@ if (appMenu) {
       case 'find':       openFindBar(); break
       case 'zoom-in':    zoomIn(); e.stopPropagation(); updateMenuZoom(); return
       case 'zoom-out':   zoomOut(); e.stopPropagation(); updateMenuZoom(); return
+      case 'print':      printPage(); break
+      case 'save-page':  savePageAs(); break
+      case 'copy-url':   copyUrl(); break
+      case 'view-source': viewPageSource(); break
+      case 'dev-tools':  toggleDevTools(); break
+      case 'fullscreen': toggleFullscreen(); break
       case 'settings':   openSettingsPanel(); break
     }
     appMenu.style.display = 'none'
@@ -1797,6 +1815,64 @@ function updateMenuZoom () {
   const pct = Math.round(100 * Math.pow(1.2, z))
   const zl = document.getElementById('menu-zoom-level')
   if (zl) zl.textContent = pct + '%'
+}
+
+// ── Print, Save, DevTools ────────────────────────────────────────────
+
+function printPage () {
+  const tab = tabs.find(t => t.id === activeTabId)
+  if (tab && tab.webview) tab.webview.print()
+}
+
+function savePageAs () {
+  const tab = tabs.find(t => t.id === activeTabId)
+  if (!tab || !tab.webview) return
+  // Use Electron's save dialog via IPC
+  if (window.electronAPI && window.electronAPI.savePageAs) {
+    window.electronAPI.savePageAs(tab.webview.getURL())
+  } else {
+    // Fallback: download the page content
+    tab.webview.executeJavaScript(`document.documentElement.outerHTML`).then(html => {
+      const blob = new Blob([html], { type: 'text/html' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = (tab.title || 'page') + '.html'
+      a.click()
+      URL.revokeObjectURL(a.href)
+    })
+  }
+}
+
+function copyUrl () {
+  const tab = tabs.find(t => t.id === activeTabId)
+  if (tab && tab.webview) {
+    const url = tab.webview.getURL()
+    navigator.clipboard.writeText(url).then(() => {
+      // Brief visual feedback in address bar
+      const orig = addrBar.value
+      addrBar.value = 'URL copied!'
+      setTimeout(() => { addrBar.value = orig }, 1000)
+    })
+  }
+}
+
+function viewPageSource () {
+  const tab = tabs.find(t => t.id === activeTabId)
+  if (tab && tab.webview) {
+    const url = tab.webview.getURL()
+    createTab('view-source:' + url, true, 'yamil')
+  }
+}
+
+function toggleDevTools () {
+  const tab = tabs.find(t => t.id === activeTabId)
+  if (tab && tab.webview) {
+    if (tab.webview.isDevToolsOpened()) {
+      tab.webview.closeDevTools()
+    } else {
+      tab.webview.openDevTools()
+    }
+  }
 }
 
 // ── Settings panel ───────────────────────────────────────────────────
