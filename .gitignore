@@ -2,3 +2,4 @@ node_modules/
 .env
 *.log
 dist/
+browser-service/data/api-keys.json

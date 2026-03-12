@@ -5,6 +5,7 @@ import { registerWebSockets } from './ws.js'
 import { probeOllama, initDb } from './knowledge.js'
 import { probeVision } from './vision.js'
 import { initWebhooks } from './webhooks.js'
+import { authHook } from './api-keys.js'
 
 const PORT = parseInt(process.env.PORT || '4000')
 const HOST = process.env.HOST || '0.0.0.0'
@@ -18,6 +19,10 @@ const app = Fastify({
 })
 
 await app.register(websocket)
+
+// API key auth — enforced for non-localhost when keys are configured
+app.addHook('preHandler', authHook)
+
 await registerRoutes(app)
 await registerWebSockets(app)
 

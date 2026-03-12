@@ -25,8 +25,24 @@ const KEY_HISTORY      = 'yamil_history'
 const KEY_AI_MEMORY    = 'yamil_ai_memory'
 const KEY_AI_SKILLS    = 'yamil_ai_skills'
 const KEY_AI_BLOCKED   = 'yamil_ai_blocked_domains'
+const KEY_PROFILE      = 'yamil_current_profile'
 const MAX_STORED_MSGS  = 200
 const MAX_HISTORY      = 5000
+
+// ── Profile management ───────────────────────────────────────────────
+let currentProfile = localStorage.getItem(KEY_PROFILE) || 'Default'
+
+function getProfiles () {
+  try { return JSON.parse(localStorage.getItem('yamil_profiles') || '["Default"]') } catch { return ['Default'] }
+}
+
+function saveProfiles (profiles) {
+  localStorage.setItem('yamil_profiles', JSON.stringify(profiles))
+}
+
+function getPartition () {
+  return currentProfile === 'Default' ? 'persist:yamil' : `persist:profile-${currentProfile.toLowerCase().replace(/\s+/g, '-')}`
+}
 
 // ── Domain color helper ──────────────────────────────────────────────
 
@@ -108,7 +124,7 @@ function createTab (url, activate = true, type = 'yamil') {
     // Create webview element
     const wv = document.createElement('webview')
     wv.setAttribute('allowpopups', '')
-    wv.setAttribute('partition', 'persist:yamil')
+    wv.setAttribute('partition', getPartition())
     wv.setAttribute('webpreferences', 'contextIsolation=yes, sandbox=no')
     wv.src = url
     container.appendChild(wv)
@@ -654,6 +670,7 @@ function wireWebviewEvents (tab) {
   // ── Autofill: check for saved credentials on page load ─────────
   wv.addEventListener('did-finish-load', () => {
     tryAutofill(tab)
+    checkPWA(tab)
   })
 
   // Handle new-window requests (e.g. target="_blank") by opening in a new tab
@@ -3402,5 +3419,167 @@ updateBookmarkStar()
 })()
 
 downloads = getDownloads()
+
+// ── Profile switcher ─────────────────────────────────────────────────
+
+function initProfileSwitcher () {
+  const select = document.getElementById('set-profile')
+  const addBtn = document.getElementById('set-profile-add')
+  const delBtn = document.getElementById('set-profile-delete')
+  if (!select) return
+
+  function renderProfiles () {
+    const profiles = getProfiles()
+    select.innerHTML = ''
+    profiles.forEach(p => {
+      const opt = document.createElement('option')
+      opt.value = p
+      opt.textContent = p
+      if (p === currentProfile) opt.selected = true
+      select.appendChild(opt)
+    })
+  }
+
+  renderProfiles()
+
+  select.addEventListener('change', () => {
+    currentProfile = select.value
+    localStorage.setItem(KEY_PROFILE, currentProfile)
+    addSystemMsg(`Switched to profile: ${currentProfile}. New tabs will use this profile.`)
+  })
+
+  addBtn?.addEventListener('click', () => {
+    const name = prompt('Profile name:')
+    if (!name || !name.trim()) return
+    const profiles = getProfiles()
+    if (profiles.includes(name.trim())) { addSystemMsg('Profile already exists.'); return }
+    profiles.push(name.trim())
+    saveProfiles(profiles)
+    currentProfile = name.trim()
+    localStorage.setItem(KEY_PROFILE, currentProfile)
+    renderProfiles()
+    addSystemMsg(`Profile "${currentProfile}" created and activated.`)
+  })
+
+  delBtn?.addEventListener('click', () => {
+    if (currentProfile === 'Default') { addSystemMsg('Cannot delete the Default profile.'); return }
+    const profiles = getProfiles().filter(p => p !== currentProfile)
+    saveProfiles(profiles)
+    currentProfile = 'Default'
+    localStorage.setItem(KEY_PROFILE, currentProfile)
+    renderProfiles()
+    addSystemMsg('Profile deleted. Switched to Default.')
+  })
+}
+
+initProfileSwitcher()
+
+// ── PWA install detection ────────────────────────────────────────────
+
+function checkPWA (tab) {
+  if (!tab || !tab.webview || tab.type !== 'yamil') return
+  try {
+    tab.webview.executeJavaScript(`(function() {
+      var link = document.querySelector('link[rel="manifest"]');
+      return link ? link.href : null;
+    })()`)
+    .then(manifestUrl => {
+      if (manifestUrl) {
+        const installBtn = document.getElementById('btn-pwa-install')
+        if (installBtn) {
+          installBtn.style.display = 'inline-flex'
+          installBtn.dataset.manifest = manifestUrl
+          installBtn.dataset.tabId = tab.id
+        }
+      } else {
+        const installBtn = document.getElementById('btn-pwa-install')
+        if (installBtn) installBtn.style.display = 'none'
+      }
+    })
+    .catch(() => {})
+  } catch {}
+}
+
+document.getElementById('btn-pwa-install')?.addEventListener('click', async () => {
+  const btn = document.getElementById('btn-pwa-install')
+  const manifestUrl = btn?.dataset.manifest
+  if (!manifestUrl) return
+  try {
+    const tab = tabs.find(t => t.id === Number(btn.dataset.tabId))
+    if (!tab || !tab.webview) return
+    const manifest = await (await fetch(manifestUrl)).json()
+    const name = manifest.name || manifest.short_name || 'App'
+    const startUrl = manifest.start_url || tab.url
+    // Create a bookmark as "installed PWA"
+    let bm = JSON.parse(localStorage.getItem(KEY_BOOKMARKS) || '[]')
+    if (!bm.some(b => b.url === startUrl && b.pwa)) {
+      bm.push({ url: startUrl, title: `[PWA] ${name}`, date: Date.now(), pwa: true, icon: manifest.icons?.[0]?.src || '' })
+      localStorage.setItem(KEY_BOOKMARKS, JSON.stringify(bm))
+      renderBookmarkBar()
+    }
+    addSystemMsg(`"${name}" added as PWA bookmark.`)
+    btn.style.display = 'none'
+  } catch (e) {
+    addSystemMsg('PWA install failed: ' + e.message)
+  }
+})
+
+// Check for PWA on page load — wire into existing webview events
+const origSwitchTab = switchTab
+// Hook into tab switch to check PWA
+const _origDidFinishLoadHandlers = new Map()
+
+// ── API key management ───────────────────────────────────────────────
+
+async function refreshApiKeys () {
+  try {
+    const res = await fetch(`${BROWSER_SERVICE}/api-keys`)
+    const data = await res.json()
+    const listEl = document.getElementById('api-key-list')
+    const statusEl = document.getElementById('api-key-status')
+    if (statusEl) statusEl.textContent = data.authEnabled ? 'Enabled (remote access requires key)' : 'Disabled (no keys configured)'
+    if (!listEl) return
+    listEl.innerHTML = ''
+    if (data.keys.length === 0) {
+      listEl.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:4px 0;">No API keys. Remote access is unrestricted.</div>'
+      return
+    }
+    data.keys.forEach(k => {
+      const row = document.createElement('div')
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px;'
+      row.innerHTML = `<span style="flex:1">${k.name} <code>${k.prefix}</code></span>`
+      const del = document.createElement('button')
+      del.className = 'settings-btn'
+      del.textContent = 'Revoke'
+      del.style.fontSize = '10px'
+      del.addEventListener('click', async () => {
+        await fetch(`${BROWSER_SERVICE}/api-keys/${k.id}`, { method: 'DELETE' })
+        refreshApiKeys()
+      })
+      row.appendChild(del)
+      listEl.appendChild(row)
+    })
+  } catch {}
+}
+
+document.getElementById('set-create-api-key')?.addEventListener('click', async () => {
+  const name = prompt('API key name:', 'my-key')
+  if (!name) return
+  try {
+    const res = await fetch(`${BROWSER_SERVICE}/api-keys`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    })
+    const data = await res.json()
+    // Show the key once — it won't be shown again
+    addSystemMsg(`API key created: ${data.key.key}\nSave this key — it will not be shown again.`)
+    refreshApiKeys()
+  } catch (e) {
+    addSystemMsg('Failed to create API key: ' + e.message)
+  }
+})
+
+refreshApiKeys()
 
 addSystemMsg('YAMIL Browser ready')

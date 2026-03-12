@@ -3,6 +3,7 @@ import { logAction, cleanupSession, searchKnowledge, getKnowledgeStats, distillS
 import { runTask, isVisionAvailable } from './vision.js'
 import { saveCredential, getCredentials, listCredentials, deleteCredential } from './credentials.js'
 import { listWebhooks, createWebhook, deleteWebhook, updateWebhook, addSSEClient } from './webhooks.js'
+import { createApiKey, listApiKeys, deleteApiKey, isAuthEnabled } from './api-keys.js'
 
 function notFound(reply, id) {
   return reply.code(404).send({ error: `Session ${id} not found` })
@@ -839,5 +840,21 @@ export async function registerRoutes(app) {
     addSSEClient(reply, domain || null, category || null)
     // Prevent Fastify from closing the response
     reply.hijack()
+  })
+
+  // ── API key management ────────────────────────────────────────────
+
+  app.get('/api-keys', async () => ({ keys: listApiKeys(), authEnabled: isAuthEnabled() }))
+
+  app.post('/api-keys', async (req) => {
+    const { name } = req.body || {}
+    const key = createApiKey(name || 'default')
+    return { key }
+  })
+
+  app.delete('/api-keys/:id', async (req, reply) => {
+    const ok = deleteApiKey(req.params.id)
+    if (!ok) return reply.code(404).send({ error: 'Key not found' })
+    return { ok: true }
   })
 }

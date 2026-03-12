@@ -1228,6 +1228,13 @@ app.whenReady().then(() => {
   adBlocker.install(yamilSession)
   console.log(`[YAMIL adblock] Installed — ${adBlocker.blockedDomains.size} domains blocked`)
 
+  // Auto-configure any new profile sessions (UA + ad blocker)
+  app.on('session-created', (newSession) => {
+    newSession.setUserAgent(chromeUA)
+    adBlocker.install(newSession)
+    console.log('[YAMIL] Configured new session partition')
+  })
+
   // Grant microphone/media permissions for webviews (needed for voice input)
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     const allowed = ['media', 'audioCapture', 'microphone', 'display-capture']

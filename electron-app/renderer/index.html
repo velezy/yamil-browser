@@ -36,6 +36,7 @@
         <div id="addr-autocomplete"></div>
       </div>
       <div id="nav-right">
+        <button id="btn-pwa-install" title="Install as PWA" style="display:none"><span class="pwa-icon"></span></button>
         <button id="btn-reader" title="Reader Mode (Ctrl+Shift+R)"><span class="reader-icon"></span></button>
         <button id="btn-pip" title="Picture-in-Picture"><span class="pip-icon"></span></button>
         <button id="btn-translate" title="Translate Page"><span class="translate-icon"></span></button>
@@ -187,6 +188,17 @@
             </label>
           </div>
           <div class="settings-section">
+            <div class="settings-section-title">Profiles</div>
+            <label class="settings-row">
+              <span>Current Profile</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <select id="set-profile" style="min-width:100px;"></select>
+                <button id="set-profile-add" class="settings-btn" title="New profile">+</button>
+                <button id="set-profile-delete" class="settings-btn" title="Delete current profile">&times;</button>
+              </div>
+            </label>
+          </div>
+          <div class="settings-section">
             <div class="settings-section-title">AI</div>
             <label class="settings-row">
               <span>AI Endpoint</span>
@@ -196,6 +208,18 @@
               <span>AI Memory</span>
               <button id="set-clear-memory" class="settings-btn">Clear Memory</button>
             </label>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-title">API Access</div>
+            <label class="settings-row">
+              <span>Auth Status</span>
+              <span id="api-key-status" style="font-size:11px;color:var(--text-muted);">Loading...</span>
+            </label>
+            <label class="settings-row">
+              <span>Create API Key</span>
+              <button id="set-create-api-key" class="settings-btn">Generate</button>
+            </label>
+            <div id="api-key-list" style="padding:0 12px;"></div>
           </div>
           <div class="settings-section">
             <div class="settings-section-title">Shortcuts</div>
