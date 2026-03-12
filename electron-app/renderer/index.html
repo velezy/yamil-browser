@@ -36,6 +36,9 @@
         <div id="addr-autocomplete"></div>
       </div>
       <div id="nav-right">
+        <button id="btn-reader" title="Reader Mode (Ctrl+Shift+R)"><span class="reader-icon"></span></button>
+        <button id="btn-pip" title="Picture-in-Picture"><span class="pip-icon"></span></button>
+        <button id="btn-translate" title="Translate Page"><span class="translate-icon"></span></button>
         <button id="btn-ai-eye" title="Toggle AI page visibility" class="ai-visible"><span class="ai-eye-icon"></span></button>
         <button id="btn-bookmark" title="Bookmark this page (Ctrl+D)">&#9734;</button>
         <button id="btn-menu" title="Menu"><span class="menu-icon"></span></button>
@@ -293,6 +296,22 @@
         </div>
       </div>
 
+    </div>
+
+    <!-- ── Reader mode overlay ───────────────────────────────────── -->
+    <div id="reader-overlay" style="display:none">
+      <div id="reader-toolbar">
+        <button id="reader-close" title="Close Reader Mode">&times;</button>
+        <span id="reader-time"></span>
+        <select id="reader-theme">
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+          <option value="sepia">Sepia</option>
+        </select>
+        <button id="reader-font-dec" title="Smaller text">A-</button>
+        <button id="reader-font-inc" title="Larger text">A+</button>
+      </div>
+      <div id="reader-content"></div>
     </div>
 
     <!-- ── Cookie manager overlay ────────────────────────────────── -->

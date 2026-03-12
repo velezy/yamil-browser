@@ -1028,6 +1028,8 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && !e.shiftKey && e.key === 't') { e.preventDefault(); createTab(startUrl, true, 'yamil') }
   // Ctrl+Shift+N → new stealth tab
   if (e.ctrlKey && e.shiftKey && (e.key === 'N' || e.key === 'n')) { e.preventDefault(); createTab(null, true, 'stealth') }
+  // Ctrl+Shift+R → reader mode
+  if (e.ctrlKey && e.shiftKey && (e.key === 'R' || e.key === 'r')) { e.preventDefault(); toggleReaderMode() }
   // Ctrl+W → close active tab
   if (e.ctrlKey && !e.shiftKey && e.key === 'w') { e.preventDefault(); if (activeTabId) closeTab(activeTabId) }
   // Ctrl+Shift+T → restore closed tab
@@ -2307,6 +2309,162 @@ document.getElementById('set-clear-memory')?.addEventListener('click', () => {
   saveAiMemory([])
   addSystemMsg('AI memory cleared.')
 })
+
+// ── Reader mode ──────────────────────────────────────────────────────
+
+const readerOverlay = document.getElementById('reader-overlay')
+const readerContent = document.getElementById('reader-content')
+let readerFontSize = 18
+
+async function toggleReaderMode () {
+  if (readerOverlay.style.display !== 'none') {
+    readerOverlay.style.display = 'none'
+    return
+  }
+
+  const tab = tabs.find(t => t.id === activeTabId)
+  if (!tab || !tab.webview) return
+
+  try {
+    const data = await tab.webview.executeJavaScript(`(function() {
+      // Simple article extraction
+      var article = document.querySelector('article') || document.querySelector('[role="main"]') || document.querySelector('main') || document.querySelector('.post-content, .article-content, .entry-content, .content');
+      var root = article || document.body;
+      var title = document.querySelector('h1')?.innerText || document.title;
+
+      // Get text content with structure
+      function extract(el) {
+        var html = '';
+        var dominated = el.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, pre, ul, ol, img, figure');
+        if (dominated.length > 3) {
+          dominated.forEach(function(n) {
+            if (n.tagName === 'IMG') {
+              html += '<img src="' + n.src + '" alt="' + (n.alt || '') + '">';
+            } else {
+              html += '<' + n.tagName.toLowerCase() + '>' + n.innerHTML + '</' + n.tagName.toLowerCase() + '>';
+            }
+          });
+        } else {
+          html = root.innerHTML;
+        }
+        return html;
+      }
+
+      var content = extract(root);
+      var wordCount = root.innerText.split(/\\s+/).length;
+      var readTime = Math.ceil(wordCount / 200);
+
+      return { title: title, content: content, wordCount: wordCount, readTime: readTime, url: location.href };
+    })()`)
+
+    if (!data || !data.content) return
+
+    readerContent.innerHTML = `
+      <h1>${data.title}</h1>
+      <div class="reader-meta">${data.wordCount} words &middot; ${data.readTime} min read &middot; ${data.url}</div>
+      ${data.content}
+    `
+    document.getElementById('reader-time').textContent = `${data.readTime} min read`
+
+    // Set theme
+    const theme = document.getElementById('reader-theme').value
+    readerOverlay.className = theme
+    readerOverlay.style.display = 'block'
+    readerContent.style.fontSize = readerFontSize + 'px'
+  } catch (_) {}
+}
+
+document.getElementById('btn-reader')?.addEventListener('click', toggleReaderMode)
+document.getElementById('reader-close')?.addEventListener('click', () => { readerOverlay.style.display = 'none' })
+document.getElementById('reader-theme')?.addEventListener('change', (e) => {
+  readerOverlay.className = e.target.value
+})
+document.getElementById('reader-font-inc')?.addEventListener('click', () => {
+  readerFontSize = Math.min(readerFontSize + 2, 32)
+  readerContent.style.fontSize = readerFontSize + 'px'
+})
+document.getElementById('reader-font-dec')?.addEventListener('click', () => {
+  readerFontSize = Math.max(readerFontSize - 2, 12)
+  readerContent.style.fontSize = readerFontSize + 'px'
+})
+
+// ── Picture-in-Picture ───────────────────────────────────────────────
+
+async function togglePiP () {
+  const tab = tabs.find(t => t.id === activeTabId)
+  if (!tab || !tab.webview) return
+
+  try {
+    await tab.webview.executeJavaScript(`(function() {
+      // Find the largest playing video, or first video
+      var videos = Array.from(document.querySelectorAll('video'));
+      if (!videos.length) { alert('No video found on this page.'); return; }
+      var video = videos.sort(function(a, b) {
+        return (b.videoWidth * b.videoHeight) - (a.videoWidth * a.videoHeight);
+      })[0];
+
+      if (document.pictureInPictureElement) {
+        document.exitPictureInPicture();
+      } else if (video.requestPictureInPicture) {
+        video.requestPictureInPicture().catch(function(e) {
+          // Try playing first then PiP
+          video.play().then(function() {
+            video.requestPictureInPicture();
+          }).catch(function() {
+            alert('Could not enter Picture-in-Picture: ' + e.message);
+          });
+        });
+      }
+    })()`, true)
+  } catch (_) {}
+}
+
+document.getElementById('btn-pip')?.addEventListener('click', togglePiP)
+
+// ── Translation ──────────────────────────────────────────────────────
+
+async function translatePage () {
+  const tab = tabs.find(t => t.id === activeTabId)
+  if (!tab || !tab.webview) return
+
+  // Get target language from user
+  const lang = prompt('Translate page to (e.g., Spanish, French, Japanese):', 'Spanish')
+  if (!lang) return
+
+  try {
+    // Extract page text
+    const text = await tab.webview.executeJavaScript('document.body.innerText.slice(0, 6000)')
+    if (!text) return
+
+    // Use AI endpoint for translation
+    if (!aiEndpoint) { addSystemMsg('No AI endpoint configured for translation.'); return }
+
+    setSidebarOpen(true)
+    addSystemMsg(`Translating page to ${lang}...`)
+
+    const response = await fetch(aiEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: `Translate the following text to ${lang}. Preserve formatting. Only output the translation, no explanations:\n\n${text}`,
+        context: { url: tab.url, title: tab.title },
+      }),
+      signal: AbortSignal.timeout(30000),
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      const translated = data.response || data.message || data.text || JSON.stringify(data)
+      addAssistantMsg(translated)
+    } else {
+      addSystemMsg('Translation failed: ' + response.statusText)
+    }
+  } catch (e) {
+    addSystemMsg('Translation error: ' + e.message)
+  }
+}
+
+document.getElementById('btn-translate')?.addEventListener('click', translatePage)
 
 // ── Ad blocker settings ──────────────────────────────────────────────
 
