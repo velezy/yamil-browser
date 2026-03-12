@@ -933,29 +933,14 @@ function startControlServer () {
     }
 
     // Third-party cookie blocking toggle
+    // NOTE: The actual header stripping is done in the unified onHeadersReceived handler
+    // registered in createWindow(). We only toggle the flag here.
     if (req.method === 'POST' && url.pathname === '/cookies/block-third-party') {
       readBody(req, body => {
-        const yamilSession = session.fromPartition('persist:yamil')
         const enabled = !!body.enabled
         if (enabled) {
+          const yamilSession = session.fromPartition('persist:yamil')
           yamilSession.cookies.flushStore().catch(() => {})
-          // Electron doesn't have native 3P cookie blocking, so we use webRequest to strip Set-Cookie from cross-origin responses
-          yamilSession.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, callback) => {
-            if (!global._block3pCookies) return callback({})
-            const reqUrl = new URL(details.url)
-            const frameUrl = details.frame?.url || details.referrer || ''
-            try {
-              const frameHost = new URL(frameUrl).hostname.replace(/^www\./, '')
-              const reqHost = reqUrl.hostname.replace(/^www\./, '')
-              if (frameHost && reqHost !== frameHost && !reqHost.endsWith('.' + frameHost)) {
-                const headers = { ...details.responseHeaders }
-                delete headers['set-cookie']
-                delete headers['Set-Cookie']
-                return callback({ responseHeaders: headers })
-              }
-            } catch {}
-            callback({})
-          })
         }
         global._block3pCookies = enabled
         json(res, { ok: true, blocking: enabled })
@@ -1264,26 +1249,83 @@ app.whenReady().then(() => {
   adBlocker.install(yamilSession)
   console.log(`[YAMIL adblock] Installed — ${adBlocker.blockedDomains.size} domains blocked`)
 
-  // Strip X-Frame-Options and CSP frame-ancestors from responses so webview can load any page
-  // (Electron webviews are cross-origin by design; these headers block legitimate browsing)
-  yamilSession.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, callback) => {
+  // Unified onHeadersReceived handler — strips frame-blocking headers and optionally blocks 3P cookies.
+  // IMPORTANT: Electron only supports ONE onHeadersReceived handler per session, so everything goes here.
+  yamilSession.webRequest.onHeadersReceived((details, callback) => {
     const h = Object.assign({}, details.responseHeaders)
-    // Remove frame-blocking headers
+
+    // Log localhost requests for debugging
+    if (details.url.includes('localhost')) {
+      console.log(`[YAMIL headers] onHeadersReceived: url=${details.url}, resourceType=${details.resourceType}`)
+      console.log(`[YAMIL headers] Original headers:`, JSON.stringify(h).slice(0, 500))
+    }
+
+    // 1. Strip frame-blocking and download-forcing headers so webview can load any page
     for (const key of Object.keys(h)) {
       const lk = key.toLowerCase()
-      if (lk === 'x-frame-options') { delete h[key]; continue }
+      if (lk === 'x-frame-options') { console.log('[YAMIL headers] Stripping X-Frame-Options'); delete h[key]; continue }
+      if (lk === 'content-disposition') {
+        // Strip Content-Disposition: attachment for HTML responses — these force downloads
+        const ct = Object.keys(h).find(k => k.toLowerCase() === 'content-type')
+        const contentType = ct ? (Array.isArray(h[ct]) ? h[ct][0] : h[ct]) : ''
+        if (contentType.includes('text/html') || contentType.includes('application/xhtml')) {
+          delete h[key]
+        }
+        continue
+      }
       if (lk === 'content-security-policy') {
         h[key] = h[key].map(v => v.replace(/frame-ancestors\s+[^;]+;?/gi, ''))
       }
+      if (lk === 'cross-origin-opener-policy' || lk === 'cross-origin-embedder-policy') {
+        delete h[key]; continue
+      }
     }
+
+    // 2. Third-party cookie blocking (when enabled)
+    if (global._block3pCookies) {
+      try {
+        const reqUrl = new URL(details.url)
+        const frameUrl = details.frame?.url || details.referrer || ''
+        if (frameUrl) {
+          const frameHost = new URL(frameUrl).hostname.replace(/^www\./, '')
+          const reqHost = reqUrl.hostname.replace(/^www\./, '')
+          if (frameHost && reqHost !== frameHost && !reqHost.endsWith('.' + frameHost)) {
+            delete h['set-cookie']
+            delete h['Set-Cookie']
+          }
+        }
+      } catch {}
+    }
+
     callback({ responseHeaders: h })
   })
 
-  // Auto-configure any new profile sessions (UA + ad blocker + downloads)
+  // Auto-configure any new profile sessions (UA + ad blocker + downloads + header stripping)
   app.on('session-created', (newSession) => {
     newSession.setUserAgent(chromeUA)
     adBlocker.install(newSession)
     wireDownloadHandler(newSession)
+    // Strip frame-blocking headers on new profile sessions too
+    newSession.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, callback) => {
+      const h = Object.assign({}, details.responseHeaders)
+      for (const key of Object.keys(h)) {
+        const lk = key.toLowerCase()
+        if (lk === 'x-frame-options') { delete h[key]; continue }
+        if (lk === 'content-disposition') {
+          const ct = Object.keys(h).find(k => k.toLowerCase() === 'content-type')
+          const contentType = ct ? (Array.isArray(h[ct]) ? h[ct][0] : h[ct]) : ''
+          if (contentType.includes('text/html') || contentType.includes('application/xhtml')) { delete h[key] }
+          continue
+        }
+        if (lk === 'content-security-policy') {
+          h[key] = h[key].map(v => v.replace(/frame-ancestors\s+[^;]+;?/gi, ''))
+        }
+        if (lk === 'cross-origin-opener-policy' || lk === 'cross-origin-embedder-policy') {
+          delete h[key]; continue
+        }
+      }
+      callback({ responseHeaders: h })
+    })
     console.log('[YAMIL] Configured new session partition')
   })
 
@@ -1291,16 +1333,26 @@ app.whenReady().then(() => {
   const activeDownloads = new Map() // savePath → DownloadItem
 
   function wireDownloadHandler (sess) {
-    sess.on('will-download', (event, item, _webContents) => {
+    sess.on('will-download', (event, item, webContents) => {
       const filename = item.getFilename()
       const mimeType = item.getMimeType() || ''
       const totalBytes = item.getTotalBytes()
+      const downloadUrl = item.getURL() || ''
+
+      console.log(`[YAMIL download] will-download: url=${downloadUrl}, mime=${mimeType}, file=${filename}, bytes=${totalBytes}`)
 
       // Cancel downloads that are actually page navigations (HTML/XHTML)
       // These happen when X-Frame-Options or Content-Disposition triggers a download for page content
-      if (mimeType.includes('text/html') || mimeType.includes('application/xhtml') ||
-          (filename === 'download' && totalBytes < 10000 && !mimeType)) {
-        event.preventDefault()
+      const isPageDownload = mimeType.includes('text/html') || mimeType.includes('application/xhtml') ||
+          filename === 'download' || !mimeType
+      if (isPageDownload) {
+        console.log('[YAMIL download] Cancelled — looks like a page navigation, not a real download')
+        // Use setSavePath to prevent the save dialog, then cancel immediately
+        const tmpPath = path.join(app.getPath('temp'), 'yamil-cancelled-' + Date.now())
+        item.setSavePath(tmpPath)
+        item.cancel()
+        // Clean up the temp file if anything was written
+        fs.unlink(tmpPath, () => {})
         return
       }
 
@@ -1350,6 +1402,7 @@ app.whenReady().then(() => {
   }
 
   wireDownloadHandler(yamilSession)
+  wireDownloadHandler(session.defaultSession)
 
   // IPC: pause/resume/cancel downloads
   ipcMain.on('download-pause', (_e, id) => {
