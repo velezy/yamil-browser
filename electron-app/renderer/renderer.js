@@ -635,6 +635,11 @@ function wireWebviewEvents (tab) {
     })()`, true).catch(() => {});
   })
 
+  // ── Autofill: check for saved credentials on page load ─────────
+  wv.addEventListener('did-finish-load', () => {
+    tryAutofill(tab)
+  })
+
   // Handle new-window requests (e.g. target="_blank") by opening in a new tab
   wv.addEventListener('new-window', (e) => {
     e.preventDefault()
@@ -664,7 +669,243 @@ function wireWebviewEvents (tab) {
       if (fc) fc.textContent = matches > 0 ? `${activeMatchOrdinal} of ${matches}` : 'No matches'
     }
   })
+
+  // Context menu (right-click)
+  wv.addEventListener('context-menu', (e) => {
+    e.preventDefault()
+    showContextMenu(e.params, tab)
+  })
 }
+
+// ── Context menu ─────────────────────────────────────────────────────
+
+const ctxMenu = document.getElementById('context-menu')
+
+function showContextMenu (params, tab) {
+  const items = []
+  const { x, y, linkURL, srcURL, mediaType, selectionText, isEditable, pageURL } = params
+
+  // Link context
+  if (linkURL) {
+    const shortUrl = linkURL.length > 40 ? linkURL.slice(0, 40) + '...' : linkURL
+    items.push({ type: 'label', text: shortUrl })
+    items.push({ label: 'Open Link in New Tab', action: () => createTab(linkURL, true) })
+    items.push({ label: 'Open Link in Stealth Tab', action: () => createTab(linkURL, true, 'stealth') })
+    items.push({ label: 'Copy Link Address', action: () => navigator.clipboard.writeText(linkURL) })
+    items.push({ type: 'sep' })
+  }
+
+  // Image context
+  if (mediaType === 'image' && srcURL) {
+    items.push({ label: 'Open Image in New Tab', action: () => createTab(srcURL, true) })
+    items.push({ label: 'Copy Image Address', action: () => navigator.clipboard.writeText(srcURL) })
+    items.push({ label: 'Save Image As...', action: () => downloadUrl(srcURL, 'image') })
+    items.push({ type: 'sep' })
+  }
+
+  // Text selection context
+  if (selectionText) {
+    const shortSel = selectionText.length > 30 ? selectionText.slice(0, 30) + '...' : selectionText
+    items.push({ label: `Copy "${shortSel}"`, action: () => { if (tab.webview) tab.webview.copy() } })
+    items.push({ label: `Search for "${shortSel}"`, action: () => {
+      const engine = localStorage.getItem('yamil_settings') ? JSON.parse(localStorage.getItem('yamil_settings')).searchEngine : 'google'
+      const urls = { google: 'https://www.google.com/search?q=', bing: 'https://www.bing.com/search?q=', duckduckgo: 'https://duckduckgo.com/?q=', brave: 'https://search.brave.com/search?q=' }
+      createTab((urls[engine] || urls.google) + encodeURIComponent(selectionText), true)
+    }})
+    items.push({ label: `Ask AI about "${shortSel}"`, action: () => {
+      const chatInput = document.getElementById('chat-input')
+      if (chatInput) { chatInput.value = selectionText; chatInput.focus() }
+      setSidebarOpen(true)
+    }})
+    items.push({ type: 'sep' })
+  }
+
+  // Editable field context
+  if (isEditable) {
+    items.push({ label: 'Cut', kbd: 'Ctrl+X', action: () => { if (tab.webview) tab.webview.cut() } })
+    items.push({ label: 'Copy', kbd: 'Ctrl+C', action: () => { if (tab.webview) tab.webview.copy() } })
+    items.push({ label: 'Paste', kbd: 'Ctrl+V', action: () => { if (tab.webview) tab.webview.paste() } })
+    items.push({ label: 'Select All', kbd: 'Ctrl+A', action: () => { if (tab.webview) tab.webview.selectAll() } })
+    items.push({ type: 'sep' })
+  }
+
+  // General page actions
+  items.push({ label: 'Back', kbd: 'Alt+\u2190', action: () => { if (tab.webview) tab.webview.goBack() }, disabled: !tab.webview?.canGoBack() })
+  items.push({ label: 'Forward', kbd: 'Alt+\u2192', action: () => { if (tab.webview) tab.webview.goForward() }, disabled: !tab.webview?.canGoForward() })
+  items.push({ label: 'Reload', kbd: 'Ctrl+R', action: () => { if (tab.webview) tab.webview.reload() } })
+  items.push({ type: 'sep' })
+  items.push({ label: 'Find in Page', kbd: 'Ctrl+F', action: () => openFindBar() })
+  items.push({ label: 'View Page Source', kbd: 'Ctrl+U', action: () => viewPageSource() })
+  items.push({ label: 'Inspect', kbd: 'F12', action: () => toggleDevTools() })
+
+  // Build the menu DOM
+  ctxMenu.innerHTML = ''
+  for (const item of items) {
+    if (item.type === 'sep') {
+      const sep = document.createElement('div')
+      sep.className = 'ctx-sep'
+      ctxMenu.appendChild(sep)
+    } else if (item.type === 'label') {
+      const lbl = document.createElement('div')
+      lbl.className = 'ctx-label'
+      lbl.textContent = item.text
+      ctxMenu.appendChild(lbl)
+    } else {
+      const el = document.createElement('div')
+      el.className = 'ctx-item' + (item.disabled ? ' disabled' : '')
+      el.textContent = item.label
+      if (item.kbd) {
+        const kbd = document.createElement('kbd')
+        kbd.textContent = item.kbd
+        el.appendChild(kbd)
+      }
+      el.addEventListener('click', () => {
+        ctxMenu.style.display = 'none'
+        if (item.action) item.action()
+      })
+      ctxMenu.appendChild(el)
+    }
+  }
+
+  // Position: keep within viewport
+  ctxMenu.style.display = 'block'
+  const mw = ctxMenu.offsetWidth, mh = ctxMenu.offsetHeight
+  const vw = window.innerWidth, vh = window.innerHeight
+  ctxMenu.style.left = (x + mw > vw ? Math.max(0, x - mw) : x) + 'px'
+  ctxMenu.style.top = (y + mh > vh ? Math.max(0, y - mh) : y) + 'px'
+}
+
+// Helper for context menu image save
+function downloadUrl (url, type) {
+  const a = document.createElement('a')
+  a.href = url
+  a.download = type || 'download'
+  a.click()
+}
+
+// Close context menu on click anywhere or Escape
+document.addEventListener('click', () => { ctxMenu.style.display = 'none' })
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && ctxMenu.style.display === 'block') ctxMenu.style.display = 'none'
+})
+
+// ── Autofill ─────────────────────────────────────────────────────────
+
+const afBar = document.getElementById('autofill-bar')
+const afUsername = document.getElementById('af-username')
+const afFillBtn = document.getElementById('af-fill')
+const afDismissBtn = document.getElementById('af-dismiss')
+let _afPending = null // { tab, username, password, usernameSelector, passwordSelector }
+
+// Dismissed domains for this session (don't nag)
+const _afDismissed = new Set()
+
+async function tryAutofill (tab) {
+  if (!tab.webview || tab.type !== 'yamil') return
+  try {
+    // Step 1: Check if page has a password field
+    const hasLogin = await tab.webview.executeJavaScript(
+      `!!document.querySelector('input[type="password"]')`
+    )
+    if (!hasLogin) return
+
+    // Step 2: Get domain
+    const pageUrl = tab.webview.getURL()
+    let domain
+    try { domain = new URL(pageUrl).hostname.replace(/^www\./, '') } catch (_) { return }
+    if (_afDismissed.has(domain)) return
+
+    // Step 3: Fetch credentials from browser-service
+    const credRes = await fetch(`http://127.0.0.1:4000/credentials?domain=${encodeURIComponent(domain)}`)
+    const credData = await credRes.json()
+    if (!credData.credentials || !credData.credentials.length) return
+
+    const cred = credData.credentials[0]
+    if (!cred.password_encrypted) return
+
+    // Step 4: Decrypt password via Electron safeStorage
+    const decRes = await fetch('http://127.0.0.1:9300/credentials/decrypt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ encrypted: cred.password_encrypted })
+    })
+    const decData = await decRes.json()
+    if (!decData.password) return
+
+    // Step 5: Detect field selectors
+    const selectors = await tab.webview.executeJavaScript(`(function() {
+      var pw = document.querySelector('input[type="password"]');
+      if (!pw) return null;
+      var container = pw.closest('form') || document.body;
+      var user = container.querySelector('input[type="email"], input[type="text"], input[name*="user"], input[name*="email"], input[name*="login"], input[autocomplete="username"]');
+      if (!user) {
+        var inputs = container.querySelectorAll('input[type="email"], input[type="text"]');
+        for (var i = 0; i < inputs.length; i++) {
+          if (inputs[i] !== pw && !inputs[i].type.match(/hidden|search/)) { user = inputs[i]; break; }
+        }
+      }
+      function sel(el) {
+        if (el.id) return '#' + el.id;
+        if (el.name) return el.tagName.toLowerCase() + '[name="' + el.name + '"]';
+        return el.tagName.toLowerCase() + '[type="' + el.type + '"]';
+      }
+      return { u: user ? sel(user) : null, p: sel(pw) };
+    })()`)
+    if (!selectors) return
+
+    // Step 6: Show autofill bar
+    _afPending = {
+      tab,
+      username: cred.username,
+      password: decData.password,
+      usernameSelector: selectors.u,
+      passwordSelector: selectors.p
+    }
+    afUsername.textContent = cred.username
+    afBar.style.display = 'flex'
+  } catch (_) {
+    // Silently fail — autofill is best-effort
+  }
+}
+
+function doAutofill () {
+  if (!_afPending) return
+  const { tab, username, password, usernameSelector, passwordSelector } = _afPending
+  if (!tab.webview) return
+
+  const uSel = usernameSelector ? JSON.stringify(usernameSelector) : 'null'
+  const pSel = JSON.stringify(passwordSelector)
+  const uVal = JSON.stringify(username)
+  const pVal = JSON.stringify(password)
+
+  tab.webview.executeJavaScript(`(function() {
+    function fillField(selector, value) {
+      var el = document.querySelector(selector);
+      if (!el) return;
+      el.focus();
+      el.value = value;
+      el.dispatchEvent(new Event('input', {bubbles: true}));
+      el.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+    if (${uSel}) fillField(${uSel}, ${uVal});
+    fillField(${pSel}, ${pVal});
+  })()`, true).catch(() => {})
+
+  afBar.style.display = 'none'
+  _afPending = null
+}
+
+afFillBtn.addEventListener('click', () => doAutofill())
+afDismissBtn.addEventListener('click', () => {
+  afBar.style.display = 'none'
+  if (_afPending) {
+    try {
+      const domain = new URL(_afPending.tab.webview.getURL()).hostname.replace(/^www\./, '')
+      _afDismissed.add(domain)
+    } catch (_) {}
+  }
+  _afPending = null
+})
 
 // ── Address bar ───────────────────────────────────────────────────────
 

@@ -822,6 +822,96 @@ body { background: var(--bg); color: var(--text); font-size: 13px; }
 }
 #btn-summarize:hover { background: var(--bg3); color: var(--text); }
 
+/* ── Autofill bar ──────────────────────────────────────────────── */
+#autofill-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9998;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 12px;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0,0,0,.3);
+}
+#autofill-bar .af-icon { font-size: 14px; flex-shrink: 0; }
+#autofill-bar .af-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#autofill-bar .af-text strong { color: var(--blue); }
+#autofill-bar .af-btn {
+  background: var(--blue);
+  color: #0f172a;
+  border: none;
+  border-radius: var(--radius);
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+#autofill-bar .af-btn:hover { opacity: .9; }
+#autofill-bar .af-btn.af-dismiss {
+  background: transparent;
+  color: var(--text-muted);
+  padding: 4px 8px;
+}
+
+/* ── Context menu ───────────────────────────────────────────────── */
+#context-menu {
+  position: fixed;
+  z-index: 99999;
+  min-width: 200px;
+  max-width: 320px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 24px rgba(0,0,0,.5);
+  padding: 4px 0;
+  font-size: 12px;
+  display: none;
+}
+#context-menu .ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#context-menu .ctx-item:hover {
+  background: var(--bg3);
+}
+#context-menu .ctx-item.disabled {
+  opacity: .4;
+  pointer-events: none;
+}
+#context-menu .ctx-item kbd {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-muted);
+  padding-left: 16px;
+}
+#context-menu .ctx-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+#context-menu .ctx-label {
+  padding: 4px 12px;
+  font-size: 10px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+}
+
 /* ── Fullscreen mode ────────────────────────────────────────────── */
 body.fullscreen #tab-bar,
 body.fullscreen #navbar,

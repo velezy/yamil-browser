@@ -2,6 +2,7 @@ import { createSession, getSession, listSessions, closeSession, touch } from './
 import { logAction, cleanupSession, searchKnowledge, getKnowledgeStats, distillSession, flushSession } from './knowledge.js'
 import { runTask, isVisionAvailable } from './vision.js'
 import { saveCredential, getCredentials, listCredentials, deleteCredential } from './credentials.js'
+import { listWebhooks, createWebhook, deleteWebhook, updateWebhook, addSSEClient } from './webhooks.js'
 
 function notFound(reply, id) {
   return reply.code(404).send({ error: `Session ${id} not found` })
@@ -778,5 +779,48 @@ export async function registerRoutes(app) {
     } catch (e) {
       return { error: e.message }
     }
+  })
+
+  // ── Webhook endpoints ──────────────────────────────────────────────
+
+  app.get('/webhooks', async () => {
+    const hooks = await listWebhooks()
+    return { webhooks: hooks }
+  })
+
+  app.post('/webhooks', async (req) => {
+    const { url, events, domainFilter, secret, description } = req.body || {}
+    try {
+      const hook = await createWebhook({ url, events, domainFilter, secret, description })
+      return { webhook: hook }
+    } catch (e) {
+      return { error: e.message }
+    }
+  })
+
+  app.delete('/webhooks/:id', async (req) => {
+    const deleted = await deleteWebhook(req.params.id)
+    return deleted ? { ok: true } : { error: 'not found' }
+  })
+
+  app.patch('/webhooks/:id', async (req) => {
+    const hook = await updateWebhook(req.params.id, req.body || {})
+    return hook ? { webhook: hook } : { error: 'not found' }
+  })
+
+  // ── SSE knowledge stream ───────────────────────────────────────────
+
+  app.get('/knowledge/stream', (req, reply) => {
+    const { domain, category } = req.query
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    })
+    reply.raw.write(`data: ${JSON.stringify({ event: 'connected', timestamp: new Date().toISOString() })}\n\n`)
+    addSSEClient(reply, domain || null, category || null)
+    // Prevent Fastify from closing the response
+    reply.hijack()
   })
 }

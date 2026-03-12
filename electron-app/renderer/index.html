@@ -62,6 +62,14 @@
         </span>
       </div>
       <div class="menu-sep"></div>
+      <button class="menu-item" data-action="print"><span class="mi-icon mi-print"></span>Print<kbd>Ctrl+P</kbd></button>
+      <button class="menu-item" data-action="save-page"><span class="mi-icon mi-save"></span>Save Page As<kbd>Ctrl+S</kbd></button>
+      <button class="menu-item" data-action="copy-url"><span class="mi-icon mi-copy"></span>Copy URL</button>
+      <div class="menu-sep"></div>
+      <button class="menu-item" data-action="view-source"><span class="mi-icon mi-source"></span>View Page Source<kbd>Ctrl+U</kbd></button>
+      <button class="menu-item" data-action="dev-tools"><span class="mi-icon mi-devtools"></span>Developer Tools<kbd>F12</kbd></button>
+      <button class="menu-item" data-action="fullscreen"><span class="mi-icon mi-fullscreen"></span>Fullscreen<kbd>F11</kbd></button>
+      <div class="menu-sep"></div>
       <button class="menu-item" data-action="settings"><span class="mi-icon mi-settings"></span>Settings<kbd>Ctrl+,</kbd></button>
     </div>
 
@@ -207,7 +215,15 @@
       <div id="progress-bar"></div>
 
       <!-- Webviews are created dynamically by renderer.js -->
-      <div id="webview-container"></div>
+      <div id="webview-container">
+        <!-- Autofill bar (shown when saved credentials match) -->
+        <div id="autofill-bar">
+          <span class="af-icon">&#128274;</span>
+          <span class="af-text">Sign in as <strong id="af-username"></strong>?</span>
+          <button class="af-btn" id="af-fill">Autofill</button>
+          <button class="af-btn af-dismiss" id="af-dismiss">&times;</button>
+        </div>
+      </div>
 
       <!-- AI Sidebar -->
       <div id="sidebar">
@@ -256,6 +272,9 @@
       </div>
 
     </div>
+
+    <!-- ── Context menu ─────────────────────────────────────────── -->
+    <div id="context-menu"></div>
 
     <!-- ── Status bar ─────────────────────────────────────────── -->
     <div id="statusbar">

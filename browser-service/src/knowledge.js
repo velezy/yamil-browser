@@ -12,6 +12,7 @@
 
 import pg from 'pg'
 import crypto from 'crypto'
+import { dispatch, dispatchSSE } from './webhooks.js'
 
 const { Pool } = pg
 
@@ -29,7 +30,8 @@ let pool = null
 let dbReady = false
 
 async function getPool() {
-  if (pool) return pool
+  if (pool && dbReady) return pool
+  if (pool && !dbReady) { try { await pool.end() } catch {} pool = null }
   pool = new Pool({ connectionString: DATABASE_URL, max: 5 })
   pool.on('error', (err) => console.error('[KNOWLEDGE DB] Pool error:', err.message))
   // Test connection
@@ -133,7 +135,9 @@ const SENSITIVE_PATTERNS = /password|passwd|secret|token|api.?key|authorization|
 function scrubValue(action, selector, value) {
   if (!value) return value
   // Scrub fill/type actions on password-like fields
-  if ((action === 'fill' || action === 'type') && SENSITIVE_PATTERNS.test(selector || '')) {
+  const sel = selector || ''
+  const isPasswordInput = /type\s*=\s*"?password"?/i.test(sel) || /\[type=password\]/i.test(sel)
+  if ((action === 'fill' || action === 'type') && (SENSITIVE_PATTERNS.test(sel) || isPasswordInput)) {
     return '***'
   }
   return value.substring(0, 100)  // truncate long values
@@ -213,6 +217,12 @@ export async function distillSession(session) {
     }
 
     console.log(`[KNOWLEDGE] Saved ${savedCount} entries from "${session.goal}" (domain: ${domain})`)
+
+    // Dispatch webhook + SSE events
+    const eventPayload = { domain, count: savedCount, goal: session.goal, url: session.url, outcome: session.outcome }
+    dispatch('knowledge.created', eventPayload)
+    dispatchSSE('knowledge.created', eventPayload)
+
     return savedCount
   } catch (e) {
     console.error(`[KNOWLEDGE] Distillation failed: ${e.message}`)
@@ -301,6 +311,9 @@ function getTracker(sessionId) {
 
 /** Log an action — writes to DB + in-memory tracker for batch distillation */
 export async function logAction(sessionId, action, params = {}, pageUrl = '', result = 'ok') {
+  // Strip query params from URL before storing (privacy: removes tokens, session IDs, etc.)
+  try { const u = new URL(pageUrl); pageUrl = u.origin + u.pathname } catch {}
+
   const tracker = getTracker(sessionId)
   const scrubbedValue = scrubValue(action, params.selector || params.text || '', params.value || params.url || '')
 
@@ -323,6 +336,9 @@ export async function logAction(sessionId, action, params = {}, pageUrl = '', re
       'INSERT INTO browser_actions (session_id, action, selector, value, page_url, domain) VALUES ($1, $2, $3, $4, $5, $6)',
       [sessionId, action, entry.selector, scrubbedValue, pageUrl, domain]
     ).catch(e => console.error(`[KNOWLEDGE] Action log DB error: ${e.message}`))
+
+    // Dispatch action event (SSE only — webhooks would be too noisy for individual actions)
+    dispatchSSE('action.logged', { sessionId, action, selector: entry.selector, domain, pageUrl })
   }
 
   // Track domain changes
@@ -358,6 +374,9 @@ export function flushSession(sessionId, trigger = 'manual') {
   const url = tracker.startUrl || 'unknown'
   const goal = `Passive: ${actions.length} actions on ${url}`
   console.log(`[KNOWLEDGE] Passive flush (${trigger}): ${actions.length} actions`)
+
+  dispatch('session.flushed', { sessionId, trigger, actionCount: actions.length, url })
+  dispatchSSE('session.flushed', { sessionId, trigger, actionCount: actions.length, url })
 
   distillSession({
     goal,
