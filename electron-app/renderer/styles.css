@@ -116,6 +116,20 @@ body { background: var(--bg); color: var(--text); font-size: 13px; }
 .tab.stealth.active { border-left: 3px solid #a855f7; }
 .stealth-icon { font-size: 10px; flex-shrink: 0; }
 
+/* ── Pinned tab ─────────────────────────────────────────────── */
+.tab.pinned {
+  min-width: 0;
+  max-width: 36px;
+  width: 36px;
+  padding: 0;
+  justify-content: center;
+}
+.tab.pinned .tab-title,
+.tab.pinned .tab-close,
+.tab.pinned .stealth-icon { display: none; }
+.tab.pinned .tab-favicon-letter,
+.tab.pinned .tab-favicon { margin: 0; }
+
 .tab-close {
   background: none;
   border: none;
@@ -809,6 +823,7 @@ body { background: var(--bg); color: var(--text); font-size: 13px; }
 .ac-item-type { font-size: 9px; padding: 1px 4px; border-radius: 3px; flex-shrink: 0; }
 .ac-item-type.bm { background: rgba(250,204,21,.15); color: #facc15; }
 .ac-item-type.hist { background: rgba(56,189,248,.15); color: var(--blue); }
+.ac-item-type.search { background: rgba(74,222,128,.15); color: var(--green); }
 
 /* ── Zoom indicator ─────────────────────────────────────────────── */
 #status-zoom { margin-left: auto; cursor: pointer; }

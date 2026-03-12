@@ -423,6 +423,10 @@ function switchTab (id) {
   saveTabs()
 }
 
+// ── Recently closed tabs (for Ctrl+Shift+T restore) ──────────────────
+const recentlyClosed = [] // { url, title, type } — max 20
+const MAX_CLOSED = 20
+
 function closeTab (id) {
   const idx = tabs.findIndex(t => t.id === id)
   if (idx === -1) return
@@ -433,6 +437,12 @@ function closeTab (id) {
   }
 
   const tab = tabs[idx]
+
+  // Remember for restore (non-blank tabs only)
+  if (tab.url && tab.url !== 'about:blank' && !tab.url.startsWith('https://localhost:8444')) {
+    recentlyClosed.push({ url: tab.url, title: tab.title, type: tab.type || 'yamil' })
+    if (recentlyClosed.length > MAX_CLOSED) recentlyClosed.shift()
+  }
 
   // Cleanup based on tab type
   if (tab.type === 'stealth') {
@@ -458,6 +468,12 @@ function closeTab (id) {
     switchTab(tabs[newIdx].id)
   }
   saveTabs()
+}
+
+function restoreClosedTab () {
+  const entry = recentlyClosed.pop()
+  if (!entry) return
+  createTab(entry.url, true, entry.type || 'yamil')
 }
 
 function getActiveWebview () {
@@ -1013,7 +1029,9 @@ document.addEventListener('keydown', (e) => {
   // Ctrl+Shift+N → new stealth tab
   if (e.ctrlKey && e.shiftKey && (e.key === 'N' || e.key === 'n')) { e.preventDefault(); createTab(null, true, 'stealth') }
   // Ctrl+W → close active tab
-  if (e.ctrlKey && e.key === 'w') { e.preventDefault(); if (activeTabId) closeTab(activeTabId) }
+  if (e.ctrlKey && !e.shiftKey && e.key === 'w') { e.preventDefault(); if (activeTabId) closeTab(activeTabId) }
+  // Ctrl+Shift+T → restore closed tab
+  if (e.ctrlKey && e.shiftKey && (e.key === 'T' || e.key === 't')) { e.preventDefault(); restoreClosedTab() }
   // Ctrl+Tab / Ctrl+Shift+Tab → cycle tabs
   if (e.ctrlKey && e.key === 'Tab') {
     e.preventDefault()
@@ -1369,7 +1387,7 @@ function saveTabs () {
   try {
     const data = {
       activeTabId,
-      tabs: tabs.map(t => ({ id: t.id, type: t.type || 'yamil', url: t.url, title: t.title, group: t.group || null, groupColor: t.groupColor || null })),
+      tabs: tabs.map(t => ({ id: t.id, type: t.type || 'yamil', url: t.url, title: t.title, group: t.group || null, groupColor: t.groupColor || null, pinned: t.pinned || false })),
     }
     localStorage.setItem(KEY_TABS, JSON.stringify(data))
   } catch (_) {}
@@ -1385,6 +1403,7 @@ function loadTabs () {
       stored.tabs.forEach(t => {
         const tab = createTab(t.url, false, t.type || 'yamil')
         if (t.group) { tab.group = t.group; tab.groupColor = t.groupColor; tab.tabEl.classList.add('grouped'); tab.tabEl.style.setProperty('--group-color', t.groupColor) }
+        if (t.pinned) { tab.pinned = true; tab.tabEl.classList.add('pinned') }
       })
       // Activate the previously active tab (or first)
       const targetId = stored.activeTabId
@@ -1415,6 +1434,9 @@ tabsList.addEventListener('contextmenu', (e) => {
   menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;z-index:10000;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px 0;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,.5);font-size:12px;color:var(--text);`
 
   const items = []
+  // Pin/Unpin
+  items.push({ label: tab.pinned ? 'Unpin Tab' : 'Pin Tab', action: () => togglePinTab(tabId) })
+  items.push({ type: 'sep' })
   if (tab.type === 'yamil') {
     items.push({ label: 'Open URL as Stealth Tab', action: () => createTab(tab.url, true, 'stealth') })
   } else {
@@ -1429,9 +1451,22 @@ tabsList.addEventListener('contextmenu', (e) => {
       if (name && name.trim()) setTabGroup(tabId, name.trim())
     }})
   }
+  items.push({ type: 'sep' })
   items.push({ label: 'Close Tab', action: () => closeTab(tabId) })
+  if (recentlyClosed.length > 0) {
+    items.push({ label: `Restore Closed Tab (${recentlyClosed.length})`, action: () => restoreClosedTab() })
+  }
+  items.push({ label: 'Close Other Tabs', action: () => {
+    tabs.filter(t => t.id !== tabId && !t.pinned).forEach(t => closeTab(t.id))
+  }})
 
   items.forEach(item => {
+    if (item.type === 'sep') {
+      const sep = document.createElement('div')
+      sep.style.cssText = 'height:1px;background:var(--border);margin:4px 0;'
+      menu.appendChild(sep)
+      return
+    }
     const el = document.createElement('div')
     el.textContent = item.label
     el.style.cssText = 'padding:6px 12px;cursor:pointer;'
@@ -1835,6 +1870,8 @@ histSearch.addEventListener('input', () => renderHistory(histSearch.value.trim()
 
 const acDropdown = document.getElementById('addr-autocomplete')
 
+let _acSuggestTimer = null
+
 function showAutocomplete () {
   const query = addrBar.value.trim().toLowerCase()
   if (!query) { hideAutocomplete(); return }
@@ -1853,8 +1890,35 @@ function showAutocomplete () {
     if (!seen.has(item.url)) {
       seen.add(item.url)
       combined.push(item)
-      if (combined.length >= 8) break
+      if (combined.length >= 6) break
     }
+  }
+
+  // Fetch search suggestions async (debounced)
+  if (_acSuggestTimer) clearTimeout(_acSuggestTimer)
+  _acSuggestTimer = setTimeout(() => fetchSearchSuggestions(query, combined.length), 250)
+
+  if (combined.length === 0 && !query.includes('.')) {
+    // Show "Search for..." hint while waiting for suggestions
+    acDropdown.innerHTML = ''
+    const hint = document.createElement('div')
+    hint.className = 'ac-item'
+    hint.dataset.idx = '0'
+    const t = document.createElement('span')
+    t.className = 'ac-item-title'
+    t.textContent = `Search for "${query}"`
+    const ty = document.createElement('span')
+    ty.className = 'ac-item-type search'
+    ty.textContent = 'search'
+    hint.appendChild(t)
+    hint.appendChild(ty)
+    hint.addEventListener('click', () => {
+      hideAutocomplete()
+      navigateToSearch(query)
+    })
+    acDropdown.appendChild(hint)
+    acDropdown.style.display = 'block'
+    return
   }
 
   if (combined.length === 0) { hideAutocomplete(); return }
@@ -1899,6 +1963,65 @@ function showAutocomplete () {
 
 function hideAutocomplete () {
   if (acDropdown) acDropdown.style.display = 'none'
+}
+
+function navigateToSearch (query) {
+  const settings = JSON.parse(localStorage.getItem('yamil_settings') || '{}')
+  const engine = settings.searchEngine || 'google'
+  const urls = { google: 'https://www.google.com/search?q=', bing: 'https://www.bing.com/search?q=', duckduckgo: 'https://duckduckgo.com/?q=', brave: 'https://search.brave.com/search?q=' }
+  const searchUrl = (urls[engine] || urls.google) + encodeURIComponent(query)
+  const tab = tabs.find(t => t.id === activeTabId)
+  if (tab && tab.type === 'stealth' && tab.sessionId) {
+    fetch(`${BROWSER_SERVICE}/sessions/${tab.sessionId}/navigate`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: searchUrl }),
+    }).catch(() => {})
+  } else {
+    const wv = getActiveWebview()
+    if (wv) wv.loadURL(searchUrl)
+  }
+}
+
+async function fetchSearchSuggestions (query, existingCount) {
+  if (!query || query.length < 2) return
+  try {
+    // Google Suggest API (JSONP-style, returns array)
+    const res = await fetch(`https://suggestqueries.google.com/complete/search?client=firefox&q=${encodeURIComponent(query)}`, {
+      signal: AbortSignal.timeout(2000)
+    })
+    const data = await res.json()
+    // data = ["query", ["suggestion1", "suggestion2", ...]]
+    const suggestions = data[1] || []
+    if (!suggestions.length) return
+    // Don't update if input has changed
+    if (addrBar.value.trim().toLowerCase() !== query) return
+
+    // Append search suggestions to existing dropdown
+    const maxSuggestions = Math.min(suggestions.length, 4)
+    for (let i = 0; i < maxSuggestions; i++) {
+      const s = suggestions[i]
+      const idx = existingCount + i
+      const row = document.createElement('div')
+      row.className = 'ac-item'
+      row.dataset.idx = idx
+      const titleEl = document.createElement('span')
+      titleEl.className = 'ac-item-title'
+      titleEl.textContent = s
+      const typeEl = document.createElement('span')
+      typeEl.className = 'ac-item-type search'
+      typeEl.textContent = 'search'
+      row.appendChild(titleEl)
+      row.appendChild(typeEl)
+      row.addEventListener('click', () => {
+        hideAutocomplete()
+        navigateToSearch(s)
+      })
+      acDropdown.appendChild(row)
+    }
+    if (acDropdown.children.length > 0) acDropdown.style.display = 'block'
+  } catch (_) {
+    // Silently fail — suggestions are best-effort
+  }
 }
 
 addrBar.addEventListener('input', showAutocomplete)
@@ -2243,6 +2366,25 @@ function formatBytes (b) {
 
 document.getElementById('dl-close').addEventListener('click', closeDownloadsPanel)
 downloadsPanel.addEventListener('click', (e) => { if (e.target === downloadsPanel) closeDownloadsPanel() })
+
+// ── Tab pinning ──────────────────────────────────────────────────────
+
+function togglePinTab (tabId) {
+  const tab = tabs.find(t => t.id === tabId)
+  if (!tab) return
+  tab.pinned = !tab.pinned
+  tab.tabEl.classList.toggle('pinned', tab.pinned)
+  // Move pinned tabs to the left
+  reorderPinnedTabs()
+  saveTabs()
+}
+
+function reorderPinnedTabs () {
+  const pinned = tabs.filter(t => t.pinned)
+  const unpinned = tabs.filter(t => !t.pinned)
+  // Re-insert pinned tabs first in DOM
+  pinned.forEach(t => tabsList.insertBefore(t.tabEl, tabsList.firstChild))
+}
 
 // ── Tab groups ───────────────────────────────────────────────────────
 
