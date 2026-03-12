@@ -1264,6 +1264,21 @@ app.whenReady().then(() => {
   adBlocker.install(yamilSession)
   console.log(`[YAMIL adblock] Installed — ${adBlocker.blockedDomains.size} domains blocked`)
 
+  // Strip X-Frame-Options and CSP frame-ancestors from responses so webview can load any page
+  // (Electron webviews are cross-origin by design; these headers block legitimate browsing)
+  yamilSession.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, callback) => {
+    const h = Object.assign({}, details.responseHeaders)
+    // Remove frame-blocking headers
+    for (const key of Object.keys(h)) {
+      const lk = key.toLowerCase()
+      if (lk === 'x-frame-options') { delete h[key]; continue }
+      if (lk === 'content-security-policy') {
+        h[key] = h[key].map(v => v.replace(/frame-ancestors\s+[^;]+;?/gi, ''))
+      }
+    }
+    callback({ responseHeaders: h })
+  })
+
   // Auto-configure any new profile sessions (UA + ad blocker + downloads)
   app.on('session-created', (newSession) => {
     newSession.setUserAgent(chromeUA)
@@ -1276,9 +1291,19 @@ app.whenReady().then(() => {
   const activeDownloads = new Map() // savePath → DownloadItem
 
   function wireDownloadHandler (sess) {
-    sess.on('will-download', (_event, item, _webContents) => {
+    sess.on('will-download', (event, item, _webContents) => {
       const filename = item.getFilename()
+      const mimeType = item.getMimeType() || ''
       const totalBytes = item.getTotalBytes()
+
+      // Cancel downloads that are actually page navigations (HTML/XHTML)
+      // These happen when X-Frame-Options or Content-Disposition triggers a download for page content
+      if (mimeType.includes('text/html') || mimeType.includes('application/xhtml') ||
+          (filename === 'download' && totalBytes < 10000 && !mimeType)) {
+        event.preventDefault()
+        return
+      }
+
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 
       // Wait for the save dialog — only track after the user picks a path
