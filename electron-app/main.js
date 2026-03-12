@@ -932,6 +932,42 @@ function startControlServer () {
       return
     }
 
+    // Third-party cookie blocking toggle
+    if (req.method === 'POST' && url.pathname === '/cookies/block-third-party') {
+      readBody(req, body => {
+        const yamilSession = session.fromPartition('persist:yamil')
+        const enabled = !!body.enabled
+        if (enabled) {
+          yamilSession.cookies.flushStore().catch(() => {})
+          // Electron doesn't have native 3P cookie blocking, so we use webRequest to strip Set-Cookie from cross-origin responses
+          yamilSession.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, callback) => {
+            if (!global._block3pCookies) return callback({})
+            const reqUrl = new URL(details.url)
+            const frameUrl = details.frame?.url || details.referrer || ''
+            try {
+              const frameHost = new URL(frameUrl).hostname.replace(/^www\./, '')
+              const reqHost = reqUrl.hostname.replace(/^www\./, '')
+              if (frameHost && reqHost !== frameHost && !reqHost.endsWith('.' + frameHost)) {
+                const headers = { ...details.responseHeaders }
+                delete headers['set-cookie']
+                delete headers['Set-Cookie']
+                return callback({ responseHeaders: headers })
+              }
+            } catch {}
+            callback({})
+          })
+        }
+        global._block3pCookies = enabled
+        json(res, { ok: true, blocking: enabled })
+      })
+      return
+    }
+
+    if (req.method === 'GET' && url.pathname === '/cookies/block-third-party') {
+      json(res, { blocking: !!global._block3pCookies })
+      return
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // ── AD BLOCKER ENDPOINTS ──────────────────────────────────────
     // ═══════════════════════════════════════════════════════════════
@@ -1228,11 +1264,70 @@ app.whenReady().then(() => {
   adBlocker.install(yamilSession)
   console.log(`[YAMIL adblock] Installed — ${adBlocker.blockedDomains.size} domains blocked`)
 
-  // Auto-configure any new profile sessions (UA + ad blocker)
+  // Auto-configure any new profile sessions (UA + ad blocker + downloads)
   app.on('session-created', (newSession) => {
     newSession.setUserAgent(chromeUA)
     adBlocker.install(newSession)
+    wireDownloadHandler(newSession)
     console.log('[YAMIL] Configured new session partition')
+  })
+
+  // ── Download manager ─────────────────────────────────────────────
+  const activeDownloads = new Map() // savePath → DownloadItem
+
+  function wireDownloadHandler (sess) {
+    sess.on('will-download', (_event, item, _webContents) => {
+      const filename = item.getFilename()
+      const totalBytes = item.getTotalBytes()
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+      const savePath = item.getSavePath()
+
+      // Notify renderer of new download
+      if (mainWindow) {
+        mainWindow.webContents.send('download-started', {
+          id, filename, totalBytes, savePath, state: 'progressing', received: 0
+        })
+      }
+
+      activeDownloads.set(id, item)
+
+      item.on('updated', (_e, state) => {
+        if (mainWindow) {
+          mainWindow.webContents.send('download-progress', {
+            id, received: item.getReceivedBytes(), totalBytes: item.getTotalBytes(),
+            state: state === 'interrupted' ? 'interrupted' : 'progressing',
+            paused: item.isPaused()
+          })
+        }
+      })
+
+      item.once('done', (_e, state) => {
+        activeDownloads.delete(id)
+        if (mainWindow) {
+          mainWindow.webContents.send('download-done', {
+            id, filename, state, // 'completed' | 'cancelled' | 'interrupted'
+            savePath: item.getSavePath(),
+            totalBytes: item.getTotalBytes()
+          })
+        }
+      })
+    })
+  }
+
+  wireDownloadHandler(yamilSession)
+
+  // IPC: pause/resume/cancel downloads
+  ipcMain.on('download-pause', (_e, id) => {
+    const item = activeDownloads.get(id)
+    if (item) item.pause()
+  })
+  ipcMain.on('download-resume', (_e, id) => {
+    const item = activeDownloads.get(id)
+    if (item) item.resume()
+  })
+  ipcMain.on('download-cancel', (_e, id) => {
+    const item = activeDownloads.get(id)
+    if (item) item.cancel()
   })
 
   // Grant microphone/media permissions for webviews (needed for voice input)

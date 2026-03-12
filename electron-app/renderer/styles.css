@@ -1113,6 +1113,23 @@ body.fullscreen #main {
 .dl-item-progress-fill {
   height: 100%; background: var(--green); transition: width .2s;
 }
+.dl-progress-wrap {
+  flex: 1; height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden; min-width: 60px;
+}
+.dl-progress-bar {
+  height: 100%; background: var(--green); transition: width .3s; border-radius: 2px;
+}
+.dl-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.dl-actions button {
+  background: rgba(128,128,128,.15); border: none; border-radius: 3px;
+  color: var(--text-muted); cursor: pointer; font-size: 10px; padding: 2px 6px;
+}
+.dl-actions button:hover { background: rgba(128,128,128,.3); color: var(--text); }
+
+/* ── Tab drag reorder ──────────────────────────────────────────── */
+.tab.dragging { opacity: 0.4; }
+.tab[draggable="true"] { cursor: grab; }
+.tab[draggable="true"]:active { cursor: grabbing; }
 
 /* ── Background task queue ──────────────────────────────────────── */
 #task-queue {

@@ -15,17 +15,19 @@ const startUrl   = window.YAMIL_CONFIG?.START_URL   || 'https://yamil-ai.com'
 if (window.YAMIL_CONFIG?.APP_TITLE) document.title = window.YAMIL_CONFIG.APP_TITLE
 
 // ── Persistence keys ──────────────────────────────────────────────────
-const KEY_LAST_URL     = 'yamil_last_url'
+// Global keys (shared across profiles)
 const KEY_SIDEBAR_OPEN = 'yamil_sidebar_open'
+const KEY_BMBAR_VIS    = 'yamil_bookmarkbar_visible'
+const KEY_PROFILE      = 'yamil_current_profile'
+// Profile-scoped keys — use pkey() wrapper when reading/writing these
+const KEY_LAST_URL     = 'yamil_last_url'
 const KEY_CHAT_HISTORY = 'yamil_chat_history'
 const KEY_TABS         = 'yamil_tabs'
 const KEY_BOOKMARKS    = 'yamil_bookmarks'
-const KEY_BMBAR_VIS    = 'yamil_bookmarkbar_visible'
 const KEY_HISTORY      = 'yamil_history'
 const KEY_AI_MEMORY    = 'yamil_ai_memory'
 const KEY_AI_SKILLS    = 'yamil_ai_skills'
 const KEY_AI_BLOCKED   = 'yamil_ai_blocked_domains'
-const KEY_PROFILE      = 'yamil_current_profile'
 const MAX_STORED_MSGS  = 200
 const MAX_HISTORY      = 5000
 
@@ -44,6 +46,18 @@ function getPartition () {
   return currentProfile === 'Default' ? 'persist:yamil' : `persist:profile-${currentProfile.toLowerCase().replace(/\s+/g, '-')}`
 }
 
+/** Profile-scoped localStorage key. Default profile uses bare keys for backward compatibility. */
+function pkey (key) {
+  return currentProfile === 'Default' ? key : `${currentProfile}::${key}`
+}
+
+// Profile-scoped storage helpers — use these instead of raw localStorage for profile data
+const PROFILE_KEYS = new Set([KEY_LAST_URL, KEY_CHAT_HISTORY, KEY_TABS, KEY_BOOKMARKS, KEY_HISTORY, KEY_AI_MEMORY, KEY_AI_SKILLS, KEY_AI_BLOCKED, 'yamil_downloads', 'yamil_settings'])
+
+function pGet (key) { return localStorage.getItem(pkey(key)) }
+function pSet (key, val) { localStorage.setItem(pkey(key), val) }
+function pRemove (key) { localStorage.removeItem(pkey(key)) }
+
 // ── Domain color helper ──────────────────────────────────────────────
 
 function domainColor (domain) {
@@ -57,11 +71,11 @@ function domainColor (domain) {
 // ── Bookmark data model ──────────────────────────────────────────────
 
 function getBookmarks () {
-  try { return JSON.parse(localStorage.getItem(KEY_BOOKMARKS) || '[]') } catch (_) { return [] }
+  try { return JSON.parse(pGet(KEY_BOOKMARKS) || '[]') } catch (_) { return [] }
 }
 
 function saveBookmarks (arr) {
-  try { localStorage.setItem(KEY_BOOKMARKS, JSON.stringify(arr)) } catch (_) {}
+  try { pSet(KEY_BOOKMARKS, JSON.stringify(arr)) } catch (_) {}
 }
 
 function addBookmark ({ url, title, favicon, tags, category }) {
@@ -181,6 +195,30 @@ function createTab (url, activate = true, type = 'yamil') {
   tab.tabEl = tabEl
   tab.titleSpan = titleSpan
   tabs.push(tab)
+
+  // Drag to reorder
+  tabEl.setAttribute('draggable', 'true')
+  tabEl.addEventListener('dragstart', (e) => {
+    e.dataTransfer.setData('text/plain', String(id))
+    tabEl.classList.add('dragging')
+  })
+  tabEl.addEventListener('dragend', () => { tabEl.classList.remove('dragging') })
+  tabEl.addEventListener('dragover', (e) => {
+    e.preventDefault()
+    const dragging = tabsList.querySelector('.tab.dragging')
+    if (!dragging || dragging === tabEl) return
+    const rect = tabEl.getBoundingClientRect()
+    const mid = rect.left + rect.width / 2
+    if (e.clientX < mid) tabsList.insertBefore(dragging, tabEl)
+    else tabsList.insertBefore(dragging, tabEl.nextSibling)
+  })
+  tabEl.addEventListener('drop', (e) => {
+    e.preventDefault()
+    // Reorder tabs array to match DOM order
+    const order = Array.from(tabsList.querySelectorAll('.tab')).map(el => Number(el.dataset.tabId))
+    tabs.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id))
+    saveTabs()
+  })
 
   // Click tab to switch
   tabEl.addEventListener('click', (e) => {
@@ -1139,13 +1177,13 @@ function saveChatHistory () {
       role: el.dataset.role,
       text: el.textContent,
     }))
-    localStorage.setItem(KEY_CHAT_HISTORY, JSON.stringify(msgs.slice(-MAX_STORED_MSGS)))
+    pSet(KEY_CHAT_HISTORY, JSON.stringify(msgs.slice(-MAX_STORED_MSGS)))
   } catch (_) {}
 }
 
 function loadChatHistory () {
   try {
-    const stored = JSON.parse(localStorage.getItem(KEY_CHAT_HISTORY) || '[]')
+    const stored = JSON.parse(pGet(KEY_CHAT_HISTORY) || '[]')
     // Filter out old voice error messages and dedupe consecutive system messages
     const clean = stored
       .filter(m => !m.text?.startsWith('Voice error:') && !m.text?.startsWith('Voice input unavailable'))
@@ -1156,7 +1194,7 @@ function loadChatHistory () {
         return !(m.role === prev.role && m.text === prev.text && m.role === 'system')
       })
     if (clean.length !== stored.length) {
-      try { localStorage.setItem(KEY_CHAT_HISTORY, JSON.stringify(clean)) } catch (_) {}
+      try { pSet(KEY_CHAT_HISTORY, JSON.stringify(clean)) } catch (_) {}
     }
     if (clean.length) {
       clean.forEach(m => _appendMsg(m.role, m.text))
@@ -1408,13 +1446,13 @@ function saveTabs () {
       activeTabId,
       tabs: tabs.map(t => ({ id: t.id, type: t.type || 'yamil', url: t.url, title: t.title, group: t.group || null, groupColor: t.groupColor || null, pinned: t.pinned || false })),
     }
-    localStorage.setItem(KEY_TABS, JSON.stringify(data))
+    pSet(KEY_TABS, JSON.stringify(data))
   } catch (_) {}
 }
 
 function loadTabs () {
   try {
-    const stored = JSON.parse(localStorage.getItem(KEY_TABS) || 'null')
+    const stored = JSON.parse(pGet(KEY_TABS) || 'null')
     if (stored && stored.tabs && stored.tabs.length > 0) {
       // Restore counter to avoid ID conflicts
       tabIdCounter = Math.max(...stored.tabs.map(t => t.id), 0)
@@ -1799,11 +1837,11 @@ const histBody     = document.getElementById('hist-body')
 const histSearch   = document.getElementById('hist-search')
 
 function getHistory () {
-  try { return JSON.parse(localStorage.getItem(KEY_HISTORY) || '[]') } catch (_) { return [] }
+  try { return JSON.parse(pGet(KEY_HISTORY) || '[]') } catch (_) { return [] }
 }
 
 function saveHistoryData (arr) {
-  try { localStorage.setItem(KEY_HISTORY, JSON.stringify(arr)) } catch (_) {}
+  try { pSet(KEY_HISTORY, JSON.stringify(arr)) } catch (_) {}
 }
 
 function recordHistory (url, title) {
@@ -2084,11 +2122,11 @@ document.getElementById('btn-summarize').addEventListener('click', async () => {
 // ── AI Memory ────────────────────────────────────────────────────────
 
 function getAiMemory () {
-  try { return JSON.parse(localStorage.getItem(KEY_AI_MEMORY) || '[]') } catch (_) { return [] }
+  try { return JSON.parse(pGet(KEY_AI_MEMORY) || '[]') } catch (_) { return [] }
 }
 
 function saveAiMemory (arr) {
-  try { localStorage.setItem(KEY_AI_MEMORY, JSON.stringify(arr)) } catch (_) {}
+  try { pSet(KEY_AI_MEMORY, JSON.stringify(arr)) } catch (_) {}
 }
 
 function addAiMemoryFact (fact) {
@@ -2264,13 +2302,13 @@ const KEY_SETTINGS = 'yamil_settings'
 const settingsPanel = document.getElementById('settings-panel')
 
 function getSettings () {
-  try { return JSON.parse(localStorage.getItem(KEY_SETTINGS) || '{}') } catch (_) { return {} }
+  try { return JSON.parse(pGet(KEY_SETTINGS) || '{}') } catch (_) { return {} }
 }
 
 function saveSetting (key, value) {
   const s = getSettings()
   s[key] = value
-  try { localStorage.setItem(KEY_SETTINGS, JSON.stringify(s)) } catch (_) {}
+  try { pSet(KEY_SETTINGS, JSON.stringify(s)) } catch (_) {}
 }
 
 function openSettingsPanel () {
@@ -2319,7 +2357,7 @@ document.getElementById('set-clear-history')?.addEventListener('click', () => {
 })
 document.getElementById('set-clear-chat')?.addEventListener('click', () => {
   chatLog.innerHTML = ''
-  try { localStorage.removeItem(KEY_CHAT_HISTORY) } catch (_) {}
+  try { pRemove(KEY_CHAT_HISTORY) } catch (_) {}
   addSystemMsg('Chat history cleared.')
 })
 document.getElementById('set-clear-memory')?.addEventListener('click', () => {
@@ -2595,6 +2633,24 @@ document.getElementById('set-clear-cookies')?.addEventListener('click', async ()
   } catch (_) {}
 })
 
+// Third-party cookie blocking
+const block3pCheckbox = document.getElementById('set-block-3p-cookies')
+if (block3pCheckbox) {
+  fetch('http://127.0.0.1:9300/cookies/block-third-party').then(r => r.json()).then(d => {
+    block3pCheckbox.checked = !!d.blocking
+  }).catch(() => {})
+  block3pCheckbox.addEventListener('change', async () => {
+    try {
+      await fetch('http://127.0.0.1:9300/cookies/block-third-party', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: block3pCheckbox.checked })
+      })
+      addSystemMsg(block3pCheckbox.checked ? 'Third-party cookies blocked.' : 'Third-party cookies allowed.')
+    } catch (_) {}
+  })
+}
+
 // Refresh stats when settings opens
 const _origOpenSettings = openSettingsPanel
 openSettingsPanel = function () {
@@ -2609,13 +2665,14 @@ const KEY_DOWNLOADS = 'yamil_downloads'
 const downloadsPanel = document.getElementById('downloads-panel')
 const dlBody = document.getElementById('dl-body')
 let downloads = []
+const liveDownloads = new Map() // id → { filename, received, totalBytes, state, paused }
 
 function getDownloads () {
-  try { return JSON.parse(localStorage.getItem(KEY_DOWNLOADS) || '[]') } catch (_) { return [] }
+  try { return JSON.parse(pGet(KEY_DOWNLOADS) || '[]') } catch (_) { return [] }
 }
 
 function saveDownloads () {
-  try { localStorage.setItem(KEY_DOWNLOADS, JSON.stringify(downloads.slice(0, 100))) } catch (_) {}
+  try { pSet(KEY_DOWNLOADS, JSON.stringify(downloads.slice(0, 100))) } catch (_) {}
 }
 
 function openDownloadsPanel () {
@@ -2629,8 +2686,53 @@ function closeDownloadsPanel () {
 
 function renderDownloads () {
   dlBody.innerHTML = ''
+  // Show live downloads first
+  for (const [id, dl] of liveDownloads) {
+    const row = document.createElement('div')
+    row.className = 'dl-item'
+    row.dataset.dlId = id
+    const nameEl = document.createElement('span')
+    nameEl.className = 'dl-item-name'
+    nameEl.textContent = dl.filename
+    const progressWrap = document.createElement('div')
+    progressWrap.className = 'dl-progress-wrap'
+    const bar = document.createElement('div')
+    bar.className = 'dl-progress-bar'
+    const pct = dl.totalBytes > 0 ? Math.round((dl.received / dl.totalBytes) * 100) : 0
+    bar.style.width = pct + '%'
+    progressWrap.appendChild(bar)
+    const info = document.createElement('span')
+    info.className = 'dl-item-size'
+    info.textContent = `${formatBytes(dl.received)} / ${dl.totalBytes > 0 ? formatBytes(dl.totalBytes) : '?'} (${pct}%)`
+    const actions = document.createElement('span')
+    actions.className = 'dl-actions'
+    if (dl.paused) {
+      const resumeBtn = document.createElement('button')
+      resumeBtn.textContent = '▶'
+      resumeBtn.title = 'Resume'
+      resumeBtn.addEventListener('click', () => window.YAMIL_IPC?.downloadResume(id))
+      actions.appendChild(resumeBtn)
+    } else {
+      const pauseBtn = document.createElement('button')
+      pauseBtn.textContent = '⏸'
+      pauseBtn.title = 'Pause'
+      pauseBtn.addEventListener('click', () => window.YAMIL_IPC?.downloadPause(id))
+      actions.appendChild(pauseBtn)
+    }
+    const cancelBtn = document.createElement('button')
+    cancelBtn.textContent = '✕'
+    cancelBtn.title = 'Cancel'
+    cancelBtn.addEventListener('click', () => window.YAMIL_IPC?.downloadCancel(id))
+    actions.appendChild(cancelBtn)
+    row.appendChild(nameEl)
+    row.appendChild(progressWrap)
+    row.appendChild(info)
+    row.appendChild(actions)
+    dlBody.appendChild(row)
+  }
+  // Show completed/historical downloads
   const items = downloads.length > 0 ? downloads : getDownloads()
-  if (items.length === 0) {
+  if (items.length === 0 && liveDownloads.size === 0) {
     dlBody.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px;font-size:12px;">No downloads yet.</div>'
     return
   }
@@ -2656,8 +2758,36 @@ function renderDownloads () {
 function formatBytes (b) {
   if (b < 1024) return b + ' B'
   if (b < 1048576) return (b / 1024).toFixed(1) + ' KB'
-  return (b / 1048576).toFixed(1) + ' MB'
+  if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB'
+  return (b / 1073741824).toFixed(1) + ' GB'
 }
+
+// Wire IPC download events
+window.YAMIL_IPC?.onDownloadStarted((d) => {
+  liveDownloads.set(d.id, { filename: d.filename, received: 0, totalBytes: d.totalBytes, state: 'progressing', paused: false })
+  openDownloadsPanel()
+})
+
+window.YAMIL_IPC?.onDownloadProgress((d) => {
+  const dl = liveDownloads.get(d.id)
+  if (dl) {
+    dl.received = d.received
+    dl.totalBytes = d.totalBytes
+    dl.paused = d.paused
+    dl.state = d.state
+  }
+  if (downloadsPanel.style.display !== 'none') renderDownloads()
+  // Update status bar
+  statusLoad.textContent = dl ? `↓ ${dl.filename} ${dl.totalBytes > 0 ? Math.round((dl.received / dl.totalBytes) * 100) : 0}%` : ''
+})
+
+window.YAMIL_IPC?.onDownloadDone((d) => {
+  liveDownloads.delete(d.id)
+  downloads.unshift({ filename: d.filename, size: d.totalBytes, state: d.state, savePath: d.savePath, date: Date.now() })
+  saveDownloads()
+  statusLoad.textContent = ''
+  if (downloadsPanel.style.display !== 'none') renderDownloads()
+})
 
 document.getElementById('dl-close').addEventListener('click', closeDownloadsPanel)
 downloadsPanel.addEventListener('click', (e) => { if (e.target === downloadsPanel) closeDownloadsPanel() })
@@ -2835,11 +2965,11 @@ const DEFAULT_SKILLS = [
 ]
 
 function getCustomSkills () {
-  try { return JSON.parse(localStorage.getItem(KEY_AI_SKILLS) || '[]') } catch (_) { return [] }
+  try { return JSON.parse(pGet(KEY_AI_SKILLS) || '[]') } catch (_) { return [] }
 }
 
 function saveCustomSkills (arr) {
-  try { localStorage.setItem(KEY_AI_SKILLS, JSON.stringify(arr)) } catch (_) {}
+  try { pSet(KEY_AI_SKILLS, JSON.stringify(arr)) } catch (_) {}
 }
 
 function getAllSkills () {
@@ -2971,11 +3101,11 @@ function openSkillEditor () {
 const btnAiEye = document.getElementById('btn-ai-eye')
 
 function getBlockedDomains () {
-  try { return JSON.parse(localStorage.getItem(KEY_AI_BLOCKED) || '[]') } catch (_) { return [] }
+  try { return JSON.parse(pGet(KEY_AI_BLOCKED) || '[]') } catch (_) { return [] }
 }
 
 function saveBlockedDomains (arr) {
-  try { localStorage.setItem(KEY_AI_BLOCKED, JSON.stringify(arr)) } catch (_) {}
+  try { pSet(KEY_AI_BLOCKED, JSON.stringify(arr)) } catch (_) {}
 }
 
 function getCurrentDomain () {
@@ -3084,12 +3214,12 @@ let agentTasks = []
 let taskIdCounter2 = 0
 
 function loadAgentTasks () {
-  try { agentTasks = JSON.parse(localStorage.getItem(KEY_TASKS) || '[]') } catch (_) { agentTasks = [] }
+  try { agentTasks = JSON.parse(pGet(KEY_TASKS) || '[]') } catch (_) { agentTasks = [] }
   taskIdCounter2 = agentTasks.reduce((max, t) => Math.max(max, t.id || 0), 0)
 }
 
 function saveAgentTasks () {
-  try { localStorage.setItem(KEY_TASKS, JSON.stringify(agentTasks.slice(-50))) } catch (_) {}
+  try { pSet(KEY_TASKS, JSON.stringify(agentTasks.slice(-50))) } catch (_) {}
 }
 
 function createAgentTask (goal) {
@@ -3391,7 +3521,7 @@ loadChatHistory()
 
 // Restore tabs or create initial tab
 if (!loadTabs()) {
-  const lastUrl = localStorage.getItem(KEY_LAST_URL) || startUrl
+  const lastUrl = pGet(KEY_LAST_URL) || startUrl
   createTab(lastUrl, true)
 }
 
@@ -3511,10 +3641,10 @@ document.getElementById('btn-pwa-install')?.addEventListener('click', async () =
     const name = manifest.name || manifest.short_name || 'App'
     const startUrl = manifest.start_url || tab.url
     // Create a bookmark as "installed PWA"
-    let bm = JSON.parse(localStorage.getItem(KEY_BOOKMARKS) || '[]')
+    let bm = JSON.parse(pGet(KEY_BOOKMARKS) || '[]')
     if (!bm.some(b => b.url === startUrl && b.pwa)) {
       bm.push({ url: startUrl, title: `[PWA] ${name}`, date: Date.now(), pwa: true, icon: manifest.icons?.[0]?.src || '' })
-      localStorage.setItem(KEY_BOOKMARKS, JSON.stringify(bm))
+      pSet(KEY_BOOKMARKS, JSON.stringify(bm))
       renderBookmarkBar()
     }
     addSystemMsg(`"${name}" added as PWA bookmark.`)

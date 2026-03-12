@@ -12,4 +12,11 @@ contextBridge.exposeInMainWorld('YAMIL_IPC', {
   minimize: () => ipcRenderer.send('window-minimize'),
   maximize: () => ipcRenderer.send('window-maximize'),
   close: () => ipcRenderer.send('window-close'),
+  // Download manager
+  onDownloadStarted: (cb) => ipcRenderer.on('download-started', (_e, d) => cb(d)),
+  onDownloadProgress: (cb) => ipcRenderer.on('download-progress', (_e, d) => cb(d)),
+  onDownloadDone: (cb) => ipcRenderer.on('download-done', (_e, d) => cb(d)),
+  downloadPause: (id) => ipcRenderer.send('download-pause', id),
+  downloadResume: (id) => ipcRenderer.send('download-resume', id),
+  downloadCancel: (id) => ipcRenderer.send('download-cancel', id),
 })
