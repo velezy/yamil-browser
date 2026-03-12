@@ -391,3 +391,64 @@ export function cleanupSession(sessionId) {
   flushSession(sessionId, 'session-close')
   sessionTrackers.delete(sessionId)
 }
+
+// ── Export / Import ──────────────────────────────────────────────────
+
+export async function exportKnowledge (domain, category) {
+  if (!dbReady) return { entries: [], actions: [] }
+  const p = await getPool()
+  let knowledgeQuery = 'SELECT id, domain, category, title, content, source_goal, source_url, confidence, access_count, created_at FROM browser_knowledge'
+  const conditions = []
+  const vals = []
+  if (domain) { vals.push(domain); conditions.push(`domain = $${vals.length}`) }
+  if (category) { vals.push(category); conditions.push(`category = $${vals.length}`) }
+  if (conditions.length) knowledgeQuery += ' WHERE ' + conditions.join(' AND ')
+  knowledgeQuery += ' ORDER BY created_at'
+  const { rows: entries } = await p.query(knowledgeQuery, vals)
+
+  let actionQuery = 'SELECT session_id, action, selector, value, page_url, domain, result, created_at FROM browser_actions'
+  const aConds = []
+  const aVals = []
+  if (domain) { aVals.push(domain); aConds.push(`domain = $${aVals.length}`) }
+  if (aConds.length) actionQuery += ' WHERE ' + aConds.join(' AND ')
+  actionQuery += ' ORDER BY created_at'
+  const { rows: actions } = await p.query(actionQuery, aVals)
+
+  return {
+    exportedAt: new Date().toISOString(),
+    version: '1.0',
+    entries: entries.map(e => ({ ...e, content: e.content })),
+    actions,
+  }
+}
+
+export async function importKnowledge (data) {
+  if (!dbReady) throw new Error('DB not ready')
+  if (!data || !data.entries) throw new Error('Invalid import data')
+  const p = await getPool()
+  let imported = 0
+
+  for (const entry of data.entries) {
+    try {
+      // Generate new embedding if available
+      let embedding = null
+      if (_embedAvailable) {
+        try { embedding = await ollamaEmbed(`${entry.category}: ${entry.title} — ${JSON.stringify(entry.content)}`) } catch {}
+      }
+      const embeddingStr = embedding ? `[${embedding.join(',')}]` : null
+
+      await p.query(
+        `INSERT INTO browser_knowledge (domain, category, title, content, source_goal, source_url, embedding, confidence)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::vector, $8)
+         ON CONFLICT DO NOTHING`,
+        [entry.domain, entry.category, entry.title, JSON.stringify(entry.content), entry.source_goal, entry.source_url, embeddingStr, entry.confidence || 0.7]
+      )
+      imported++
+    } catch (e) {
+      console.error(`[KNOWLEDGE] Import entry failed: ${e.message}`)
+    }
+  }
+
+  console.log(`[KNOWLEDGE] Imported ${imported}/${data.entries.length} entries`)
+  return { imported, total: data.entries.length }
+}

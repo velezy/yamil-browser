@@ -2308,6 +2308,126 @@ document.getElementById('set-clear-memory')?.addEventListener('click', () => {
   addSystemMsg('AI memory cleared.')
 })
 
+// ── Ad blocker settings ──────────────────────────────────────────────
+
+async function refreshAdblockStats () {
+  try {
+    const res = await fetch('http://127.0.0.1:9300/adblock/stats')
+    const stats = await res.json()
+    const countEl = document.getElementById('set-adblock-count')
+    const toggleEl = document.getElementById('set-adblock-toggle')
+    if (countEl) countEl.textContent = `${stats.totalBlocked} blocked`
+    if (toggleEl) toggleEl.textContent = stats.enabled ? 'Enabled' : 'Disabled'
+  } catch (_) {}
+}
+
+document.getElementById('set-adblock-toggle')?.addEventListener('click', async () => {
+  try {
+    await fetch('http://127.0.0.1:9300/adblock/toggle', { method: 'POST' })
+    refreshAdblockStats()
+  } catch (_) {}
+})
+
+document.getElementById('set-adblock-whitelist')?.addEventListener('click', async () => {
+  const tab = tabs.find(t => t.id === activeTabId)
+  if (!tab || !tab.webview) return
+  try {
+    const domain = new URL(tab.webview.getURL()).hostname.replace(/^www\./, '')
+    await fetch('http://127.0.0.1:9300/adblock/whitelist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain })
+    })
+    addSystemMsg(`${domain} added to ad blocker whitelist.`)
+  } catch (_) {}
+})
+
+// ── Cookie management ────────────────────────────────────────────────
+
+const cookiePanel = document.getElementById('cookie-panel')
+const cookieBody = document.getElementById('cookie-body')
+
+async function refreshCookieCount () {
+  try {
+    const res = await fetch('http://127.0.0.1:9300/cookies')
+    const data = await res.json()
+    const el = document.getElementById('set-cookie-count')
+    if (el) el.textContent = `${data.total} cookies`
+  } catch (_) {}
+}
+
+async function openCookieManager () {
+  cookiePanel.style.display = 'flex'
+  try {
+    const res = await fetch('http://127.0.0.1:9300/cookies')
+    const data = await res.json()
+    cookieBody.innerHTML = ''
+    const domains = Object.keys(data.cookies).sort()
+    if (domains.length === 0) {
+      cookieBody.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px;font-size:12px;">No cookies stored.</div>'
+      return
+    }
+    domains.forEach(domain => {
+      const count = data.cookies[domain].length
+      const row = document.createElement('div')
+      row.className = 'cookie-domain'
+      const nameEl = document.createElement('span')
+      nameEl.className = 'cookie-domain-name'
+      nameEl.textContent = domain
+      const countEl = document.createElement('span')
+      countEl.className = 'cookie-domain-count'
+      countEl.textContent = `${count} cookie${count !== 1 ? 's' : ''}`
+      const delBtn = document.createElement('button')
+      delBtn.className = 'cookie-domain-delete'
+      delBtn.textContent = 'Delete'
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        await fetch('http://127.0.0.1:9300/cookies', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ domain })
+        })
+        row.remove()
+        refreshCookieCount()
+      })
+      row.appendChild(nameEl)
+      row.appendChild(countEl)
+      row.appendChild(delBtn)
+      cookieBody.appendChild(row)
+    })
+  } catch (_) {
+    cookieBody.innerHTML = '<div style="text-align:center;color:var(--red);padding:40px;">Failed to load cookies.</div>'
+  }
+}
+
+document.getElementById('set-view-cookies')?.addEventListener('click', openCookieManager)
+document.getElementById('cookie-close')?.addEventListener('click', () => { cookiePanel.style.display = 'none' })
+cookiePanel?.addEventListener('click', (e) => { if (e.target === cookiePanel) cookiePanel.style.display = 'none' })
+
+document.getElementById('set-clear-cookies')?.addEventListener('click', async () => {
+  try {
+    const res = await fetch('http://127.0.0.1:9300/cookies')
+    const data = await res.json()
+    for (const domain of Object.keys(data.cookies)) {
+      await fetch('http://127.0.0.1:9300/cookies', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain })
+      })
+    }
+    addSystemMsg('All cookies cleared.')
+    refreshCookieCount()
+  } catch (_) {}
+})
+
+// Refresh stats when settings opens
+const _origOpenSettings = openSettingsPanel
+openSettingsPanel = function () {
+  _origOpenSettings()
+  refreshAdblockStats()
+  refreshCookieCount()
+}
+
 // ── Downloads manager ────────────────────────────────────────────────
 
 const KEY_DOWNLOADS = 'yamil_downloads'

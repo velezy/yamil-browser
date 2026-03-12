@@ -151,7 +151,29 @@
             </label>
           </div>
           <div class="settings-section">
-            <div class="settings-section-title">Privacy</div>
+            <div class="settings-section-title">Privacy &amp; Security</div>
+            <label class="settings-row">
+              <span>Ad Blocker</span>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span id="set-adblock-count" style="font-size:11px;color:var(--text-muted);">0 blocked</span>
+                <button id="set-adblock-toggle" class="settings-btn">Enabled</button>
+              </div>
+            </label>
+            <label class="settings-row">
+              <span>Whitelist Current Site</span>
+              <button id="set-adblock-whitelist" class="settings-btn">Add</button>
+            </label>
+            <label class="settings-row">
+              <span>Cookies</span>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span id="set-cookie-count" style="font-size:11px;color:var(--text-muted);">0 cookies</span>
+                <button id="set-view-cookies" class="settings-btn">Manage</button>
+              </div>
+            </label>
+            <label class="settings-row">
+              <span>Clear All Cookies</span>
+              <button id="set-clear-cookies" class="settings-btn">Clear</button>
+            </label>
             <label class="settings-row">
               <span>Clear History</span>
               <button id="set-clear-history" class="settings-btn">Clear All</button>
@@ -271,6 +293,17 @@
         </div>
       </div>
 
+    </div>
+
+    <!-- ── Cookie manager overlay ────────────────────────────────── -->
+    <div id="cookie-panel" style="display:none">
+      <div id="cookie-dialog">
+        <div id="cookie-header">
+          <span>Cookie Manager</span>
+          <button id="cookie-close">&times;</button>
+        </div>
+        <div id="cookie-body"></div>
+      </div>
     </div>
 
     <!-- ── Context menu ─────────────────────────────────────────── -->

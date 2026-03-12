@@ -1,5 +1,5 @@
 import { createSession, getSession, listSessions, closeSession, touch } from './sessions.js'
-import { logAction, cleanupSession, searchKnowledge, getKnowledgeStats, distillSession, flushSession } from './knowledge.js'
+import { logAction, cleanupSession, searchKnowledge, getKnowledgeStats, distillSession, flushSession, exportKnowledge, importKnowledge } from './knowledge.js'
 import { runTask, isVisionAvailable } from './vision.js'
 import { saveCredential, getCredentials, listCredentials, deleteCredential } from './credentials.js'
 import { listWebhooks, createWebhook, deleteWebhook, updateWebhook, addSSEClient } from './webhooks.js'
@@ -710,6 +710,23 @@ export async function registerRoutes(app) {
       durationMs: 0,
     })
     return { ok: true, entriesAdded: entries || 0 }
+  })
+
+  // ── Knowledge export/import ──────────────────────────────────────
+  app.get('/knowledge/export', async (req) => {
+    const { domain, category } = req.query
+    const data = await exportKnowledge(domain, category)
+    return data
+  })
+
+  app.post('/knowledge/import', async (req) => {
+    const data = req.body
+    try {
+      const result = await importKnowledge(data)
+      return { ok: true, ...result }
+    } catch (e) {
+      return { error: e.message }
+    }
   })
 
   /** Flush a session's passive knowledge now (don't wait for idle timer) */

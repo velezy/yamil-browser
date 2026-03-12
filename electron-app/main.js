@@ -3,6 +3,9 @@ const path = require('path')
 const http  = require('http')
 const fs    = require('fs')
 
+const { AdBlocker } = require('./adblocker')
+const adBlocker = new AdBlocker()
+
 const APP_TITLE    = process.env.APP_TITLE || 'YAMIL Browser'
 const CTRL_PORT    = parseInt(process.env.CTRL_PORT || '9300', 10)
 const BROWSER_SVC  = process.env.BROWSER_SERVICE || 'http://127.0.0.1:4000'
@@ -884,6 +887,81 @@ function startControlServer () {
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // ── COOKIE MANAGEMENT ENDPOINTS ───────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+
+    if (req.method === 'GET' && url.pathname === '/cookies') {
+      const domain = url.searchParams.get('domain') || ''
+      const yamilSession = session.fromPartition('persist:yamil')
+      yamilSession.cookies.get(domain ? { domain } : {})
+        .then(cookies => {
+          // Group by domain
+          const grouped = {}
+          cookies.forEach(c => {
+            const d = c.domain.replace(/^\./, '')
+            if (!grouped[d]) grouped[d] = []
+            grouped[d].push({ name: c.name, value: c.value.slice(0, 100), domain: c.domain, path: c.path, secure: c.secure, httpOnly: c.httpOnly, expirationDate: c.expirationDate })
+          })
+          json(res, { cookies: grouped, total: cookies.length })
+        })
+        .catch(e => json(res, { error: e.message }, 500))
+      return
+    }
+
+    if (req.method === 'DELETE' && url.pathname === '/cookies') {
+      readBody(req, async body => {
+        const yamilSession = session.fromPartition('persist:yamil')
+        const { domain, name } = body
+        if (domain && name) {
+          // Delete specific cookie
+          const url = `https://${domain.replace(/^\./, '')}${body.path || '/'}`
+          await yamilSession.cookies.remove(url, name)
+          json(res, { ok: true, deleted: 1 })
+        } else if (domain) {
+          // Delete all cookies for domain
+          const cookies = await yamilSession.cookies.get({ domain: domain.replace(/^\./, '') })
+          for (const c of cookies) {
+            const u = `https://${c.domain.replace(/^\./, '')}${c.path || '/'}`
+            await yamilSession.cookies.remove(u, c.name).catch(() => {})
+          }
+          json(res, { ok: true, deleted: cookies.length })
+        } else {
+          json(res, { error: 'domain required' }, 400)
+        }
+      })
+      return
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ── AD BLOCKER ENDPOINTS ──────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+
+    if (req.method === 'GET' && url.pathname === '/adblock/stats') {
+      json(res, adBlocker.getStats())
+      return
+    }
+
+    if (req.method === 'POST' && url.pathname === '/adblock/toggle') {
+      const enabled = adBlocker.toggle()
+      json(res, { enabled })
+      return
+    }
+
+    if (req.method === 'POST' && url.pathname === '/adblock/whitelist') {
+      readBody(req, body => {
+        const { domain, action } = body
+        if (!domain) { json(res, { error: 'domain required' }, 400); return }
+        if (action === 'remove') {
+          adBlocker.removeWhitelist(domain)
+        } else {
+          adBlocker.addWhitelist(domain)
+        }
+        json(res, { ok: true, whitelist: [...adBlocker.whitelist] })
+      })
+      return
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // ── CREDENTIAL CRYPTO ENDPOINTS (safeStorage / OS keychain) ──
     // ═══════════════════════════════════════════════════════════════
 
@@ -1145,6 +1223,10 @@ app.whenReady().then(() => {
   session.defaultSession.setUserAgent(chromeUA)
   const yamilSession = session.fromPartition('persist:yamil')
   yamilSession.setUserAgent(chromeUA)
+
+  // Install ad blocker on webview sessions
+  adBlocker.install(yamilSession)
+  console.log(`[YAMIL adblock] Installed — ${adBlocker.blockedDomains.size} domains blocked`)
 
   // Grant microphone/media permissions for webviews (needed for voice input)
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
