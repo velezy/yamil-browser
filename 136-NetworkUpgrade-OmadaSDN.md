@@ -1,6 +1,6 @@
 # 136 — Network Upgrade: TP-Link Omada SDN
 
-**Status**: Purchased — Awaiting Delivery
+**Status**: In Progress — Phases 1-8 Complete (except 2,4,5)
 **Created**: 2026-03-08
 **Philosophy**: AI-Managed Network — the AI controls the entire network via Omada dashboard through YAMIL Browser
 
@@ -68,24 +68,26 @@ Fiber ONT (black box)
 ```
 Fiber ONT (black box)
   └── CR1000A (BRIDGE MODE — passthrough only, WiFi disabled)
-        └── ER707-M2 (Omada Router) — WAN: 2.5G
-              └── SG2210XMP-M2 (Omada Switch) — 2.5G backbone
-                    ├── Port 1: Dark-Knight / Windows PC (2.5G Realtek)
-                    ├── Port 2: GEEKOM A8 Max (2.5G port 1)
-                    ├── Port 3: FridayAI / QNAP TS-251+
-                    ├── Port 4: brainiac7 / Synology
-                    ├── Port 5: Mac Mini M4 (1G, negotiates down)
-                    ├── Port 6: Bitdefender BOX (1G)
-                    │     └── Aruba DAGGER (1G) — IoT only
-                    │           ├── Sony TV
-                    │           ├── eero
-                    │           ├── Lutron
-                    │           ├── SmartThings hub
-                    │           └── other IoT
-                    ├── Port 7: spare
-                    └── Port 8: spare
-                    SFP+ 1: future 10G uplink
-                    SFP+ 2: future 10G uplink
+        ├── ER707-M2 (Omada Router) — WAN: 2.5G
+        │     └── SG2210XMP-M2 (Omada Switch) — 2.5G backbone
+        │           ├── Port 1: ER707-M2 (uplink to router, 2.5G)
+        │           ├── Port 2: Dark-Knight / Windows PC (2.5G Realtek)
+        │           ├── Port 3: GEEKOM A8 Max (2.5G port 1)
+        │           ├── Port 4: FridayAI / QNAP TS-251+
+        │           ├── Port 5: brainiac7 / Synology
+        │           ├── Port 6: Mac Mini M4 (1G, negotiates down)
+        │           ├── Port 7: eero Pro 6E (mesh WiFi)
+        │           └── Port 8: spare
+        │           SFP+ 1: future 10G uplink
+        │           SFP+ 2: future 10G uplink
+        │
+        └── Bitdefender BOX (1G, monitoring only — not inline)
+              └── Aruba DAGGER (1G) — IoT only
+                    ├── Sony TV
+                    ├── eero
+                    ├── Lutron
+                    ├── SmartThings hub
+                    └── other IoT
 ```
 
 ## 5. VLAN Plan
@@ -94,20 +96,20 @@ Fiber ONT (black box)
 |------|------|---------|---------|
 | 1 | Default/Management | ER707-M2, SG2210XMP-M2 | Network management |
 | 10 | Production | Dark-Knight, GEEKOM, QNAP, Synology, Mac Mini | Docker Swarm, NAS, dev machines |
-| 20 | IoT | Bitdefender BOX → Aruba → TV, Lutron, SmartThings, eero | Isolated IoT — no access to Production VLAN |
+| 20 | IoT | Aruba DAGGER → TV, Lutron, SmartThings, eero | Isolated IoT — no access to Production VLAN |
 
 ## 6. Implementation Order
 
-- [ ] Phase 1: Unbox and firmware update both devices
-- [ ] Phase 2: Put CR1000A into bridge mode (Verizon router passthrough)
-- [ ] Phase 3: Connect ER707-M2 as primary router, configure WAN (PPPoE or DHCP from ONT)
-- [ ] Phase 4: Connect SG2210XMP-M2 to ER707-M2
-- [ ] Phase 5: Move devices from Aruba to TP-Link switch (PC, NAS units, GEEKOM)
-- [ ] Phase 6: Set up Omada SDN dashboard (cloud or local controller)
-- [ ] Phase 7: Configure VLANs (Production + IoT isolation)
-- [ ] Phase 8: Configure firewall rules (block IoT → Production)
-- [ ] Phase 9: Set up VPN (OpenVPN for remote access)
-- [ ] Phase 10: Configure QoS (prioritize Docker Swarm + NAS traffic)
+- [x] Phase 1: Unbox and firmware update both devices (ER707-M2 → fw 1.3.1)
+- [x] Phase 2: CR1000A port forwarding for VPN (UDP 500, 4500, 1701 → ER707-M2 at 192.168.1.226; bridge mode skipped — double NAT)
+- [x] Phase 3: Connect ER707-M2 as primary router, configure WAN (DHCP from CR1000A, 192.168.1.226)
+- [x] Phase 4: Connect SG2210XMP-M2 to ER707-M2
+- [x] Phase 5: Move devices from Aruba to TP-Link switch (PC, NAS units, GEEKOM)
+- [x] Phase 6: Set up Omada SDN dashboard (controller on QNAP, ER707-M2 adopted)
+- [x] Phase 7: Configure VLANs (Default=1, Production=10 192.168.10.0/24, IoT=20 192.168.20.0/24)
+- [x] Phase 8: Configure firewall rules (Gateway ACL: Deny All, IoT→Production, LAN→LAN)
+- [x] Phase 9: Set up VPN (L2TP/IPsec, policy: YAMIL_Remote_Access, pool: 192.168.30.0/24, user: yvelez)
+- [x] Phase 10: Configure QoS (Bandwidth Control: Docker-NAS-Priority 1.5G/2G, IoT-Throttle 100M/200M, WAN1)
 - [ ] Phase 11: Retire Aruba CLOAK, keep DAGGER for IoT sub-switch
 - [ ] Phase 12: Verify all services (Uptime Kuma, Grafana, Logic Weaver, YAMIL Browser)
 - [ ] Phase 13: Test AI management — YAMIL Browser manages Omada dashboard

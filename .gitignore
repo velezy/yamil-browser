@@ -3,3 +3,7 @@ node_modules/
 *.log
 dist/
 browser-service/data/api-keys.json
+*.bin
+*.zip
+*.pdf
+__pycache__/

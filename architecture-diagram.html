@@ -1,0 +1,3011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MemoByte - Architecture Diagram</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-primary: #0f1117;
+    --bg-secondary: #161822;
+    --bg-surface: #1c1f2e;
+    --bg-surface-hover: #242840;
+    --border-color: #2a2d3e;
+    --border-hover: #3d4160;
+    --text-primary: #e4e6f0;
+    --text-secondary: #8b8fa8;
+    --text-muted: #5e6278;
+    --purple-primary: #8b5cf6;
+    --purple-light: #a78bfa;
+    --purple-dark: #6d28d9;
+    --blue-primary: #3b82f6;
+    --blue-light: #60a5fa;
+    --green-primary: #10b981;
+    --green-light: #34d399;
+    --orange-primary: #f59e0b;
+    --orange-light: #fbbf24;
+    --cyan-primary: #06b6d4;
+    --cyan-light: #22d3ee;
+    --pink-primary: #ec4899;
+    --pink-light: #f472b6;
+    --red-primary: #ef4444;
+    --red-light: #f87171;
+    --teal-primary: #14b8a6;
+    --teal-light: #2dd4bf;
+    --gradient-header: linear-gradient(135deg, #0891b2 0%, #3b82f6 50%, #8b5cf6 100%);
+    --gradient-purple: linear-gradient(135deg, #6d28d9, #8b5cf6);
+    --gradient-blue: linear-gradient(135deg, #1d4ed8, #3b82f6);
+    --gradient-green: linear-gradient(135deg, #059669, #10b981);
+    --gradient-orange: linear-gradient(135deg, #d97706, #f59e0b);
+    --gradient-cyan: linear-gradient(135deg, #0891b2, #06b6d4);
+    --gradient-pink: linear-gradient(135deg, #db2777, #ec4899);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+    --shadow-glow-purple: 0 0 20px rgba(139,92,246,0.15);
+    --shadow-glow-blue: 0 0 20px rgba(59,130,246,0.15);
+    --shadow-glow-green: 0 0 20px rgba(16,185,129,0.15);
+    --shadow-glow-orange: 0 0 20px rgba(245,158,11,0.15);
+    --shadow-glow-cyan: 0 0 20px rgba(6,182,212,0.15);
+    --shadow-glow-pink: 0 0 20px rgba(236,72,153,0.15);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --transition: 0.2s ease;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ===== HEADER ===== */
+  .header {
+    background: var(--gradient-header);
+    padding: 32px 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(255,255,255,0.03) 60px, rgba(255,255,255,0.03) 61px),
+                repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(255,255,255,0.03) 60px, rgba(255,255,255,0.03) 61px);
+  }
+  .header-content {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .header h1 span { opacity: 0.85; font-weight: 400; }
+  .header-badge {
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    color: #fff;
+    font-weight: 500;
+  }
+  .header-subtitle {
+    font-size: 14px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 4px;
+  }
+
+  /* ===== TABS ===== */
+  .tab-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    padding: 16px 0 0;
+    border-bottom: 1px solid var(--border-color);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tab-bar::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    padding: 10px 20px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all var(--transition);
+    white-space: nowrap;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  }
+  .tab-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-surface);
+  }
+  .tab-btn.active {
+    color: var(--cyan-light);
+    border-bottom-color: var(--cyan-primary);
+    background: var(--bg-surface);
+  }
+
+  .tab-content {
+    display: none;
+    padding: 28px 0 40px;
+    animation: fadeIn 0.3s ease;
+  }
+  .tab-content.active { display: block; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ===== ARCHITECTURE DIAGRAM (Tab 1) ===== */
+  .arch-diagram {
+    position: relative;
+    width: 100%;
+  }
+  .arch-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  @keyframes flowPulse {
+    0% { stroke-dashoffset: 20; }
+    100% { stroke-dashoffset: 0; }
+  }
+  .flow-arrow {
+    fill: none;
+    stroke-width: 1.5;
+    stroke-dasharray: 6 4;
+    animation: flowPulse 1s linear infinite;
+    opacity: 0.6;
+  }
+  .flow-arrow:hover { opacity: 1; stroke-width: 2.5; }
+  .flow-arrow.purple { stroke: var(--purple-light); }
+  .flow-arrow.blue { stroke: var(--blue-light); }
+  .flow-arrow.green { stroke: var(--green-light); }
+  .flow-arrow.orange { stroke: var(--orange-light); }
+  .flow-arrow.cyan { stroke: var(--cyan-light); }
+  .flow-arrow.pink { stroke: var(--pink-light); }
+  .flow-arrow.red { stroke: var(--red-light); }
+
+  .layer {
+    position: relative;
+    border: 1.5px dashed var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 20px 20px 20px 48px;
+    margin-bottom: 20px;
+    background: rgba(22, 24, 34, 0.5);
+    z-index: 2;
+  }
+  .layer-label {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%) rotate(180deg);
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 12px 4px;
+    border-radius: var(--radius-sm);
+  }
+  .layer-label.client { color: var(--purple-light); }
+  .layer-label.gateway { color: var(--pink-light); }
+  .layer-label.core { color: var(--blue-light); }
+  .layer-label.study { color: var(--orange-light); }
+  .layer-label.ai { color: var(--green-light); }
+  .layer-label.infra { color: var(--cyan-light); }
+  .layer-label.jobs { color: var(--teal-light); }
+
+  .layer-nodes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    justify-content: center;
+  }
+
+  .node {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 14px 18px;
+    min-width: 160px;
+    max-width: 220px;
+    cursor: default;
+    transition: all var(--transition);
+    position: relative;
+    z-index: 3;
+  }
+  .node:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+  }
+  .node.purple { border-left: 3px solid var(--purple-primary); }
+  .node.purple:hover { box-shadow: var(--shadow-glow-purple); }
+  .node.blue { border-left: 3px solid var(--blue-primary); }
+  .node.blue:hover { box-shadow: var(--shadow-glow-blue); }
+  .node.green { border-left: 3px solid var(--green-primary); }
+  .node.green:hover { box-shadow: var(--shadow-glow-green); }
+  .node.orange { border-left: 3px solid var(--orange-primary); }
+  .node.orange:hover { box-shadow: var(--shadow-glow-orange); }
+  .node.cyan { border-left: 3px solid var(--cyan-primary); }
+  .node.cyan:hover { box-shadow: var(--shadow-glow-cyan); }
+  .node.pink { border-left: 3px solid var(--pink-primary); }
+  .node.pink:hover { box-shadow: var(--shadow-glow-pink); }
+
+  .node-icon { font-size: 22px; margin-bottom: 6px; }
+  .node-name { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+  .node-port {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .node-tech {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--green-primary);
+    font-weight: 500;
+    margin-top: 2px;
+    opacity: 0.85;
+  }
+  .node-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* ===== TOOLTIP ===== */
+  .tooltip {
+    position: fixed;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-hover);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--text-primary);
+    max-width: 280px;
+    box-shadow: var(--shadow-lg);
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    line-height: 1.5;
+  }
+  .tooltip.visible { opacity: 1; }
+  .tooltip-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; color: var(--cyan-light); }
+  .tooltip-detail { color: var(--text-secondary); }
+
+  /* ===== CARDS ===== */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 18px;
+  }
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+    transition: all var(--transition);
+  }
+  .card:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+  }
+  .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .card-icon {
+    width: 40px; height: 40px; border-radius: var(--radius-md);
+    display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;
+  }
+  .card-icon.purple { background: rgba(139,92,246,0.15); }
+  .card-icon.blue { background: rgba(59,130,246,0.15); }
+  .card-icon.green { background: rgba(16,185,129,0.15); }
+  .card-icon.orange { background: rgba(245,158,11,0.15); }
+  .card-icon.cyan { background: rgba(6,182,212,0.15); }
+  .card-icon.pink { background: rgba(236,72,153,0.15); }
+  .card-title { font-size: 15px; font-weight: 600; }
+  .card-subtitle { font-size: 12px; color: var(--text-secondary); }
+  .card-body { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+  .card-body ul { list-style: none; padding: 0; }
+  .card-body li { padding: 4px 0; padding-left: 16px; position: relative; }
+  .card-body li::before {
+    content: ''; position: absolute; left: 0; top: 12px;
+    width: 6px; height: 6px; border-radius: 50%; background: var(--cyan-primary);
+  }
+
+  .service-tag {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 500; font-family: 'JetBrains Mono', monospace; margin: 2px 2px;
+  }
+  .service-tag.gateway { background: rgba(236,72,153,0.15); color: var(--pink-light); }
+  .service-tag.flashcards { background: rgba(59,130,246,0.15); color: var(--blue-light); }
+  .service-tag.study { background: rgba(245,158,11,0.15); color: var(--orange-light); }
+  .service-tag.ai-chat { background: rgba(16,185,129,0.15); color: var(--green-light); }
+  .service-tag.documents { background: rgba(139,92,246,0.15); color: var(--purple-light); }
+  .service-tag.admin { background: rgba(6,182,212,0.15); color: var(--cyan-light); }
+  .service-tag.auth { background: rgba(236,72,153,0.15); color: var(--pink-light); }
+  .service-tag.ollama { background: rgba(16,185,129,0.15); color: var(--green-light); }
+
+  /* ===== DATA FLOW ===== */
+  .flow-section { margin-bottom: 32px; }
+  .flow-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+  .flow-title .flow-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .flow-steps {
+    display: flex; flex-wrap: wrap; gap: 0; align-items: center;
+    padding: 16px 20px; background: var(--bg-surface);
+    border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow-x: auto;
+  }
+  .flow-step {
+    background: var(--bg-secondary); border: 1px solid var(--border-color);
+    border-radius: var(--radius-md); padding: 10px 14px; font-size: 12px;
+    text-align: center; min-width: 100px; max-width: 160px; transition: all var(--transition);
+  }
+  .flow-step:hover { transform: translateY(-2px); border-color: var(--border-hover); box-shadow: var(--shadow-sm); }
+  .flow-step-icon { font-size: 18px; margin-bottom: 4px; }
+  .flow-step-label { font-weight: 500; color: var(--text-primary); font-size: 11px; }
+  .flow-step-detail { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+  .flow-arrow-sep { color: var(--text-muted); font-size: 18px; padding: 0 6px; flex-shrink: 0; }
+
+  /* ===== SECTION TITLES ===== */
+  .section-title {
+    font-size: 18px; font-weight: 600; margin-bottom: 20px; color: var(--text-primary);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border-color); }
+
+  /* ===== SERVICE DETAIL TABLE ===== */
+  .detail-card {
+    background: var(--bg-surface); border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg); margin-bottom: 18px; overflow: hidden; transition: all var(--transition);
+  }
+  .detail-card:hover { border-color: var(--border-hover); box-shadow: var(--shadow-md); }
+  .detail-header {
+    padding: 16px 22px; display: flex; align-items: center; gap: 12px;
+    cursor: pointer; user-select: none; border-bottom: 1px solid var(--border-color);
+  }
+  .detail-header:hover { background: var(--bg-surface-hover); }
+  .detail-chevron { transition: transform var(--transition); color: var(--text-muted); font-size: 12px; }
+  .detail-card.open .detail-chevron { transform: rotate(90deg); }
+  .detail-header-info { flex: 1; }
+  .detail-header-name { font-size: 14px; font-weight: 600; }
+  .detail-header-port { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-muted); }
+  .detail-body { padding: 0 22px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease; }
+  .detail-card.open .detail-body { max-height: 800px; padding: 16px 22px; }
+  .detail-section-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-muted); margin-bottom: 8px; margin-top: 12px;
+  }
+  .detail-section-label:first-child { margin-top: 0; }
+  .detail-list { list-style: none; padding: 0; }
+  .detail-list li { font-size: 12px; color: var(--text-secondary); padding: 3px 0; font-family: 'JetBrains Mono', monospace; }
+  .detail-list li code {
+    background: rgba(6,182,212,0.1); padding: 1px 6px; border-radius: 3px;
+    color: var(--cyan-light); font-size: 11px;
+  }
+
+  /* ===== AI PIPELINE ===== */
+  .pipeline-section { margin-bottom: 32px; }
+  .pipeline-header { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+  .model-tiers { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .tier-card {
+    background: var(--bg-surface); border: 1px solid var(--border-color);
+    border-radius: var(--radius-md); padding: 16px; transition: all var(--transition);
+  }
+  .tier-card:hover { border-color: var(--border-hover); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+  .tier-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .tier-models { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+  .tier-desc { font-size: 12px; color: var(--text-secondary); }
+  .tier-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+  }
+  .pipeline-flow {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0;
+    padding: 20px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg);
+  }
+  .pipeline-step {
+    background: var(--bg-secondary); border: 1px solid var(--border-color);
+    border-radius: var(--radius-md); padding: 12px 16px; text-align: center;
+    min-width: 110px; max-width: 150px; transition: all var(--transition);
+  }
+  .pipeline-step:hover { transform: translateY(-2px); border-color: var(--border-hover); box-shadow: var(--shadow-sm); }
+  .pipeline-step-icon { font-size: 20px; margin-bottom: 4px; }
+  .pipeline-step-name { font-size: 11px; font-weight: 600; color: var(--text-primary); }
+  .pipeline-step-detail { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+  .pipeline-arrow { color: var(--text-muted); font-size: 18px; padding: 0 6px; flex-shrink: 0; }
+
+  /* ===== DATABASE SCHEMA (Tab 7) ===== */
+  .schema-category {
+    margin-bottom: 28px;
+  }
+  .schema-category-header {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-primary);
+    padding: 10px 16px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--cyan-primary);
+    cursor: pointer;
+    user-select: none;
+  }
+  .schema-category-header:hover { background: var(--bg-surface-hover); }
+  .schema-category-header .cat-count {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-left: auto;
+  }
+  .schema-category-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 14px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease, padding 0.3s ease;
+  }
+  .schema-category.open .schema-category-body {
+    max-height: 10000px;
+    padding-top: 4px;
+  }
+  .schema-cat-chevron {
+    font-size: 12px; color: var(--text-muted);
+    transition: transform var(--transition);
+  }
+  .schema-category.open .schema-cat-chevron { transform: rotate(90deg); }
+
+  .schema-table {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition: all var(--transition);
+  }
+  .schema-table:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+  }
+  .schema-table-header {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    user-select: none;
+  }
+  .schema-table-header:hover { background: var(--bg-surface-hover); }
+  .schema-table-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cyan-light);
+  }
+  .schema-table-count {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-left: auto;
+  }
+  .schema-table-chevron {
+    font-size: 10px; color: var(--text-muted);
+    transition: transform var(--transition);
+  }
+  .schema-table.open .schema-table-chevron { transform: rotate(90deg); }
+  .schema-table-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  .schema-table.open .schema-table-body {
+    max-height: 2000px;
+  }
+  .schema-col {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 16px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    border-bottom: 1px solid rgba(42,45,62,0.3);
+  }
+  .schema-col:last-child { border-bottom: none; }
+  .schema-col:hover { background: rgba(42,45,62,0.3); }
+  .schema-col-name {
+    color: var(--text-primary);
+    font-weight: 500;
+    min-width: 180px;
+    flex-shrink: 0;
+  }
+  .schema-col-type {
+    color: var(--purple-light);
+    font-size: 10px;
+    min-width: 120px;
+  }
+  .schema-col-extra {
+    color: var(--text-muted);
+    font-size: 10px;
+  }
+  .schema-col-pk { color: var(--orange-light); }
+  .schema-col-fk { color: var(--green-light); }
+  .schema-col-badge {
+    display: inline-block;
+    padding: 0 4px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .schema-col-badge.pk { background: rgba(245,158,11,0.15); color: var(--orange-light); }
+  .schema-col-badge.fk { background: rgba(16,185,129,0.15); color: var(--green-light); }
+  .schema-col-badge.uq { background: rgba(139,92,246,0.15); color: var(--purple-light); }
+  .schema-col-badge.nn { background: rgba(239,68,68,0.1); color: var(--red-light); }
+  .schema-col-badge.vec { background: rgba(6,182,212,0.15); color: var(--cyan-light); }
+
+  .schema-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .schema-stat {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    text-align: center;
+  }
+  .schema-stat-num {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--cyan-light);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .schema-stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width: 768px) {
+    .header { padding: 20px 16px; }
+    .header h1 { font-size: 20px; }
+    .tab-container { padding: 0 12px; }
+    .tab-btn { padding: 8px 14px; font-size: 12px; }
+    .cards-grid { grid-template-columns: 1fr; }
+    .layer { padding: 16px 16px 16px 40px; }
+    .node { min-width: 130px; }
+    .flow-steps { flex-direction: column; align-items: stretch; }
+    .flow-arrow-sep { transform: rotate(90deg); text-align: center; }
+    .pipeline-flow { flex-direction: column; }
+    .pipeline-arrow { transform: rotate(90deg); }
+    .model-tiers { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== HEADER ===== -->
+<div class="header">
+  <div class="header-content">
+    <div>
+      <h1>MemoByte <span>Architecture</span></h1>
+      <div class="header-subtitle">Microservices Architecture &middot; v2.0 &middot; 9 Services &middot; Local AI Inference</div>
+    </div>
+    <div class="header-badge">AI-Powered Study Platform &middot; Feb 2026</div>
+  </div>
+</div>
+
+<!-- ===== TABS ===== -->
+<div class="tab-container">
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('arch')">Architecture</button>
+    <button class="tab-btn" onclick="switchTab('screens')">Screens &rarr; Services</button>
+    <button class="tab-btn" onclick="switchTab('flows')">Data Flows</button>
+    <button class="tab-btn" onclick="switchTab('infra')">Infrastructure</button>
+    <button class="tab-btn" onclick="switchTab('details')">Service Details</button>
+    <button class="tab-btn" onclick="switchTab('pipeline')">AI Pipeline</button>
+    <button class="tab-btn" onclick="switchTab('schema')">Database Schema</button>
+  </div>
+
+  <!-- ==================== TAB 1: ARCHITECTURE ==================== -->
+  <div id="tab-arch" class="tab-content active">
+    <div class="arch-diagram" id="archDiagram">
+      <svg class="arch-svg" id="archSvg"></svg>
+
+      <!-- Layer 1: CLIENT -->
+      <div class="layer" id="layer-client">
+        <div class="layer-label client">CLIENT</div>
+        <div class="layer-nodes">
+          <div class="node purple" id="node-frontend" data-tooltip="React SPA built with Vite and TypeScript. Features flashcard management, AI quiz generation, study sessions, document processing, AI tutor chat, voice interaction, and themed UI with 10+ themes.">
+            <div class="node-icon">&#x1F4DA;</div>
+            <div class="node-name">React Frontend</div>
+            <div class="node-port">:3002</div>
+            <div class="node-desc">SPA &middot; Vite + React + TS</div>
+          </div>
+          <div class="node purple" id="node-mobile" data-tooltip="Progressive Web App support allows mobile access through the browser with offline capabilities and responsive design across all study features.">
+            <div class="node-icon">&#x1F4F1;</div>
+            <div class="node-name">PWA / Mobile</div>
+            <div class="node-port">responsive</div>
+            <div class="node-desc">Mobile-first study experience</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 2: API GATEWAY -->
+      <div class="layer" id="layer-gateway">
+        <div class="layer-label gateway">GATEWAY</div>
+        <div class="layer-nodes">
+          <div class="node pink" id="node-gateway" data-tooltip="FastAPI-based API gateway (port 8400) that routes requests to microservices. Handles CORS, authentication middleware, request proxying, and health checks for all backend services.">
+            <div class="node-icon">&#x1F6E1;&#xFE0F;</div>
+            <div class="node-name">API Gateway</div>
+            <div class="node-port">:8400</div>
+            <div class="node-desc">Routing, CORS, Auth Middleware</div>
+          </div>
+          <div class="node pink" id="node-apisix" data-tooltip="Apache APISIX gateway (optional, production profile). Handles rate limiting, JWT authentication, prometheus metrics, and SSL termination.">
+            <div class="node-icon">&#x1F310;</div>
+            <div class="node-name">APISIX (Prod)</div>
+            <div class="node-port">:9080</div>
+            <div class="node-desc">Rate Limiting, JWT, Prometheus</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 3: CORE SERVICES -->
+      <div class="layer" id="layer-core">
+        <div class="layer-label core">CORE SERVICES</div>
+        <div class="layer-nodes">
+          <div class="node blue" id="node-flashcards" data-tooltip="Manages flashcard CRUD operations, collections, deck organization, card difficulty tracking, and import/export. Handles card creation from manual input and AI generation.">
+            <div class="node-icon">&#x1F4C7;</div>
+            <div class="node-name">Flashcards Service</div>
+            <div class="node-port">:8402</div>
+            <div class="node-tech">FastAPI + Uvicorn</div>
+            <div class="node-desc">Cards, collections, decks</div>
+          </div>
+          <div class="node blue" id="node-study" data-tooltip="Study session management, spaced repetition scheduling (SM-2 algorithm), quiz generation and scoring, study analytics, and focused study sessions with progress tracking.">
+            <div class="node-icon">&#x1F4D6;</div>
+            <div class="node-name">Study Service</div>
+            <div class="node-port">:8403</div>
+            <div class="node-tech">FastAPI + Uvicorn</div>
+            <div class="node-desc">Sessions, quizzes, spaced repetition</div>
+          </div>
+          <div class="node blue" id="node-ai-chat" data-tooltip="AI-powered features: chat conversations, AI tutor, flashcard generation from text, quiz generation, web crawling for content extraction, study guide creation, voice chat with TTS/STT.">
+            <div class="node-icon">&#x1F916;</div>
+            <div class="node-name">AI Chat Service</div>
+            <div class="node-port">:8404</div>
+            <div class="node-tech">FastAPI + Uvicorn</div>
+            <div class="node-desc">AI tutor, chat, generators, voice</div>
+          </div>
+          <div class="node blue" id="node-documents" data-tooltip="Document upload and processing pipeline. Handles PDF, DOCX, and image files through Docling for parsing and extraction. Generates flashcards from document content.">
+            <div class="node-icon">&#x1F4C4;</div>
+            <div class="node-name">Documents Service</div>
+            <div class="node-port">:8406</div>
+            <div class="node-tech">FastAPI + Uvicorn</div>
+            <div class="node-desc">Upload, Docling, PDF processing</div>
+          </div>
+          <div class="node blue" id="node-auth" data-tooltip="JWT authentication, user registration and login, password reset, session management, role-based access control, and license validation.">
+            <div class="node-icon">&#x1F512;</div>
+            <div class="node-name">Auth Service</div>
+            <div class="node-port">:8401</div>
+            <div class="node-tech">FastAPI + Uvicorn</div>
+            <div class="node-desc">JWT, login, RBAC, sessions</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 4: SUPPORT SERVICES -->
+      <div class="layer" id="layer-support">
+        <div class="layer-label study">SUPPORT</div>
+        <div class="layer-nodes">
+          <div class="node orange" id="node-analytics" data-tooltip="Usage analytics tracking, study performance metrics, learning progress dashboards, model performance monitoring, and AI interaction analytics.">
+            <div class="node-icon">&#x1F4CA;</div>
+            <div class="node-name">Analytics Service</div>
+            <div class="node-port">:8407</div>
+            <div class="node-tech">FastAPI + Uvicorn</div>
+            <div class="node-desc">Usage metrics, study progress</div>
+          </div>
+          <div class="node orange" id="node-admin" data-tooltip="Administrative operations including user management, system configuration, job queue monitoring, schedule management, and system health overview.">
+            <div class="node-icon">&#x2699;&#xFE0F;</div>
+            <div class="node-name">Admin Service</div>
+            <div class="node-port">:8408</div>
+            <div class="node-tech">FastAPI + Uvicorn</div>
+            <div class="node-desc">User mgmt, jobs, schedules</div>
+          </div>
+          <div class="node orange" id="node-ai-rag" data-tooltip="RAG (Retrieval Augmented Generation) service. Generates embeddings with Sentence Transformers, performs vector search via pgvector, and provides context-enriched AI responses.">
+            <div class="node-icon">&#x1F50D;</div>
+            <div class="node-name">AI RAG Service</div>
+            <div class="node-port">:8405</div>
+            <div class="node-tech">FastAPI + Uvicorn</div>
+            <div class="node-desc">Embeddings, vector search, RAG</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 5: AI / ML -->
+      <div class="layer" id="layer-ai">
+        <div class="layer-label ai">AI / ML</div>
+        <div class="layer-nodes">
+          <div class="node green" id="node-ollama" data-tooltip="Local LLM inference server. Runs multiple models including llama3.2:3b (fast), llama3.1:8b (standard), gemma3:4b. Provides OpenAI-compatible API with parallel request processing.">
+            <div class="node-icon">&#x1F9E0;</div>
+            <div class="node-name">Ollama</div>
+            <div class="node-port">:11434</div>
+            <div class="node-desc">Local LLM: llama3, gemma3</div>
+          </div>
+          <div class="node green" id="node-orchestra" data-tooltip="AI Orchestra layer with circuit breaker, intelligent model routing, fallback chains, and multi-model coordination. Routes queries to optimal model tier based on complexity.">
+            <div class="node-icon">&#x1F3AF;</div>
+            <div class="node-name">AI Orchestra</div>
+            <div class="node-port">embedded</div>
+            <div class="node-desc">Circuit breaker, model routing</div>
+          </div>
+          <div class="node green" id="node-embeddings" data-tooltip="Sentence Transformers library generating dense vector embeddings using all-MiniLM-L6-v2 model. Converts text to 384-dimensional vectors for semantic search and similarity matching.">
+            <div class="node-icon">&#x1F4C8;</div>
+            <div class="node-name">Sentence Transformers</div>
+            <div class="node-port">embedded</div>
+            <div class="node-desc">all-MiniLM-L6-v2 embeddings</div>
+          </div>
+          <div class="node green" id="node-voice" data-tooltip="Pipecat voice processing pipeline with text-to-speech (Coqui TTS / Kokoro-ONNX) and speech-to-text. Supports real-time WebSocket voice chat with sentiment-aware voice selection.">
+            <div class="node-icon">&#x1F3A4;</div>
+            <div class="node-name">Voice Pipeline</div>
+            <div class="node-port">WebSocket</div>
+            <div class="node-desc">Pipecat STT/TTS, sentiment</div>
+          </div>
+          <div class="node green" id="node-mem0" data-tooltip="Mem0 memory management for persistent user context. Stores conversation memories, learning preferences, and user knowledge state for personalized AI tutoring.">
+            <div class="node-icon">&#x1F4DD;</div>
+            <div class="node-name">Mem0 Memory</div>
+            <div class="node-port">embedded</div>
+            <div class="node-desc">Persistent user memory</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 6: INFRASTRUCTURE -->
+      <div class="layer" id="layer-infra">
+        <div class="layer-label infra">INFRA</div>
+        <div class="layer-nodes">
+          <div class="node cyan" id="node-postgres" data-tooltip="PostgreSQL 17 with pgvector extension for hybrid relational + vector storage. Stores users, flashcards, collections, quiz sessions, study progress, embeddings (384-dim), and AI conversations.">
+            <div class="node-icon">&#x1F4BE;</div>
+            <div class="node-name">PostgreSQL 17</div>
+            <div class="node-port">:5432 / :5433</div>
+            <div class="node-desc">+ pgvector &middot; local + AWS RDS</div>
+          </div>
+          <div class="node cyan" id="node-redis" data-tooltip="Redis 7 for Celery task broker, job progress pub/sub, session caching, rate limiting, and real-time progress updates via Redis channels.">
+            <div class="node-icon">&#x26A1;</div>
+            <div class="node-name">Redis 7</div>
+            <div class="node-port">:6379</div>
+            <div class="node-desc">Celery broker, pub/sub, cache</div>
+          </div>
+          <div class="node cyan" id="node-celery" data-tooltip="Celery distributed task queue with Redis broker. Handles background study guide generation, quiz generation, web crawling jobs, and PDF imports. Beat scheduler runs scheduled jobs every 60s.">
+            <div class="node-icon">&#x1F4E6;</div>
+            <div class="node-name">Celery Workers</div>
+            <div class="node-port">2 workers</div>
+            <div class="node-desc">Background jobs, beat scheduler</div>
+          </div>
+          <div class="node cyan" id="node-aws" data-tooltip="AWS RDS PostgreSQL instance for production data. Accessed via SSH tunnel through EC2 (port 5433 locally). Stores all production user data, flashcards, and study progress.">
+            <div class="node-icon">&#x2601;&#xFE0F;</div>
+            <div class="node-name">AWS RDS</div>
+            <div class="node-port">SSH tunnel :5433</div>
+            <div class="node-desc">Production PostgreSQL on AWS</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 2: SCREENS -> SERVICES ==================== -->
+  <div id="tab-screens" class="tab-content">
+    <div class="section-title">UI Screens and Backend Service Dependencies</div>
+    <div class="cards-grid">
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon cyan">&#x1F3E0;</div>
+          <div>
+            <div class="card-title">Dashboard</div>
+            <div class="card-subtitle">Main landing page with study overview</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div style="margin-bottom:8px;">
+            <span class="service-tag auth">Auth :8401</span>
+            <span class="service-tag flashcards">Flashcards :8402</span>
+            <span class="service-tag study">Study :8403</span>
+          </div>
+          <ul>
+            <li>User session validation and profile</li>
+            <li>Flashcard collection overview</li>
+            <li>Recent study session stats</li>
+            <li>Learning streak and progress</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon blue">&#x1F4C7;</div>
+          <div>
+            <div class="card-title">Flashcard Management</div>
+            <div class="card-subtitle">Create, edit, organize flashcards</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div style="margin-bottom:8px;">
+            <span class="service-tag flashcards">Flashcards :8402</span>
+            <span class="service-tag ai-chat">AI Chat :8404</span>
+          </div>
+          <ul>
+            <li>Manual card creation and editing</li>
+            <li>AI-powered card generation from text</li>
+            <li>Collection and deck organization</li>
+            <li>Import/export flashcard sets</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon orange">&#x1F4D6;</div>
+          <div>
+            <div class="card-title">Study Session</div>
+            <div class="card-subtitle">Interactive flashcard review</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div style="margin-bottom:8px;">
+            <span class="service-tag study">Study :8403</span>
+            <span class="service-tag flashcards">Flashcards :8402</span>
+          </div>
+          <ul>
+            <li>Spaced repetition (SM-2 algorithm)</li>
+            <li>Focused study sessions</li>
+            <li>Difficulty-based card filtering</li>
+            <li>Real-time progress tracking</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon green">&#x1F916;</div>
+          <div>
+            <div class="card-title">AI Quiz</div>
+            <div class="card-subtitle">AI-generated quizzes from content</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div style="margin-bottom:8px;">
+            <span class="service-tag ai-chat">AI Chat :8404</span>
+            <span class="service-tag study">Study :8403</span>
+            <span class="service-tag ollama">Ollama :11434</span>
+          </div>
+          <ul>
+            <li>AI quiz generation from collections</li>
+            <li>Multiple question types (MCQ, T/F, short answer)</li>
+            <li>Difficulty level selection</li>
+            <li>Quiz history and retake tracking</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon green">&#x1F4AC;</div>
+          <div>
+            <div class="card-title">AI Tutor Chat</div>
+            <div class="card-subtitle">Interactive AI study assistant</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div style="margin-bottom:8px;">
+            <span class="service-tag ai-chat">AI Chat :8404</span>
+            <span class="service-tag ollama">Ollama :11434</span>
+          </div>
+          <ul>
+            <li>Streaming LLM tutoring responses</li>
+            <li>Topic explanation and practice problems</li>
+            <li>Voice chat with TTS/STT</li>
+            <li>Conversation history and memory</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon purple">&#x1F4C4;</div>
+          <div>
+            <div class="card-title">Documents</div>
+            <div class="card-subtitle">Upload and process study materials</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div style="margin-bottom:8px;">
+            <span class="service-tag documents">Docs :8406</span>
+            <span class="service-tag ai-chat">AI Chat :8404</span>
+          </div>
+          <ul>
+            <li>PDF, DOCX, image upload</li>
+            <li>Docling document processing</li>
+            <li>Auto-generate flashcards from docs</li>
+            <li>Document search and vector search</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon blue">&#x1F578;&#xFE0F;</div>
+          <div>
+            <div class="card-title">Web Crawler</div>
+            <div class="card-subtitle">Extract study content from the web</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div style="margin-bottom:8px;">
+            <span class="service-tag ai-chat">AI Chat :8404</span>
+            <span class="service-tag ollama">Ollama :11434</span>
+          </div>
+          <ul>
+            <li>URL-based content extraction</li>
+            <li>AI content summarization</li>
+            <li>Auto flashcard generation from web pages</li>
+            <li>Crawl4AI integration</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon orange">&#x1F4CA;</div>
+          <div>
+            <div class="card-title">Study Analytics</div>
+            <div class="card-subtitle">Learning progress and insights</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div style="margin-bottom:8px;">
+            <span class="service-tag study">Study :8403</span>
+            <span class="service-tag admin">Analytics :8407</span>
+          </div>
+          <ul>
+            <li>Study session history and trends</li>
+            <li>Performance by topic/collection</li>
+            <li>Spaced repetition effectiveness</li>
+            <li>Learning streak tracking</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon pink">&#x1F465;</div>
+          <div>
+            <div class="card-title">Social & Groups</div>
+            <div class="card-subtitle">Collaborative study features</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div style="margin-bottom:8px;">
+            <span class="service-tag auth">Auth :8401</span>
+            <span class="service-tag flashcards">Flashcards :8402</span>
+          </div>
+          <ul>
+            <li>Friends list and profiles</li>
+            <li>Study groups</li>
+            <li>Shared flashcard collections</li>
+            <li>Public profile share links</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon cyan">&#x2699;&#xFE0F;</div>
+          <div>
+            <div class="card-title">Settings & Admin</div>
+            <div class="card-subtitle">User and system configuration</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div style="margin-bottom:8px;">
+            <span class="service-tag auth">Auth :8401</span>
+            <span class="service-tag admin">Admin :8408</span>
+          </div>
+          <ul>
+            <li>Profile and preferences</li>
+            <li>Theme selection (10+ themes)</li>
+            <li>License activation and management</li>
+            <li>Job queue and schedule monitoring</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== TAB 3: DATA FLOWS ==================== -->
+  <div id="tab-flows" class="tab-content">
+    <div class="section-title">Data Flow Sequences</div>
+
+    <!-- Flow 1: AI Flashcard Generation -->
+    <div class="flow-section">
+      <div class="flow-title">
+        <div class="flow-num" style="background:rgba(59,130,246,0.15);color:var(--blue-light);">1</div>
+        AI Flashcard Generation
+      </div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F464;</div>
+          <div class="flow-step-label">User Input</div>
+          <div class="flow-step-detail">Text or topic</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F916;</div>
+          <div class="flow-step-label">AI Chat Service</div>
+          <div class="flow-step-detail">:8404</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F3AF;</div>
+          <div class="flow-step-label">AI Orchestra</div>
+          <div class="flow-step-detail">Model selection</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F9E0;</div>
+          <div class="flow-step-label">Ollama LLM</div>
+          <div class="flow-step-detail">Generate cards</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4C7;</div>
+          <div class="flow-step-label">Flashcards DB</div>
+          <div class="flow-step-detail">Save to collection</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x2705;</div>
+          <div class="flow-step-label">Ready to Study</div>
+          <div class="flow-step-detail">Cards available</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flow 2: AI Quiz Generation -->
+    <div class="flow-section">
+      <div class="flow-title">
+        <div class="flow-num" style="background:rgba(16,185,129,0.15);color:var(--green-light);">2</div>
+        AI Quiz Generation &amp; Scoring
+      </div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4DA;</div>
+          <div class="flow-step-label">Select Collection</div>
+          <div class="flow-step-detail">Choose topic</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4C7;</div>
+          <div class="flow-step-label">Fetch Cards</div>
+          <div class="flow-step-detail">Collection content</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F9E0;</div>
+          <div class="flow-step-label">LLM Generates</div>
+          <div class="flow-step-detail">MCQ, T/F, short</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x270D;&#xFE0F;</div>
+          <div class="flow-step-label">User Answers</div>
+          <div class="flow-step-detail">Take quiz</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4CA;</div>
+          <div class="flow-step-label">Score &amp; Save</div>
+          <div class="flow-step-detail">Quiz history</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flow 3: Document Processing -->
+    <div class="flow-section">
+      <div class="flow-title">
+        <div class="flow-num" style="background:rgba(139,92,246,0.15);color:var(--purple-light);">3</div>
+        Document Upload &amp; Processing
+      </div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4E4;</div>
+          <div class="flow-step-label">Upload File</div>
+          <div class="flow-step-detail">PDF, DOCX, IMG</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4C4;</div>
+          <div class="flow-step-label">Documents Service</div>
+          <div class="flow-step-detail">:8406</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4D6;</div>
+          <div class="flow-step-label">Docling Parser</div>
+          <div class="flow-step-detail">Extract text</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4C8;</div>
+          <div class="flow-step-label">Embeddings</div>
+          <div class="flow-step-detail">MiniLM-L6-v2</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4BE;</div>
+          <div class="flow-step-label">pgvector</div>
+          <div class="flow-step-detail">384-dim vectors</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4C7;</div>
+          <div class="flow-step-label">Generate Cards</div>
+          <div class="flow-step-detail">AI flashcards</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flow 4: Study Session -->
+    <div class="flow-section">
+      <div class="flow-title">
+        <div class="flow-num" style="background:rgba(245,158,11,0.15);color:var(--orange-light);">4</div>
+        Spaced Repetition Study Session
+      </div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4DA;</div>
+          <div class="flow-step-label">Start Session</div>
+          <div class="flow-step-detail">Select collection</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4D6;</div>
+          <div class="flow-step-label">SM-2 Scheduler</div>
+          <div class="flow-step-detail">Pick due cards</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4C7;</div>
+          <div class="flow-step-label">Show Card</div>
+          <div class="flow-step-detail">Front / Back</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x2B50;</div>
+          <div class="flow-step-label">Rate Recall</div>
+          <div class="flow-step-detail">Easy / Hard / Again</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4CA;</div>
+          <div class="flow-step-label">Update Schedule</div>
+          <div class="flow-step-detail">Next review date</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F3C6;</div>
+          <div class="flow-step-label">Session Summary</div>
+          <div class="flow-step-detail">Performance stats</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flow 5: Voice Chat -->
+    <div class="flow-section">
+      <div class="flow-title">
+        <div class="flow-num" style="background:rgba(6,182,212,0.15);color:var(--cyan-light);">5</div>
+        Voice Chat with AI Tutor
+      </div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F3A4;</div>
+          <div class="flow-step-label">User Speaks</div>
+          <div class="flow-step-detail">Audio input</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F3A7;</div>
+          <div class="flow-step-label">STT Engine</div>
+          <div class="flow-step-detail">Transcription</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F916;</div>
+          <div class="flow-step-label">AI Tutor</div>
+          <div class="flow-step-detail">Generate answer</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F3AD;</div>
+          <div class="flow-step-label">Sentiment Analysis</div>
+          <div class="flow-step-detail">Voice tone select</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F50A;</div>
+          <div class="flow-step-label">TTS Synthesis</div>
+          <div class="flow-step-detail">Kokoro / Coqui</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4FB;</div>
+          <div class="flow-step-label">Audio Response</div>
+          <div class="flow-step-detail">WebSocket stream</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flow 6: Background Job -->
+    <div class="flow-section">
+      <div class="flow-title">
+        <div class="flow-num" style="background:rgba(236,72,153,0.15);color:var(--pink-light);">6</div>
+        Background Job Processing
+      </div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4E5;</div>
+          <div class="flow-step-label">Job Created</div>
+          <div class="flow-step-detail">Study guide / quiz</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x26A1;</div>
+          <div class="flow-step-label">Redis Broker</div>
+          <div class="flow-step-detail">Queue task</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4E6;</div>
+          <div class="flow-step-label">Celery Worker</div>
+          <div class="flow-step-detail">Pick up job</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F9E0;</div>
+          <div class="flow-step-label">AI Generation</div>
+          <div class="flow-step-detail">Ollama inference</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4E2;</div>
+          <div class="flow-step-label">Pub/Sub Update</div>
+          <div class="flow-step-detail">Progress events</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x2705;</div>
+          <div class="flow-step-label">Complete</div>
+          <div class="flow-step-detail">Results stored</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 4: INFRASTRUCTURE ==================== -->
+  <div id="tab-infra" class="tab-content">
+    <div class="section-title">Infrastructure Components</div>
+    <div class="cards-grid">
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon cyan">&#x1F4BE;</div>
+          <div>
+            <div class="card-title">PostgreSQL 17 + pgvector</div>
+            <div class="card-subtitle" style="font-family:'JetBrains Mono',monospace;">:5432 (local) / :5433 (RDS tunnel)</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <p style="margin-bottom:10px;">Primary relational database with vector search extension for hybrid storage.</p>
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Key Tables</div>
+          <ul>
+            <li><code style="background:rgba(6,182,212,0.1);color:var(--cyan-light);padding:1px 6px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:11px;">users</code> &mdash; Accounts, roles, preferences</li>
+            <li><code style="background:rgba(6,182,212,0.1);color:var(--cyan-light);padding:1px 6px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:11px;">flashcards</code> &mdash; Card front/back, difficulty, schedule</li>
+            <li><code style="background:rgba(6,182,212,0.1);color:var(--cyan-light);padding:1px 6px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:11px;">collections</code> &mdash; Flashcard decks and organization</li>
+            <li><code style="background:rgba(6,182,212,0.1);color:var(--cyan-light);padding:1px 6px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:11px;">quiz_sessions</code> &mdash; Quiz attempts, scores, answers</li>
+            <li><code style="background:rgba(6,182,212,0.1);color:var(--cyan-light);padding:1px 6px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:11px;">study_sessions</code> &mdash; Study progress and scheduling</li>
+            <li><code style="background:rgba(6,182,212,0.1);color:var(--cyan-light);padding:1px 6px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:11px;">conversations</code> &mdash; AI chat history</li>
+            <li><code style="background:rgba(6,182,212,0.1);color:var(--cyan-light);padding:1px 6px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:11px;">documents</code> &mdash; Uploaded file metadata</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon cyan">&#x26A1;</div>
+          <div>
+            <div class="card-title">Redis 7</div>
+            <div class="card-subtitle" style="font-family:'JetBrains Mono',monospace;">:6379</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <p style="margin-bottom:10px;">In-memory data store powering background jobs, caching, and real-time features.</p>
+          <ul>
+            <li>Celery task broker and result backend</li>
+            <li>Job progress pub/sub channels</li>
+            <li>Session and response caching</li>
+            <li>Rate limiting counters</li>
+            <li>Real-time progress updates via Redis channels</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon green">&#x1F9E0;</div>
+          <div>
+            <div class="card-title">Ollama</div>
+            <div class="card-subtitle" style="font-family:'JetBrains Mono',monospace;">:11434</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <p style="margin-bottom:10px;">Local LLM inference server with multi-model support and OpenAI-compatible API.</p>
+          <ul>
+            <li>llama3.2:3b &mdash; Fast tier (quick responses)</li>
+            <li>llama3.1:8b &mdash; Standard tier (general use)</li>
+            <li>gemma3:4b &mdash; Alternative model</li>
+            <li>Parallel processing (OLLAMA_NUM_PARALLEL=4)</li>
+            <li>GPU acceleration (Metal on macOS)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon orange">&#x1F4E6;</div>
+          <div>
+            <div class="card-title">Celery + Beat</div>
+            <div class="card-subtitle" style="font-family:'JetBrains Mono',monospace;">2 workers &middot; Redis broker</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <p style="margin-bottom:10px;">Distributed task queue for background AI generation and scheduled jobs.</p>
+          <ul>
+            <li>Study guide generation (rate: 10/min)</li>
+            <li>Quiz generation (rate: 20/min)</li>
+            <li>Web crawling and PDF import</li>
+            <li>Beat scheduler: jobs every 60 seconds</li>
+            <li>3 priority queues: high, default, low</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon cyan">&#x2601;&#xFE0F;</div>
+          <div>
+            <div class="card-title">AWS RDS</div>
+            <div class="card-subtitle" style="font-family:'JetBrains Mono',monospace;">SSH tunnel via EC2</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <p style="margin-bottom:10px;">Production PostgreSQL database on AWS, accessed via SSH tunnel.</p>
+          <ul>
+            <li>RDS host: memobyte-dev-postgres.*.rds.amazonaws.com</li>
+            <li>EC2 bastion: SSH key-based tunnel</li>
+            <li>Local port forwarding: 5433 &rarr; RDS 5432</li>
+            <li>All production user data and study progress</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon pink">&#x1F6E1;&#xFE0F;</div>
+          <div>
+            <div class="card-title">Apache APISIX (Production)</div>
+            <div class="card-subtitle" style="font-family:'JetBrains Mono',monospace;">:9080 &middot; optional profile</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <p style="margin-bottom:10px;">Production API gateway with etcd configuration store.</p>
+          <ul>
+            <li>Request rate limiting</li>
+            <li>JWT authentication validation</li>
+            <li>Prometheus metrics (:9091)</li>
+            <li>Automatic route initialization</li>
+            <li>Enabled via <code style="background:rgba(236,72,153,0.1);color:var(--pink-light);padding:1px 6px;border-radius:3px;font-size:11px;">--profile gateway</code></li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== TAB 5: SERVICE DETAILS ==================== -->
+  <div id="tab-details" class="tab-content">
+    <div class="section-title">Service Details</div>
+
+    <!-- Gateway -->
+    <div class="detail-card open" id="svc-gateway">
+      <div class="detail-header" onclick="toggleDetail('svc-gateway')">
+        <div class="detail-chevron">&#x25B6;</div>
+        <div style="font-size:20px;">&#x1F6E1;&#xFE0F;</div>
+        <div class="detail-header-info">
+          <div class="detail-header-name">API Gateway</div>
+          <div class="detail-header-port">:8400 &middot; Python FastAPI</div>
+        </div>
+        <span class="service-tag gateway">GATEWAY</span>
+      </div>
+      <div class="detail-body">
+        <div class="detail-section-label">Responsibilities</div>
+        <ul class="detail-list">
+          <li>Route requests to backend microservices</li>
+          <li>CORS and authentication middleware</li>
+          <li>Health check aggregation for all services</li>
+          <li>Request proxying and load distribution</li>
+        </ul>
+        <div class="detail-section-label">Dependencies</div>
+        <ul class="detail-list">
+          <li>All backend services (:8401-:8408)</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Auth -->
+    <div class="detail-card" id="svc-auth">
+      <div class="detail-header" onclick="toggleDetail('svc-auth')">
+        <div class="detail-chevron">&#x25B6;</div>
+        <div style="font-size:20px;">&#x1F512;</div>
+        <div class="detail-header-info">
+          <div class="detail-header-name">Auth Service</div>
+          <div class="detail-header-port">:8401 &middot; Python FastAPI</div>
+        </div>
+        <span class="service-tag auth">CORE</span>
+      </div>
+      <div class="detail-body">
+        <div class="detail-section-label">Endpoints</div>
+        <ul class="detail-list">
+          <li><code>POST /api/auth/login</code> &mdash; Authenticate user</li>
+          <li><code>POST /api/auth/register</code> &mdash; Register new user</li>
+          <li><code>POST /api/auth/refresh</code> &mdash; Refresh JWT token</li>
+          <li><code>GET /api/auth/me</code> &mdash; Current user profile</li>
+          <li><code>POST /api/auth/reset-password</code> &mdash; Password reset</li>
+        </ul>
+        <div class="detail-section-label">Dependencies</div>
+        <ul class="detail-list">
+          <li>PostgreSQL (:5432) &mdash; User accounts</li>
+          <li>Redis (:6379) &mdash; Session storage</li>
+        </ul>
+        <div class="detail-section-label">Database Tables</div>
+        <ul class="detail-list">
+          <li><code>users</code>, <code>sessions</code>, <code>roles</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Flashcards -->
+    <div class="detail-card" id="svc-flashcards">
+      <div class="detail-header" onclick="toggleDetail('svc-flashcards')">
+        <div class="detail-chevron">&#x25B6;</div>
+        <div style="font-size:20px;">&#x1F4C7;</div>
+        <div class="detail-header-info">
+          <div class="detail-header-name">Flashcards Service</div>
+          <div class="detail-header-port">:8402 &middot; Python FastAPI</div>
+        </div>
+        <span class="service-tag flashcards">CORE</span>
+      </div>
+      <div class="detail-body">
+        <div class="detail-section-label">Endpoints</div>
+        <ul class="detail-list">
+          <li><code>GET /api/flashcards</code> &mdash; List user flashcards</li>
+          <li><code>POST /api/flashcards</code> &mdash; Create flashcard</li>
+          <li><code>PUT /api/flashcards/{id}</code> &mdash; Update flashcard</li>
+          <li><code>DELETE /api/flashcards/{id}</code> &mdash; Delete flashcard</li>
+          <li><code>GET /api/collections</code> &mdash; List collections</li>
+          <li><code>POST /api/collections</code> &mdash; Create collection</li>
+          <li><code>GET /api/collections/{id}/cards</code> &mdash; Cards in collection</li>
+        </ul>
+        <div class="detail-section-label">Dependencies</div>
+        <ul class="detail-list">
+          <li>PostgreSQL (:5432) &mdash; Card and collection storage</li>
+        </ul>
+        <div class="detail-section-label">Database Tables</div>
+        <ul class="detail-list">
+          <li><code>flashcards</code>, <code>collections</code>, <code>collection_cards</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Study -->
+    <div class="detail-card" id="svc-study">
+      <div class="detail-header" onclick="toggleDetail('svc-study')">
+        <div class="detail-chevron">&#x25B6;</div>
+        <div style="font-size:20px;">&#x1F4D6;</div>
+        <div class="detail-header-info">
+          <div class="detail-header-name">Study Service</div>
+          <div class="detail-header-port">:8403 &middot; Python FastAPI</div>
+        </div>
+        <span class="service-tag study">CORE</span>
+      </div>
+      <div class="detail-body">
+        <div class="detail-section-label">Endpoints</div>
+        <ul class="detail-list">
+          <li><code>POST /api/study/sessions</code> &mdash; Start study session</li>
+          <li><code>PUT /api/study/sessions/{id}/review</code> &mdash; Submit card review</li>
+          <li><code>GET /api/study/sessions/history</code> &mdash; Session history</li>
+          <li><code>GET /api/study/analytics</code> &mdash; Study analytics</li>
+          <li><code>GET /api/quiz/history</code> &mdash; Quiz attempt history</li>
+          <li><code>POST /api/quiz/sessions</code> &mdash; Create quiz session</li>
+          <li><code>PUT /api/quiz/sessions/{id}/submit</code> &mdash; Submit quiz answers</li>
+        </ul>
+        <div class="detail-section-label">Dependencies</div>
+        <ul class="detail-list">
+          <li>PostgreSQL (:5432) &mdash; Session and quiz data</li>
+          <li>Flashcards Service (:8402) &mdash; Card content</li>
+        </ul>
+        <div class="detail-section-label">Database Tables</div>
+        <ul class="detail-list">
+          <li><code>study_sessions</code>, <code>quiz_sessions</code>, <code>quiz_collections</code>, <code>card_reviews</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- AI Chat -->
+    <div class="detail-card" id="svc-ai-chat">
+      <div class="detail-header" onclick="toggleDetail('svc-ai-chat')">
+        <div class="detail-chevron">&#x25B6;</div>
+        <div style="font-size:20px;">&#x1F916;</div>
+        <div class="detail-header-info">
+          <div class="detail-header-name">AI Chat Service</div>
+          <div class="detail-header-port">:8404 &middot; Python FastAPI</div>
+        </div>
+        <span class="service-tag ai-chat">CORE</span>
+      </div>
+      <div class="detail-body">
+        <div class="detail-section-label">Route Modules</div>
+        <ul class="detail-list">
+          <li><code>chat.py</code> &mdash; AI conversation with streaming</li>
+          <li><code>conversations.py</code> &mdash; Conversation history CRUD</li>
+          <li><code>tutor.py</code> &mdash; AI tutor with TTS/STT sentiment</li>
+          <li><code>flashcard_generator.py</code> &mdash; AI card generation</li>
+          <li><code>quiz.py</code> &mdash; AI quiz generation</li>
+          <li><code>web_crawler.py</code> &mdash; Web content extraction</li>
+          <li><code>documents.py</code> &mdash; AI document processing</li>
+          <li><code>status.py</code> &mdash; Service status and health</li>
+        </ul>
+        <div class="detail-section-label">Dependencies</div>
+        <ul class="detail-list">
+          <li>Ollama (:11434) &mdash; LLM inference</li>
+          <li>AI Orchestra &mdash; Model routing &amp; circuit breaker</li>
+          <li>PostgreSQL (:5432) &mdash; Conversation storage</li>
+          <li>Pipecat &mdash; Voice pipeline (STT/TTS)</li>
+          <li>Mem0 &mdash; Memory management</li>
+          <li>Crawl4AI &mdash; Web crawling</li>
+          <li>Docling &mdash; Document processing</li>
+        </ul>
+        <div class="detail-section-label">Database Tables</div>
+        <ul class="detail-list">
+          <li><code>conversations</code>, <code>messages</code>, <code>ai_jobs</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Documents -->
+    <div class="detail-card" id="svc-documents">
+      <div class="detail-header" onclick="toggleDetail('svc-documents')">
+        <div class="detail-chevron">&#x25B6;</div>
+        <div style="font-size:20px;">&#x1F4C4;</div>
+        <div class="detail-header-info">
+          <div class="detail-header-name">Documents Service</div>
+          <div class="detail-header-port">:8406 &middot; Python FastAPI</div>
+        </div>
+        <span class="service-tag documents">CORE</span>
+      </div>
+      <div class="detail-body">
+        <div class="detail-section-label">Endpoints</div>
+        <ul class="detail-list">
+          <li><code>POST /api/documents/upload</code> &mdash; Upload and process file</li>
+          <li><code>GET /api/documents</code> &mdash; List user documents</li>
+          <li><code>GET /api/documents/{id}</code> &mdash; Get document details</li>
+          <li><code>DELETE /api/documents/{id}</code> &mdash; Delete document</li>
+          <li><code>GET /api/documents/search</code> &mdash; Full-text and vector search</li>
+        </ul>
+        <div class="detail-section-label">Dependencies</div>
+        <ul class="detail-list">
+          <li>PostgreSQL + pgvector (:5432) &mdash; Document and vector storage</li>
+          <li>Sentence Transformers &mdash; Embedding generation</li>
+          <li>Docling &mdash; PDF/DOCX parsing</li>
+        </ul>
+        <div class="detail-section-label">Database Tables</div>
+        <ul class="detail-list">
+          <li><code>documents</code>, <code>document_chunks</code>, <code>embeddings</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Analytics -->
+    <div class="detail-card" id="svc-analytics">
+      <div class="detail-header" onclick="toggleDetail('svc-analytics')">
+        <div class="detail-chevron">&#x25B6;</div>
+        <div style="font-size:20px;">&#x1F4CA;</div>
+        <div class="detail-header-info">
+          <div class="detail-header-name">Analytics Service</div>
+          <div class="detail-header-port">:8407 &middot; Python FastAPI</div>
+        </div>
+        <span class="service-tag admin">SUPPORT</span>
+      </div>
+      <div class="detail-body">
+        <div class="detail-section-label">Endpoints</div>
+        <ul class="detail-list">
+          <li><code>GET /api/analytics/study</code> &mdash; Study performance metrics</li>
+          <li><code>GET /api/analytics/usage</code> &mdash; Usage statistics</li>
+          <li><code>GET /api/analytics/ai</code> &mdash; AI interaction analytics</li>
+          <li><code>GET /api/analytics/models</code> &mdash; Model performance stats</li>
+        </ul>
+        <div class="detail-section-label">Dependencies</div>
+        <ul class="detail-list">
+          <li>PostgreSQL (:5432) &mdash; Analytics data</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Admin -->
+    <div class="detail-card" id="svc-admin">
+      <div class="detail-header" onclick="toggleDetail('svc-admin')">
+        <div class="detail-chevron">&#x25B6;</div>
+        <div style="font-size:20px;">&#x2699;&#xFE0F;</div>
+        <div class="detail-header-info">
+          <div class="detail-header-name">Admin Service</div>
+          <div class="detail-header-port">:8408 &middot; Python FastAPI</div>
+        </div>
+        <span class="service-tag admin">SUPPORT</span>
+      </div>
+      <div class="detail-body">
+        <div class="detail-section-label">Features</div>
+        <ul class="detail-list">
+          <li>User management and role assignment</li>
+          <li>Job queue monitoring and management</li>
+          <li>Schedule creation and management</li>
+          <li>Job template CRUD</li>
+          <li>System logs and health monitoring</li>
+        </ul>
+        <div class="detail-section-label">Dependencies</div>
+        <ul class="detail-list">
+          <li>PostgreSQL (:5432) &mdash; Admin data</li>
+          <li>Redis (:6379) &mdash; Job queue state</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== TAB 6: AI PIPELINE ==================== -->
+  <div id="tab-pipeline" class="tab-content">
+
+    <!-- AI Orchestra -->
+    <div class="pipeline-section">
+      <div class="pipeline-header">&#x1F3AF; AI Orchestra &mdash; Intelligent Model Routing</div>
+      <div class="pipeline-flow">
+        <div class="pipeline-step" style="border-left:3px solid var(--blue-primary);">
+          <div class="pipeline-step-icon">&#x1F4E5;</div>
+          <div class="pipeline-step-name">User Query</div>
+          <div class="pipeline-step-detail">Any AI request</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--purple-primary);">
+          <div class="pipeline-step-icon">&#x1F50E;</div>
+          <div class="pipeline-step-name">Classify Intent</div>
+          <div class="pipeline-step-detail">Task complexity</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--green-primary);">
+          <div class="pipeline-step-icon">&#x1F4A1;</div>
+          <div class="pipeline-step-name">Tier Selection</div>
+          <div class="pipeline-step-detail">Fast / Standard</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--orange-primary);">
+          <div class="pipeline-step-icon">&#x1F6E1;&#xFE0F;</div>
+          <div class="pipeline-step-name">Circuit Breaker</div>
+          <div class="pipeline-step-detail">Failure protection</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--cyan-primary);">
+          <div class="pipeline-step-icon">&#x1F9E0;</div>
+          <div class="pipeline-step-name">Ollama Model</div>
+          <div class="pipeline-step-detail">LLM inference</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--pink-primary);">
+          <div class="pipeline-step-icon">&#x2705;</div>
+          <div class="pipeline-step-name">Response</div>
+          <div class="pipeline-step-detail">Quality matched</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Model Tiers -->
+    <div class="pipeline-section">
+      <div class="pipeline-header">&#x1F9E0; Model Tiers</div>
+      <div class="model-tiers">
+        <div class="tier-card" style="border-left:3px solid var(--green-primary);">
+          <div class="tier-badge" style="background:rgba(16,185,129,0.15);color:var(--green-light);">FAST</div>
+          <div class="tier-name">Fast Tier</div>
+          <div class="tier-models">llama3.2:3b</div>
+          <div class="tier-desc">Quick responses for simple queries, flashcard generation, basic questions. Low latency, minimal resource usage.</div>
+        </div>
+        <div class="tier-card" style="border-left:3px solid var(--blue-primary);">
+          <div class="tier-badge" style="background:rgba(59,130,246,0.15);color:var(--blue-light);">STANDARD</div>
+          <div class="tier-name">Standard Tier</div>
+          <div class="tier-models">llama3.1:8b</div>
+          <div class="tier-desc">Balanced performance for tutoring, quiz generation, study guide creation, and nuanced explanations.</div>
+        </div>
+        <div class="tier-card" style="border-left:3px solid var(--purple-primary);">
+          <div class="tier-badge" style="background:rgba(139,92,246,0.15);color:var(--purple-light);">ALTERNATIVE</div>
+          <div class="tier-name">Alternative Model</div>
+          <div class="tier-models">gemma3:4b</div>
+          <div class="tier-desc">Google's Gemma model as a fallback option. Good balance of speed and quality for general-purpose tasks.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flashcard Generation Pipeline -->
+    <div class="pipeline-section">
+      <div class="pipeline-header">&#x1F4C7; Flashcard Generation Pipeline</div>
+      <div class="pipeline-flow">
+        <div class="pipeline-step" style="border-left:3px solid var(--blue-primary);">
+          <div class="pipeline-step-icon">&#x1F4DD;</div>
+          <div class="pipeline-step-name">Input</div>
+          <div class="pipeline-step-detail">Text / URL / PDF</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--purple-primary);">
+          <div class="pipeline-step-icon">&#x1F4D6;</div>
+          <div class="pipeline-step-name">Extract</div>
+          <div class="pipeline-step-detail">Docling / Crawl4AI</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--green-primary);">
+          <div class="pipeline-step-icon">&#x1F3AF;</div>
+          <div class="pipeline-step-name">AI Orchestra</div>
+          <div class="pipeline-step-detail">Route to model</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--orange-primary);">
+          <div class="pipeline-step-icon">&#x1F9E0;</div>
+          <div class="pipeline-step-name">LLM Generate</div>
+          <div class="pipeline-step-detail">Front + back pairs</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--cyan-primary);">
+          <div class="pipeline-step-icon">&#x2705;</div>
+          <div class="pipeline-step-name">Validate</div>
+          <div class="pipeline-step-detail">JSON parsing</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--pink-primary);">
+          <div class="pipeline-step-icon">&#x1F4BE;</div>
+          <div class="pipeline-step-name">Store</div>
+          <div class="pipeline-step-detail">Save to collection</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RAG Pipeline -->
+    <div class="pipeline-section">
+      <div class="pipeline-header">&#x1F50D; RAG Pipeline</div>
+      <div class="pipeline-flow">
+        <div class="pipeline-step" style="border-left:3px solid var(--blue-primary);">
+          <div class="pipeline-step-icon">&#x2753;</div>
+          <div class="pipeline-step-name">Query</div>
+          <div class="pipeline-step-detail">User question</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--green-primary);">
+          <div class="pipeline-step-icon">&#x1F4C8;</div>
+          <div class="pipeline-step-name">Embedding</div>
+          <div class="pipeline-step-detail">MiniLM-L6-v2</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--cyan-primary);">
+          <div class="pipeline-step-icon">&#x1F50E;</div>
+          <div class="pipeline-step-name">Vector Search</div>
+          <div class="pipeline-step-detail">pgvector cosine</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--orange-primary);">
+          <div class="pipeline-step-icon">&#x1F4E6;</div>
+          <div class="pipeline-step-name">Context Assembly</div>
+          <div class="pipeline-step-detail">Top-k chunks</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--purple-primary);">
+          <div class="pipeline-step-icon">&#x1F9E0;</div>
+          <div class="pipeline-step-name">LLM Generation</div>
+          <div class="pipeline-step-detail">With context</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--pink-primary);">
+          <div class="pipeline-step-icon">&#x1F4E8;</div>
+          <div class="pipeline-step-name">Stream Response</div>
+          <div class="pipeline-step-detail">SSE to client</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Document Processing Pipeline -->
+    <div class="pipeline-section">
+      <div class="pipeline-header">&#x1F4C4; Document Processing Pipeline</div>
+      <div class="pipeline-flow">
+        <div class="pipeline-step" style="border-left:3px solid var(--orange-primary);">
+          <div class="pipeline-step-icon">&#x1F4E4;</div>
+          <div class="pipeline-step-name">Upload</div>
+          <div class="pipeline-step-detail">PDF, DOCX, IMG</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--purple-primary);">
+          <div class="pipeline-step-icon">&#x1F50E;</div>
+          <div class="pipeline-step-name">Format Detect</div>
+          <div class="pipeline-step-detail">MIME analysis</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--blue-primary);">
+          <div class="pipeline-step-icon">&#x1F4D6;</div>
+          <div class="pipeline-step-name">Docling</div>
+          <div class="pipeline-step-detail">Text extraction</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--green-primary);">
+          <div class="pipeline-step-icon">&#x2702;&#xFE0F;</div>
+          <div class="pipeline-step-name">Chunking</div>
+          <div class="pipeline-step-detail">Semantic split</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--orange-primary);">
+          <div class="pipeline-step-icon">&#x1F4C8;</div>
+          <div class="pipeline-step-name">Embedding</div>
+          <div class="pipeline-step-detail">384-dim vectors</div>
+        </div>
+        <div class="pipeline-arrow">&rarr;</div>
+        <div class="pipeline-step" style="border-left:3px solid var(--pink-primary);">
+          <div class="pipeline-step-icon">&#x1F4BE;</div>
+          <div class="pipeline-step-name">pgvector</div>
+          <div class="pipeline-step-detail">Indexed storage</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== TAB 7: DATABASE SCHEMA ==================== -->
+  <div id="tab-schema" class="tab-content">
+    <div class="section-title">Database Schema &mdash; 83 Tables</div>
+
+    <!-- Summary Stats -->
+    <div class="schema-summary">
+      <div class="schema-stat"><div class="schema-stat-num">83</div><div class="schema-stat-label">Total Tables</div></div>
+      <div class="schema-stat"><div class="schema-stat-num">9</div><div class="schema-stat-label">Core App</div></div>
+      <div class="schema-stat"><div class="schema-stat-num">8</div><div class="schema-stat-label">Quiz & Study</div></div>
+      <div class="schema-stat"><div class="schema-stat-num">18</div><div class="schema-stat-label">AI System</div></div>
+      <div class="schema-stat"><div class="schema-stat-num">9</div><div class="schema-stat-label">RAG & Vectors</div></div>
+      <div class="schema-stat"><div class="schema-stat-num">7</div><div class="schema-stat-label">Knowledge Graph</div></div>
+      <div class="schema-stat"><div class="schema-stat-num">6</div><div class="schema-stat-label">AI Tutor</div></div>
+      <div class="schema-stat"><div class="schema-stat-num">6</div><div class="schema-stat-label">Model Monitoring</div></div>
+    </div>
+
+    <!-- ===== CORE APPLICATION ===== -->
+    <div class="schema-category open" id="cat-core">
+      <div class="schema-category-header" onclick="toggleCategory('cat-core')" style="border-left-color:var(--blue-primary);">
+        <span class="schema-cat-chevron">&#x25B6;</span>
+        &#x1F4DA; Core Application
+        <span class="cat-count">9 tables</span>
+      </div>
+      <div class="schema-category-body">
+
+        <!-- users -->
+        <div class="schema-table open" id="tbl-users">
+          <div class="schema-table-header" onclick="toggleTable('tbl-users')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">users</span>
+            <span class="schema-table-count">10 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">username</span><span class="schema-col-type">VARCHAR(150)</span><span class="schema-col-badge uq">UQ</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">email</span><span class="schema-col-type">VARCHAR(150)</span><span class="schema-col-badge uq">UQ</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">password_hash</span><span class="schema-col-type">VARCHAR(255)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">created_at</span><span class="schema-col-type">TIMESTAMPTZ</span><span class="schema-col-extra">DEFAULT NOW()</span></div>
+            <div class="schema-col"><span class="schema-col-name">last_login</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">is_active</span><span class="schema-col-type">BOOLEAN</span><span class="schema-col-extra">DEFAULT true</span></div>
+            <div class="schema-col"><span class="schema-col-name">is_admin</span><span class="schema-col-type">BOOLEAN</span><span class="schema-col-extra">DEFAULT false</span></div>
+            <div class="schema-col"><span class="schema-col-name">timezone</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-extra">DEFAULT 'UTC'</span></div>
+            <div class="schema-col"><span class="schema-col-name">study_preferences</span><span class="schema-col-type">JSONB</span><span class="schema-col-extra">DEFAULT '{}'</span></div>
+          </div>
+        </div>
+
+        <!-- flashcards -->
+        <div class="schema-table" id="tbl-flashcards">
+          <div class="schema-table-header" onclick="toggleTable('tbl-flashcards')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">flashcards</span>
+            <span class="schema-table-count">24 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">front</span><span class="schema-col-type">TEXT</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">back</span><span class="schema-col-type">TEXT</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">theme</span><span class="schema-col-type">VARCHAR(255)</span></div>
+            <div class="schema-col"><span class="schema-col-name">collection_name</span><span class="schema-col-type">VARCHAR(255)</span></div>
+            <div class="schema-col"><span class="schema-col-name">collection_id</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">difficulty</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-extra">DEFAULT 'intermediate'</span></div>
+            <div class="schema-col"><span class="schema-col-name">created_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">updated_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">last_reviewed</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">review_count</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">correct_count</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">study_level</span><span class="schema-col-type">VARCHAR(20)</span></div>
+            <div class="schema-col"><span class="schema-col-name">source_material</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">tags</span><span class="schema-col-type">TEXT[]</span></div>
+            <div class="schema-col"><span class="schema-col-name">is_favorite</span><span class="schema-col-type">BOOLEAN</span><span class="schema-col-extra">DEFAULT false</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_generated</span><span class="schema-col-type">BOOLEAN</span><span class="schema-col-extra">DEFAULT false</span></div>
+            <div class="schema-col"><span class="schema-col-name">question_type</span><span class="schema-col-type">TEXT</span><span class="schema-col-extra">DEFAULT 'basic'</span></div>
+            <div class="schema-col"><span class="schema-col-name">excluded</span><span class="schema-col-type">BOOLEAN</span><span class="schema-col-extra">DEFAULT false</span></div>
+            <div class="schema-col"><span class="schema-col-name">front_image_url</span><span class="schema-col-type">VARCHAR(500)</span></div>
+            <div class="schema-col"><span class="schema-col-name">back_image_url</span><span class="schema-col-type">VARCHAR(500)</span></div>
+            <div class="schema-col"><span class="schema-col-name">content_embedding</span><span class="schema-col-type">vector(384)</span><span class="schema-col-badge vec">VEC</span></div>
+            <div class="schema-col"><span class="schema-col-name">embedding_version</span><span class="schema-col-type">VARCHAR(20)</span><span class="schema-col-extra">DEFAULT 'v1.0'</span></div>
+          </div>
+        </div>
+
+        <!-- collections -->
+        <div class="schema-table" id="tbl-collections">
+          <div class="schema-table-header" onclick="toggleTable('tbl-collections')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">collections</span>
+            <span class="schema-table-count">9 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">name</span><span class="schema-col-type">VARCHAR(255)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">description</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">theme</span><span class="schema-col-type">VARCHAR(255)</span></div>
+            <div class="schema-col"><span class="schema-col-name">created_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">updated_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">flashcard_count</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">is_pinned</span><span class="schema-col-type">BOOLEAN</span><span class="schema-col-extra">DEFAULT false</span></div>
+          </div>
+        </div>
+
+        <!-- documents -->
+        <div class="schema-table" id="tbl-documents">
+          <div class="schema-table-header" onclick="toggleTable('tbl-documents')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">documents</span>
+            <span class="schema-table-count">12 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">title</span><span class="schema-col-type">VARCHAR(255)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">content</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">document_type</span><span class="schema-col-type">VARCHAR(100)</span><span class="schema-col-extra">DEFAULT 'text'</span></div>
+            <div class="schema-col"><span class="schema-col-name">file_path</span><span class="schema-col-type">VARCHAR(500)</span></div>
+            <div class="schema-col"><span class="schema-col-name">file_size</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">mime_type</span><span class="schema-col-type">VARCHAR(100)</span></div>
+            <div class="schema-col"><span class="schema-col-name">uploaded_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">processed_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">is_processed</span><span class="schema-col-type">BOOLEAN</span><span class="schema-col-extra">DEFAULT false</span></div>
+            <div class="schema-col"><span class="schema-col-name">metadata</span><span class="schema-col-type">JSONB</span><span class="schema-col-extra">DEFAULT '{}'</span></div>
+          </div>
+        </div>
+
+        <!-- conversations -->
+        <div class="schema-table" id="tbl-conversations">
+          <div class="schema-table-header" onclick="toggleTable('tbl-conversations')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">conversations</span>
+            <span class="schema-table-count">8 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">conversation_type</span><span class="schema-col-type">VARCHAR(100)</span><span class="schema-col-extra">DEFAULT 'user_chat'</span></div>
+            <div class="schema-col"><span class="schema-col-name">title</span><span class="schema-col-type">VARCHAR(255)</span></div>
+            <div class="schema-col"><span class="schema-col-name">content</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">created_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">is_archived</span><span class="schema-col-type">BOOLEAN</span><span class="schema-col-extra">DEFAULT false</span></div>
+            <div class="schema-col"><span class="schema-col-name">metadata</span><span class="schema-col-type">JSONB</span></div>
+          </div>
+        </div>
+
+        <!-- conversation_bookmarks -->
+        <div class="schema-table" id="tbl-conv-bookmarks">
+          <div class="schema-table-header" onclick="toggleTable('tbl-conv-bookmarks')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">conversation_bookmarks</span>
+            <span class="schema-table-count">6 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">conversation_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span></div>
+            <div class="schema-col"><span class="schema-col-name">message_id</span><span class="schema-col-type">VARCHAR(255)</span></div>
+            <div class="schema-col"><span class="schema-col-name">note</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">created_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+          </div>
+        </div>
+
+        <!-- conversation_references -->
+        <div class="schema-table" id="tbl-conv-refs">
+          <div class="schema-table-header" onclick="toggleTable('tbl-conv-refs')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">conversation_references</span>
+            <span class="schema-table-count">7 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">conversation_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">flashcard_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span></div>
+            <div class="schema-col"><span class="schema-col-name">reference_number</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">relevance_score</span><span class="schema-col-type">FLOAT</span></div>
+            <div class="schema-col"><span class="schema-col-name">flashcard_content_snapshot</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">created_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+          </div>
+        </div>
+
+        <!-- conversation_processing -->
+        <div class="schema-table" id="tbl-conv-proc">
+          <div class="schema-table-header" onclick="toggleTable('tbl-conv-proc')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">conversation_processing</span>
+            <span class="schema-table-count">10 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">conversation_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge pk">PK</span><span class="schema-col-badge fk">FK</span></div>
+            <div class="schema-col"><span class="schema-col-name">processing_type</span><span class="schema-col-type">VARCHAR(50)</span></div>
+            <div class="schema-col"><span class="schema-col-name">model_used</span><span class="schema-col-type">VARCHAR(100)</span></div>
+            <div class="schema-col"><span class="schema-col-name">processing_time_ms</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">context_score</span><span class="schema-col-type">FLOAT</span></div>
+            <div class="schema-col"><span class="schema-col-name">cards_analyzed</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">cards_used</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">success</span><span class="schema-col-type">BOOLEAN</span><span class="schema-col-extra">DEFAULT true</span></div>
+            <div class="schema-col"><span class="schema-col-name">error_message</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">architecture_version</span><span class="schema-col-type">VARCHAR(20)</span></div>
+          </div>
+        </div>
+
+        <!-- crawl_history -->
+        <div class="schema-table" id="tbl-crawl-history">
+          <div class="schema-table-header" onclick="toggleTable('tbl-crawl-history')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">crawl_history</span>
+            <span class="schema-table-count">10 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">url</span><span class="schema-col-type">TEXT</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">title</span><span class="schema-col-type">VARCHAR(500)</span></div>
+            <div class="schema-col"><span class="schema-col-name">content</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">crawled_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">status</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-extra">DEFAULT 'success'</span></div>
+            <div class="schema-col"><span class="schema-col-name">error_message</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">content_length</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">flashcards_generated</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ===== QUIZ & STUDY ===== -->
+    <div class="schema-category" id="cat-study">
+      <div class="schema-category-header" onclick="toggleCategory('cat-study')" style="border-left-color:var(--orange-primary);">
+        <span class="schema-cat-chevron">&#x25B6;</span>
+        &#x1F4D6; Quiz &amp; Study Sessions
+        <span class="cat-count">8 tables</span>
+      </div>
+      <div class="schema-category-body">
+
+        <div class="schema-table" id="tbl-quiz-sessions">
+          <div class="schema-table-header" onclick="toggleTable('tbl-quiz-sessions')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">quiz_sessions</span>
+            <span class="schema-table-count">12 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">collection_name</span><span class="schema-col-type">VARCHAR(255)</span></div>
+            <div class="schema-col"><span class="schema-col-name">total_questions</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">correct_answers</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">score</span><span class="schema-col-type">DECIMAL(5,2)</span><span class="schema-col-extra">DEFAULT 0.00</span></div>
+            <div class="schema-col"><span class="schema-col-name">started_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">completed_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">duration_seconds</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">quiz_type</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-extra">DEFAULT 'standard'</span></div>
+            <div class="schema-col"><span class="schema-col-name">difficulty_level</span><span class="schema-col-type">VARCHAR(20)</span></div>
+            <div class="schema-col"><span class="schema-col-name">theme</span><span class="schema-col-type">VARCHAR(255)</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-quiz-responses">
+          <div class="schema-table-header" onclick="toggleTable('tbl-quiz-responses')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">quiz_question_responses</span>
+            <span class="schema-table-count">9 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">quiz_session_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">question_number</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">question_text</span><span class="schema-col-type">TEXT</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">question_type</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_answer</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">correct_answer</span><span class="schema-col-type">TEXT</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">is_correct</span><span class="schema-col-type">BOOLEAN</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">flashcard_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-quiz-collections">
+          <div class="schema-table-header" onclick="toggleTable('tbl-quiz-collections')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">quiz_collections</span>
+            <span class="schema-table-count">10 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">title</span><span class="schema-col-type">VARCHAR(255)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">description</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">source_type</span><span class="schema-col-type">VARCHAR(100)</span><span class="schema-col-extra">DEFAULT 'ai_generated'</span></div>
+            <div class="schema-col"><span class="schema-col-name">difficulty</span><span class="schema-col-type">VARCHAR(50)</span></div>
+            <div class="schema-col"><span class="schema-col-name">total_questions</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">quality_score</span><span class="schema-col-type">DECIMAL(3,2)</span></div>
+            <div class="schema-col"><span class="schema-col-name">tags</span><span class="schema-col-type">TEXT[]</span></div>
+            <div class="schema-col"><span class="schema-col-name">source_file_name</span><span class="schema-col-type">VARCHAR(500)</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-quiz-questions">
+          <div class="schema-table-header" onclick="toggleTable('tbl-quiz-questions')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">quiz_questions</span>
+            <span class="schema-table-count">9 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">collection_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">question_order</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 1</span></div>
+            <div class="schema-col"><span class="schema-col-name">question_text</span><span class="schema-col-type">TEXT</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">question_type</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-extra">DEFAULT 'multiple_choice'</span></div>
+            <div class="schema-col"><span class="schema-col-name">options</span><span class="schema-col-type">JSONB</span><span class="schema-col-extra">DEFAULT '[]'</span></div>
+            <div class="schema-col"><span class="schema-col-name">correct_answer</span><span class="schema-col-type">TEXT</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">explanation</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">difficulty</span><span class="schema-col-type">VARCHAR(50)</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-study-sessions">
+          <div class="schema-table-header" onclick="toggleTable('tbl-study-sessions')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">study_sessions</span>
+            <span class="schema-table-count">11 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">collection_name</span><span class="schema-col-type">VARCHAR(255)</span></div>
+            <div class="schema-col"><span class="schema-col-name">theme</span><span class="schema-col-type">VARCHAR(255)</span></div>
+            <div class="schema-col"><span class="schema-col-name">cards_studied</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">correct_answers</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">session_duration</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">started_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">ended_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">study_mode</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-extra">DEFAULT 'standard'</span></div>
+            <div class="schema-col"><span class="schema-col-name">effectiveness_score</span><span class="schema-col-type">DECIMAL(3,2)</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-focused-sessions">
+          <div class="schema-table-header" onclick="toggleTable('tbl-focused-sessions')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">focused_study_sessions</span>
+            <span class="schema-table-count">11 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">study_session_id</span><span class="schema-col-type">VARCHAR(255)</span><span class="schema-col-badge uq">UQ</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">chat_session_id</span><span class="schema-col-type">VARCHAR(255)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">theme</span><span class="schema-col-type">VARCHAR(255)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">card_ids</span><span class="schema-col-type">JSONB</span><span class="schema-col-extra">DEFAULT '[]'</span></div>
+            <div class="schema-col"><span class="schema-col-name">session_config</span><span class="schema-col-type">JSONB</span></div>
+            <div class="schema-col"><span class="schema-col-name">progress_data</span><span class="schema-col-type">JSONB</span></div>
+            <div class="schema-col"><span class="schema-col-name">cards_reviewed</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">duration_seconds</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">created_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-learning-progress">
+          <div class="schema-table-header" onclick="toggleTable('tbl-learning-progress')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">learning_progress</span>
+            <span class="schema-table-count">10 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">theme</span><span class="schema-col-type">VARCHAR(255)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">topic</span><span class="schema-col-type">VARCHAR(255)</span></div>
+            <div class="schema-col"><span class="schema-col-name">mastery_level</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">last_studied</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">times_studied</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">questions_asked</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">correct_answers</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">updated_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-gen-jobs">
+          <div class="schema-table-header" onclick="toggleTable('tbl-gen-jobs')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">generation_jobs</span>
+            <span class="schema-table-count">15 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">job_id</span><span class="schema-col-type">UUID</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">job_type</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">status</span><span class="schema-col-type">VARCHAR(20)</span><span class="schema-col-extra">DEFAULT 'pending'</span></div>
+            <div class="schema-col"><span class="schema-col-name">progress</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">current_batch</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">total_batches</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">cards_generated</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">cards_saved</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">status_message</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">error_message</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">config</span><span class="schema-col-type">JSONB</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">collection_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span></div>
+            <div class="schema-col"><span class="schema-col-name">started_at</span><span class="schema-col-type">TIMESTAMP</span></div>
+            <div class="schema-col"><span class="schema-col-name">completed_at</span><span class="schema-col-type">TIMESTAMP</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ===== AI CONVERSATIONS & PROMPTS ===== -->
+    <div class="schema-category" id="cat-ai">
+      <div class="schema-category-header" onclick="toggleCategory('cat-ai')" style="border-left-color:var(--green-primary);">
+        <span class="schema-cat-chevron">&#x25B6;</span>
+        &#x1F916; AI Conversations, Prompts &amp; Performance
+        <span class="cat-count">18 tables</span>
+      </div>
+      <div class="schema-category-body">
+
+        <div class="schema-table" id="tbl-ai-conv">
+          <div class="schema-table-header" onclick="toggleTable('tbl-ai-conv')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">ai_conversations</span>
+            <span class="schema-table-count">23 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">conversation_id</span><span class="schema-col-type">VARCHAR(32)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">conversation_type</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">sender</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">receiver</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">request_content</span><span class="schema-col-type">TEXT</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">response_content</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">operation_type</span><span class="schema-col-type">VARCHAR(100)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_model</span><span class="schema-col-type">VARCHAR(100)</span></div>
+            <div class="schema-col"><span class="schema-col-name">processing_time_ms</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">success</span><span class="schema-col-type">BOOLEAN</span><span class="schema-col-extra">DEFAULT false</span></div>
+            <div class="schema-col"><span class="schema-col-name">error_type</span><span class="schema-col-type">VARCHAR(100)</span></div>
+            <div class="schema-col"><span class="schema-col-name">response_quality_score</span><span class="schema-col-type">REAL</span></div>
+            <div class="schema-col"><span class="schema-col-name">flagged_for_review</span><span class="schema-col-type">BOOLEAN</span><span class="schema-col-extra">DEFAULT false</span></div>
+            <div class="schema-col"><span class="schema-col-name">+8 more...</span><span class="schema-col-type"></span><span class="schema-col-extra">timestamps, tokens, study_level</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-ai-feedback">
+          <div class="schema-table-header" onclick="toggleTable('tbl-ai-feedback')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">ai_feedback</span>
+            <span class="schema-table-count">7 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">message_id</span><span class="schema-col-type">VARCHAR(255)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span></div>
+            <div class="schema-col"><span class="schema-col-name">theme</span><span class="schema-col-type">VARCHAR(255)</span></div>
+            <div class="schema-col"><span class="schema-col-name">reaction</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">comment</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">created_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-ai-cache">
+          <div class="schema-table-header" onclick="toggleTable('tbl-ai-cache')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">ai_response_cache</span>
+            <span class="schema-table-count">7 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">cache_key</span><span class="schema-col-type">VARCHAR(255)</span><span class="schema-col-badge uq">UQ</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">question_text</span><span class="schema-col-type">TEXT</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">response_text</span><span class="schema-col-type">TEXT</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">flashcard_ids</span><span class="schema-col-type">INTEGER[]</span></div>
+            <div class="schema-col"><span class="schema-col-name">hit_count</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">expires_at</span><span class="schema-col-type">TIMESTAMPTZ</span><span class="schema-col-extra">+24 hours</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-ai-prompts">
+          <div class="schema-table-header" onclick="toggleTable('tbl-ai-prompts')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">ai_prompts</span>
+            <span class="schema-table-count">16 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">name</span><span class="schema-col-type">VARCHAR(255)</span><span class="schema-col-badge uq">UQ</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">category</span><span class="schema-col-type">VARCHAR(100)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">prompt_template</span><span class="schema-col-type">TEXT</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">description</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">is_active</span><span class="schema-col-type">BOOLEAN</span><span class="schema-col-extra">DEFAULT true</span></div>
+            <div class="schema-col"><span class="schema-col-name">version</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 1</span></div>
+            <div class="schema-col"><span class="schema-col-name">tags</span><span class="schema-col-type">TEXT[]</span></div>
+            <div class="schema-col"><span class="schema-col-name">parameters</span><span class="schema-col-type">JSONB</span></div>
+            <div class="schema-col"><span class="schema-col-name">usage_count</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">success_rate</span><span class="schema-col-type">REAL</span><span class="schema-col-extra">DEFAULT 0.0</span></div>
+            <div class="schema-col"><span class="schema-col-name">avg_response_time_ms</span><span class="schema-col-type">REAL</span></div>
+            <div class="schema-col"><span class="schema-col-name">+4 more...</span><span class="schema-col-type"></span><span class="schema-col-extra">created_by, timestamps, source</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-ai-perf">
+          <div class="schema-table-header" onclick="toggleTable('tbl-ai-perf')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">ai_performance_metrics</span>
+            <span class="schema-table-count">13 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_model</span><span class="schema-col-type">VARCHAR(100)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">operation_type</span><span class="schema-col-type">VARCHAR(100)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">processing_time_ms</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">tokens_processed</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">success</span><span class="schema-col-type">BOOLEAN</span></div>
+            <div class="schema-col"><span class="schema-col-name">error_type</span><span class="schema-col-type">VARCHAR(100)</span></div>
+            <div class="schema-col"><span class="schema-col-name">content_size</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">complexity_score</span><span class="schema-col-type">REAL</span></div>
+            <div class="schema-col"><span class="schema-col-name">memory_usage_mb</span><span class="schema-col-type">REAL</span></div>
+            <div class="schema-col"><span class="schema-col-name">cpu_usage_percent</span><span class="schema-col-type">REAL</span></div>
+            <div class="schema-col"><span class="schema-col-name">study_level</span><span class="schema-col-type">VARCHAR(50)</span></div>
+            <div class="schema-col"><span class="schema-col-name">timestamp</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-ai-quality">
+          <div class="schema-table-header" onclick="toggleTable('tbl-ai-quality')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">ai_quality_alerts</span>
+            <span class="schema-table-count">22 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">alert_type</span><span class="schema-col-type">VARCHAR(100)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">severity</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-extra">DEFAULT 'medium'</span></div>
+            <div class="schema-col"><span class="schema-col-name">title</span><span class="schema-col-type">VARCHAR(500)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">message</span><span class="schema-col-type">TEXT</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">status</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-extra">DEFAULT 'active'</span></div>
+            <div class="schema-col"><span class="schema-col-name">occurrence_count</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 1</span></div>
+            <div class="schema-col"><span class="schema-col-name">+15 more...</span><span class="schema-col-type"></span><span class="schema-col-extra">model, prompt, resolution, timestamps</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-more-ai">
+          <div class="schema-table-header" onclick="toggleTable('tbl-more-ai')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">+ 12 more AI tables</span>
+            <span class="schema-table-count">see SQL files</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">ai_prompts_enhanced</span><span class="schema-col-type"></span><span class="schema-col-extra">Versioned prompt management</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_prompt_effectiveness</span><span class="schema-col-type"></span><span class="schema-col-extra">Prompt performance tracking</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_prompt_requests</span><span class="schema-col-type"></span><span class="schema-col-extra">User prompt requests</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_prompt_suggestions</span><span class="schema-col-type"></span><span class="schema-col-extra">AI-suggested improvements</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_conversation_analysis</span><span class="schema-col-type"></span><span class="schema-col-extra">Conversation quality analysis</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_system_health</span><span class="schema-col-type"></span><span class="schema-col-extra">Component health tracking</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_timeout_settings</span><span class="schema-col-type"></span><span class="schema-col-extra">Per-operation timeout config</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_admin_notifications</span><span class="schema-col-type"></span><span class="schema-col-extra">Admin alert notifications</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_operation_logs</span><span class="schema-col-type"></span><span class="schema-col-extra">Detailed operation audit log</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_agents</span><span class="schema-col-type"></span><span class="schema-col-extra">Agent configuration and tools</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_usage_logs</span><span class="schema-col-type"></span><span class="schema-col-extra">Per-user AI usage tracking</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_model_comparison</span><span class="schema-col-type"></span><span class="schema-col-extra">A/B model comparisons</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ===== RAG & EMBEDDINGS ===== -->
+    <div class="schema-category" id="cat-rag">
+      <div class="schema-category-header" onclick="toggleCategory('cat-rag')" style="border-left-color:var(--purple-primary);">
+        <span class="schema-cat-chevron">&#x25B6;</span>
+        &#x1F50D; RAG &amp; Vector Embeddings
+        <span class="cat-count">9 tables</span>
+      </div>
+      <div class="schema-category-body">
+
+        <div class="schema-table" id="tbl-rag-docs">
+          <div class="schema-table-header" onclick="toggleTable('tbl-rag-docs')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">rag_documents</span>
+            <span class="schema-table-count">15 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">file_name</span><span class="schema-col-type">VARCHAR(500)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">file_type</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">file_hash</span><span class="schema-col-type">VARCHAR(64)</span><span class="schema-col-badge uq">UQ</span></div>
+            <div class="schema-col"><span class="schema-col-name">extracted_text</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">ocr_text</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">processing_status</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-extra">DEFAULT 'pending'</span></div>
+            <div class="schema-col"><span class="schema-col-name">embedding_status</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-extra">DEFAULT 'pending'</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">metadata</span><span class="schema-col-type">JSONB</span></div>
+            <div class="schema-col"><span class="schema-col-name">+5 more...</span><span class="schema-col-type"></span><span class="schema-col-extra">file_size, collection_id, timestamps</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-rag-chunks">
+          <div class="schema-table-header" onclick="toggleTable('tbl-rag-chunks')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">rag_document_chunks</span>
+            <span class="schema-table-count">8 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">document_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">chunk_index</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">chunk_text</span><span class="schema-col-type">TEXT</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">chunk_embedding</span><span class="schema-col-type">vector(384)</span><span class="schema-col-badge vec">VEC</span></div>
+            <div class="schema-col"><span class="schema-col-name">chunk_size</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">metadata</span><span class="schema-col-type">JSONB</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-fc-embed">
+          <div class="schema-table-header" onclick="toggleTable('tbl-fc-embed')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">flashcard_embeddings</span>
+            <span class="schema-table-count">10 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">flashcard_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">front_embedding</span><span class="schema-col-type">vector(384)</span><span class="schema-col-badge vec">VEC</span></div>
+            <div class="schema-col"><span class="schema-col-name">back_embedding</span><span class="schema-col-type">vector(384)</span><span class="schema-col-badge vec">VEC</span></div>
+            <div class="schema-col"><span class="schema-col-name">combined_embedding</span><span class="schema-col-type">vector(384)</span><span class="schema-col-badge vec">VEC</span></div>
+            <div class="schema-col"><span class="schema-col-name">theme</span><span class="schema-col-type">VARCHAR(255)</span></div>
+            <div class="schema-col"><span class="schema-col-name">difficulty</span><span class="schema-col-type">VARCHAR(50)</span></div>
+            <div class="schema-col"><span class="schema-col-name">created_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+            <div class="schema-col"><span class="schema-col-name">updated_at</span><span class="schema-col-type">TIMESTAMPTZ</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-more-rag">
+          <div class="schema-table-header" onclick="toggleTable('tbl-more-rag')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">+ 6 more RAG tables</span>
+            <span class="schema-table-count">see SQL files</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">document_embeddings</span><span class="schema-col-type"></span><span class="schema-col-extra">Document vector storage</span></div>
+            <div class="schema-col"><span class="schema-col-name">document_collections</span><span class="schema-col-type"></span><span class="schema-col-extra">Vector collection grouping</span></div>
+            <div class="schema-col"><span class="schema-col-name">embedding_models</span><span class="schema-col-type"></span><span class="schema-col-extra">Model registry (dims, config)</span></div>
+            <div class="schema-col"><span class="schema-col-name">conversation_embeddings</span><span class="schema-col-type"></span><span class="schema-col-extra">Chat context vectors</span></div>
+            <div class="schema-col"><span class="schema-col-name">semantic_search_cache</span><span class="schema-col-type"></span><span class="schema-col-extra">Query result caching</span></div>
+            <div class="schema-col"><span class="schema-col-name">ocr_processing_results</span><span class="schema-col-type"></span><span class="schema-col-extra">OCR extraction data</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ===== KNOWLEDGE GRAPH ===== -->
+    <div class="schema-category" id="cat-kg">
+      <div class="schema-category-header" onclick="toggleCategory('cat-kg')" style="border-left-color:var(--pink-primary);">
+        <span class="schema-cat-chevron">&#x25B6;</span>
+        &#x1F578;&#xFE0F; Knowledge Graph
+        <span class="cat-count">7 tables</span>
+      </div>
+      <div class="schema-category-body">
+
+        <div class="schema-table" id="tbl-kg-nodes">
+          <div class="schema-table-header" onclick="toggleTable('tbl-kg-nodes')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">kg_nodes</span>
+            <span class="schema-table-count">10 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">entity_name</span><span class="schema-col-type">VARCHAR(500)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">entity_type</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-extra">DEFAULT 'concept'</span></div>
+            <div class="schema-col"><span class="schema-col-name">difficulty_level</span><span class="schema-col-type">VARCHAR(20)</span></div>
+            <div class="schema-col"><span class="schema-col-name">properties</span><span class="schema-col-type">JSONB</span></div>
+            <div class="schema-col"><span class="schema-col-name">embedding</span><span class="schema-col-type">vector(384)</span><span class="schema-col-badge vec">VEC</span></div>
+            <div class="schema-col"><span class="schema-col-name">document_id</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">collection_id</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">source_text</span><span class="schema-col-type">TEXT</span></div>
+            <div class="schema-col"><span class="schema-col-name">created_at</span><span class="schema-col-type">TIMESTAMP</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-kg-edges">
+          <div class="schema-table-header" onclick="toggleTable('tbl-kg-edges')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">kg_edges</span>
+            <span class="schema-table-count">7 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">source_node_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">target_node_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge fk">FK</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">relationship_type</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-extra">DEFAULT 'related_to'</span></div>
+            <div class="schema-col"><span class="schema-col-name">confidence</span><span class="schema-col-type">FLOAT</span><span class="schema-col-extra">DEFAULT 1.0</span></div>
+            <div class="schema-col"><span class="schema-col-name">study_order</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">properties</span><span class="schema-col-type">JSONB</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-more-kg">
+          <div class="schema-table-header" onclick="toggleTable('tbl-more-kg')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">+ 5 more KG tables</span>
+            <span class="schema-table-count">see SQL files</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">kg_user_progress</span><span class="schema-col-type"></span><span class="schema-col-extra">Per-user node mastery tracking</span></div>
+            <div class="schema-col"><span class="schema-col-name">kg_study_paths</span><span class="schema-col-type"></span><span class="schema-col-extra">Ordered learning paths</span></div>
+            <div class="schema-col"><span class="schema-col-name">kg_study_sessions</span><span class="schema-col-type"></span><span class="schema-col-extra">Graph-based study sessions</span></div>
+            <div class="schema-col"><span class="schema-col-name">kg_entity_extractions</span><span class="schema-col-type"></span><span class="schema-col-extra">Cached entity extraction results</span></div>
+            <div class="schema-col"><span class="schema-col-name">kg_graph_questions</span><span class="schema-col-type"></span><span class="schema-col-extra">Questions from graph relationships</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ===== AI TUTOR ===== -->
+    <div class="schema-category" id="cat-tutor">
+      <div class="schema-category-header" onclick="toggleCategory('cat-tutor')" style="border-left-color:var(--teal-primary);">
+        <span class="schema-cat-chevron">&#x25B6;</span>
+        &#x1F393; AI Tutor Sessions
+        <span class="cat-count">6 tables</span>
+      </div>
+      <div class="schema-category-body">
+
+        <div class="schema-table" id="tbl-tutor-sessions">
+          <div class="schema-table-header" onclick="toggleTable('tbl-tutor-sessions')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">ai_tutor_sessions</span>
+            <span class="schema-table-count">10 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_id</span><span class="schema-col-type">INTEGER</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">collection_id</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">session_key</span><span class="schema-col-type">VARCHAR(100)</span><span class="schema-col-badge uq">UQ</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">topic</span><span class="schema-col-type">VARCHAR(500)</span></div>
+            <div class="schema-col"><span class="schema-col-name">mode</span><span class="schema-col-type">VARCHAR(50)</span><span class="schema-col-extra">DEFAULT 'text'</span></div>
+            <div class="schema-col"><span class="schema-col-name">is_active</span><span class="schema-col-type">BOOLEAN</span><span class="schema-col-extra">DEFAULT true</span></div>
+            <div class="schema-col"><span class="schema-col-name">message_count</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">created_at</span><span class="schema-col-type">TIMESTAMP</span></div>
+            <div class="schema-col"><span class="schema-col-name">ended_at</span><span class="schema-col-type">TIMESTAMP</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-more-tutor">
+          <div class="schema-table-header" onclick="toggleTable('tbl-more-tutor')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">+ 5 more tutor tables</span>
+            <span class="schema-table-count">see SQL files</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">ai_tutor_messages</span><span class="schema-col-type"></span><span class="schema-col-extra">Messages with model, audio, KG context</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_tutor_session_states</span><span class="schema-col-type"></span><span class="schema-col-extra">Session context snapshots for resume</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_tutor_stream_events</span><span class="schema-col-type"></span><span class="schema-col-extra">Real-time streaming event log</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_tutor_voice_logs</span><span class="schema-col-type"></span><span class="schema-col-extra">STT/TTS processing audit trail</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_tutor_user_preferences</span><span class="schema-col-type"></span><span class="schema-col-extra">Voice, mode, difficulty prefs</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ===== MODEL MONITORING & ADMIN ===== -->
+    <div class="schema-category" id="cat-monitor">
+      <div class="schema-category-header" onclick="toggleCategory('cat-monitor')" style="border-left-color:var(--orange-primary);">
+        <span class="schema-cat-chevron">&#x25B6;</span>
+        &#x1F4CA; Model Monitoring &amp; Administration
+        <span class="cat-count">19 tables</span>
+      </div>
+      <div class="schema-category-body">
+
+        <div class="schema-table" id="tbl-model-health">
+          <div class="schema-table-header" onclick="toggleTable('tbl-model-health')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">model_health_logs</span>
+            <span class="schema-table-count">15 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">model_id</span><span class="schema-col-type">VARCHAR(100)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">model_name</span><span class="schema-col-type">VARCHAR(255)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">status</span><span class="schema-col-type">VARCHAR(20)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">is_available</span><span class="schema-col-type">BOOLEAN</span></div>
+            <div class="schema-col"><span class="schema-col-name">ram_usage_gb</span><span class="schema-col-type">REAL</span></div>
+            <div class="schema-col"><span class="schema-col-name">gpu_usage_percent</span><span class="schema-col-type">REAL</span></div>
+            <div class="schema-col"><span class="schema-col-name">response_time_ms</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">queue_length</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">error_count_session</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">DEFAULT 0</span></div>
+            <div class="schema-col"><span class="schema-col-name">+5 more...</span><span class="schema-col-type"></span><span class="schema-col-extra">cpu, inference, check type, timestamps</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-model-perf">
+          <div class="schema-table-header" onclick="toggleTable('tbl-model-perf')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">model_performance_metrics</span>
+            <span class="schema-table-count">25 cols</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">id</span><span class="schema-col-type">SERIAL</span><span class="schema-col-badge pk">PK</span></div>
+            <div class="schema-col"><span class="schema-col-name">model_id</span><span class="schema-col-type">VARCHAR(100)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">period_start / period_end</span><span class="schema-col-type">TIMESTAMPTZ</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">period_type</span><span class="schema-col-type">VARCHAR(20)</span><span class="schema-col-badge nn">NN</span></div>
+            <div class="schema-col"><span class="schema-col-name">total_requests</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">successful_requests</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">failed_requests</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">p50/p90/p95/p99 response</span><span class="schema-col-type">INTEGER</span><span class="schema-col-extra">Latency percentiles</span></div>
+            <div class="schema-col"><span class="schema-col-name">total_input/output_tokens</span><span class="schema-col-type">INTEGER</span></div>
+            <div class="schema-col"><span class="schema-col-name">avg_quality_score</span><span class="schema-col-type">REAL</span></div>
+            <div class="schema-col"><span class="schema-col-name">+10 more...</span><span class="schema-col-type"></span><span class="schema-col-extra">RAM, queue, cost, parsing rate</span></div>
+          </div>
+        </div>
+
+        <div class="schema-table" id="tbl-more-monitor">
+          <div class="schema-table-header" onclick="toggleTable('tbl-more-monitor')">
+            <span class="schema-table-chevron">&#x25B6;</span>
+            <span class="schema-table-name">+ 17 more monitoring/admin tables</span>
+            <span class="schema-table-count">see SQL files</span>
+          </div>
+          <div class="schema-table-body">
+            <div class="schema-col"><span class="schema-col-name">model_inference_log</span><span class="schema-col-type"></span><span class="schema-col-extra">Per-inference detailed logging</span></div>
+            <div class="schema-col"><span class="schema-col-name">model_config_history</span><span class="schema-col-type"></span><span class="schema-col-extra">Config change audit trail</span></div>
+            <div class="schema-col"><span class="schema-col-name">model_alert_rules</span><span class="schema-col-type"></span><span class="schema-col-extra">Threshold-based alert rules</span></div>
+            <div class="schema-col"><span class="schema-col-name">model_alerts</span><span class="schema-col-type"></span><span class="schema-col-extra">Triggered alert instances</span></div>
+            <div class="schema-col"><span class="schema-col-name">database_backups</span><span class="schema-col-type"></span><span class="schema-col-extra">Backup tracking and checksums</span></div>
+            <div class="schema-col"><span class="schema-col-name">admin_audit_log</span><span class="schema-col-type"></span><span class="schema-col-extra">Admin action audit trail</span></div>
+            <div class="schema-col"><span class="schema-col-name">system_alerts</span><span class="schema-col-type"></span><span class="schema-col-extra">System-wide alert management</span></div>
+            <div class="schema-col"><span class="schema-col-name">database_query_log</span><span class="schema-col-type"></span><span class="schema-col-extra">SQL query execution logging</span></div>
+            <div class="schema-col"><span class="schema-col-name">database_maintenance_history</span><span class="schema-col-type"></span><span class="schema-col-extra">VACUUM, ANALYZE, etc. history</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_sessions</span><span class="schema-col-type"></span><span class="schema-col-extra">JWT session storage</span></div>
+            <div class="schema-col"><span class="schema-col-name">cache_entries</span><span class="schema-col-type"></span><span class="schema-col-extra">General-purpose KV cache</span></div>
+            <div class="schema-col"><span class="schema-col-name">rate_limits</span><span class="schema-col-type"></span><span class="schema-col-extra">Per-endpoint rate limiting</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_preferences</span><span class="schema-col-type"></span><span class="schema-col-extra">User KV preferences store</span></div>
+            <div class="schema-col"><span class="schema-col-name">user_ai_preferences</span><span class="schema-col-type"></span><span class="schema-col-extra">AI-specific JSONB preferences</span></div>
+            <div class="schema-col"><span class="schema-col-name">app_settings</span><span class="schema-col-type"></span><span class="schema-col-extra">Global application settings</span></div>
+            <div class="schema-col"><span class="schema-col-name">license_config</span><span class="schema-col-type"></span><span class="schema-col-extra">License tiers, quotas, features</span></div>
+            <div class="schema-col"><span class="schema-col-name">ai_generation_mode_analytics</span><span class="schema-col-type"></span><span class="schema-col-extra">Generation mode tracking</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- /tab-container -->
+
+<!-- Tooltip element -->
+<div class="tooltip" id="tooltip">
+  <div class="tooltip-title" id="tooltipTitle"></div>
+  <div class="tooltip-detail" id="tooltipDetail"></div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ===== TAB SWITCHING =====
+  window.switchTab = function(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + tabId).classList.add('active');
+    const btns = document.querySelectorAll('.tab-btn');
+    const tabOrder = ['arch','screens','flows','infra','details','pipeline','schema'];
+    const idx = tabOrder.indexOf(tabId);
+    if (idx >= 0 && btns[idx]) btns[idx].classList.add('active');
+
+    if (tabId === 'arch') {
+      requestAnimationFrame(() => drawArrows());
+    }
+  };
+
+  // ===== DETAIL TOGGLE =====
+  window.toggleDetail = function(id) {
+    const card = document.getElementById(id);
+    if (card) card.classList.toggle('open');
+  };
+
+  window.toggleCategory = function(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('open');
+  };
+
+  window.toggleTable = function(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('open');
+  };
+
+  // ===== TOOLTIP =====
+  const tooltip = document.getElementById('tooltip');
+  const tooltipTitle = document.getElementById('tooltipTitle');
+  const tooltipDetail = document.getElementById('tooltipDetail');
+
+  document.querySelectorAll('.node[data-tooltip]').forEach(node => {
+    node.addEventListener('mouseenter', function(e) {
+      tooltipTitle.textContent = this.querySelector('.node-name').textContent;
+      tooltipDetail.textContent = this.getAttribute('data-tooltip');
+      tooltip.classList.add('visible');
+    });
+    node.addEventListener('mousemove', function(e) {
+      let x = e.clientX + 16;
+      let y = e.clientY + 16;
+      const rect = tooltip.getBoundingClientRect();
+      if (x + rect.width > window.innerWidth - 20) x = e.clientX - rect.width - 16;
+      if (y + rect.height > window.innerHeight - 20) y = e.clientY - rect.height - 16;
+      tooltip.style.left = x + 'px';
+      tooltip.style.top = y + 'px';
+    });
+    node.addEventListener('mouseleave', function() {
+      tooltip.classList.remove('visible');
+    });
+  });
+
+  // ===== SVG ARROWS =====
+  function getNodeCenter(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const svgRect = document.getElementById('archSvg').getBoundingClientRect();
+    return {
+      x: rect.left + rect.width / 2 - svgRect.left,
+      y: rect.top + rect.height / 2 - svgRect.top,
+      top: rect.top - svgRect.top,
+      bottom: rect.bottom - svgRect.top,
+      left: rect.left - svgRect.left,
+      right: rect.right - svgRect.left,
+      width: rect.width,
+      height: rect.height
+    };
+  }
+
+  function createArrowPath(from, to, color, curveOffset) {
+    if (!from || !to) return '';
+    const startX = from.x;
+    const startY = from.bottom;
+    const endX = to.x;
+    const endY = to.top;
+    const midY = (startY + endY) / 2;
+    const cx = curveOffset || 0;
+
+    return '<path class="flow-arrow ' + color + '"' +
+      ' d="M ' + startX + ' ' + startY +
+      ' C ' + (startX + cx) + ' ' + midY + ', ' + (endX - cx) + ' ' + midY + ', ' + endX + ' ' + endY + '"' +
+      ' marker-end="url(#arrowhead-' + color + ')" />';
+  }
+
+  function drawArrows() {
+    const svg = document.getElementById('archSvg');
+    const diagram = document.getElementById('archDiagram');
+    if (!svg || !diagram) return;
+
+    const diagramRect = diagram.getBoundingClientRect();
+    svg.setAttribute('width', diagramRect.width);
+    svg.setAttribute('height', diagramRect.height);
+    svg.style.width = diagramRect.width + 'px';
+    svg.style.height = diagramRect.height + 'px';
+
+    const colors = ['purple','blue','green','orange','cyan','pink','red'];
+    const colorMap = {
+      purple: '#a78bfa', blue: '#60a5fa', green: '#34d399',
+      orange: '#fbbf24', cyan: '#22d3ee', pink: '#f472b6', red: '#f87171'
+    };
+
+    let defs = '<defs>';
+    colors.forEach(function(c) {
+      defs += '<marker id="arrowhead-' + c + '" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">' +
+        '<polygon points="0 0, 8 3, 0 6" fill="' + colorMap[c] + '" opacity="0.7"/>' +
+        '</marker>';
+    });
+    defs += '</defs>';
+
+    let paths = '';
+
+    // Client -> Gateway
+    const frontend = getNodeCenter('node-frontend');
+    const mobile = getNodeCenter('node-mobile');
+    const gateway = getNodeCenter('node-gateway');
+    const apisix = getNodeCenter('node-apisix');
+
+    paths += createArrowPath(frontend, gateway, 'purple', -20);
+    paths += createArrowPath(mobile, gateway, 'purple', 20);
+
+    // Gateway -> Core Services
+    const flashcards = getNodeCenter('node-flashcards');
+    const study = getNodeCenter('node-study');
+    const aiChat = getNodeCenter('node-ai-chat');
+    const documents = getNodeCenter('node-documents');
+    const auth = getNodeCenter('node-auth');
+
+    paths += createArrowPath(gateway, flashcards, 'pink', -60);
+    paths += createArrowPath(gateway, study, 'pink', -30);
+    paths += createArrowPath(gateway, aiChat, 'pink', 0);
+    paths += createArrowPath(gateway, documents, 'pink', 30);
+    paths += createArrowPath(gateway, auth, 'pink', 60);
+
+    // AI Chat -> AI/ML Layer
+    const ollama = getNodeCenter('node-ollama');
+    const orchestra = getNodeCenter('node-orchestra');
+
+    if (aiChat && ollama) {
+      var startX = aiChat.left + 10;
+      var startY = aiChat.bottom;
+      var endX = ollama.x;
+      var endY = ollama.top;
+      var midY = (startY + endY) / 2;
+      paths += '<path class="flow-arrow green"' +
+        ' d="M ' + startX + ' ' + startY + ' C ' + (startX - 40) + ' ' + midY + ', ' + (endX - 30) + ' ' + midY + ', ' + endX + ' ' + endY + '"' +
+        ' marker-end="url(#arrowhead-green)" />';
+    }
+
+    if (aiChat && orchestra) {
+      var startX2 = aiChat.x;
+      var startY2 = aiChat.bottom;
+      var endX2 = orchestra.x;
+      var endY2 = orchestra.top;
+      var midY2 = (startY2 + endY2) / 2;
+      paths += '<path class="flow-arrow green"' +
+        ' d="M ' + startX2 + ' ' + startY2 + ' C ' + startX2 + ' ' + midY2 + ', ' + endX2 + ' ' + midY2 + ', ' + endX2 + ' ' + endY2 + '"' +
+        ' marker-end="url(#arrowhead-green)" />';
+    }
+
+    // Core -> Infrastructure
+    const postgres = getNodeCenter('node-postgres');
+    const redis = getNodeCenter('node-redis');
+    const celery = getNodeCenter('node-celery');
+
+    // Flashcards -> PostgreSQL
+    if (flashcards && postgres) {
+      var sx = flashcards.left + 20;
+      var sy = flashcards.bottom;
+      var ex = postgres.x - 40;
+      var ey = postgres.top;
+      var my = (sy + ey) / 2;
+      paths += '<path class="flow-arrow cyan"' +
+        ' d="M ' + sx + ' ' + sy + ' C ' + (sx - 50) + ' ' + my + ', ' + (ex + 20) + ' ' + my + ', ' + ex + ' ' + ey + '"' +
+        ' marker-end="url(#arrowhead-cyan)" />';
+    }
+
+    // Study -> PostgreSQL
+    if (study && postgres) {
+      var sx3 = study.x;
+      var sy3 = study.bottom;
+      var ex3 = postgres.x - 10;
+      var ey3 = postgres.top;
+      var my3 = (sy3 + ey3) / 2;
+      paths += '<path class="flow-arrow cyan"' +
+        ' d="M ' + sx3 + ' ' + sy3 + ' C ' + sx3 + ' ' + my3 + ', ' + ex3 + ' ' + my3 + ', ' + ex3 + ' ' + ey3 + '"' +
+        ' marker-end="url(#arrowhead-cyan)" />';
+    }
+
+    // Auth -> Redis
+    if (auth && redis) {
+      var sx4 = auth.right - 10;
+      var sy4 = auth.bottom;
+      var ex4 = redis.x;
+      var ey4 = redis.top;
+      var my4 = (sy4 + ey4) / 2;
+      paths += '<path class="flow-arrow cyan"' +
+        ' d="M ' + sx4 + ' ' + sy4 + ' C ' + (sx4 + 60) + ' ' + my4 + ', ' + (ex4 + 20) + ' ' + my4 + ', ' + ex4 + ' ' + ey4 + '"' +
+        ' marker-end="url(#arrowhead-cyan)" />';
+    }
+
+    // AI Chat -> Redis (for pub/sub)
+    if (aiChat && redis) {
+      var sx5 = aiChat.right - 10;
+      var sy5 = aiChat.bottom;
+      var ex5 = redis.x + 20;
+      var ey5 = redis.top;
+      var my5 = (sy5 + ey5) / 2;
+      paths += '<path class="flow-arrow cyan"' +
+        ' d="M ' + sx5 + ' ' + sy5 + ' C ' + (sx5 + 40) + ' ' + my5 + ', ' + (ex5 - 10) + ' ' + my5 + ', ' + ex5 + ' ' + ey5 + '"' +
+        ' marker-end="url(#arrowhead-cyan)" />';
+    }
+
+    svg.innerHTML = defs + paths;
+  }
+
+  // Draw arrows on load and resize
+  window.addEventListener('load', function() {
+    setTimeout(drawArrows, 100);
+  });
+  window.addEventListener('resize', drawArrows);
+})();
+</script>
+</body>
+</html>

@@ -21,7 +21,7 @@ services:
     image: pgvector/pgvector:pg17
     container_name: yamil-browser-db
     ports:
-      - "5433:5432"                 # 5433 to avoid conflict with other postgres instances
+      - "127.0.0.1:5433:5432"       # 5433 to avoid conflict with other postgres instances; bound to localhost only
     environment:
       - POSTGRES_DB=yamil_browser
       - POSTGRES_USER=yamil_browser
