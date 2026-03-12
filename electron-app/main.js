@@ -1280,18 +1280,27 @@ app.whenReady().then(() => {
       const filename = item.getFilename()
       const totalBytes = item.getTotalBytes()
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
-      const savePath = item.getSavePath()
 
-      // Notify renderer of new download
-      if (mainWindow) {
-        mainWindow.webContents.send('download-started', {
-          id, filename, totalBytes, savePath, state: 'progressing', received: 0
-        })
-      }
-
-      activeDownloads.set(id, item)
+      // Wait for the save dialog — only track after the user picks a path
+      // Electron shows the save dialog automatically; if the user cancels,
+      // the item state goes to 'cancelled' without us ever notifying the renderer.
+      let notified = false
 
       item.on('updated', (_e, state) => {
+        const savePath = item.getSavePath()
+        // Only start tracking once a save path is set (user confirmed the dialog)
+        if (!savePath) return
+
+        if (!notified) {
+          notified = true
+          activeDownloads.set(id, item)
+          if (mainWindow) {
+            mainWindow.webContents.send('download-started', {
+              id, filename, totalBytes: item.getTotalBytes(), savePath, state: 'progressing', received: 0
+            })
+          }
+        }
+
         if (mainWindow) {
           mainWindow.webContents.send('download-progress', {
             id, received: item.getReceivedBytes(), totalBytes: item.getTotalBytes(),
@@ -1303,9 +1312,10 @@ app.whenReady().then(() => {
 
       item.once('done', (_e, state) => {
         activeDownloads.delete(id)
-        if (mainWindow) {
+        // Only notify renderer if we actually tracked this download
+        if (notified && mainWindow) {
           mainWindow.webContents.send('download-done', {
-            id, filename, state, // 'completed' | 'cancelled' | 'interrupted'
+            id, filename, state,
             savePath: item.getSavePath(),
             totalBytes: item.getTotalBytes()
           })

@@ -2765,7 +2765,8 @@ function formatBytes (b) {
 // Wire IPC download events
 window.YAMIL_IPC?.onDownloadStarted((d) => {
   liveDownloads.set(d.id, { filename: d.filename, received: 0, totalBytes: d.totalBytes, state: 'progressing', paused: false })
-  openDownloadsPanel()
+  // Show a non-intrusive status bar indicator instead of auto-opening the panel
+  statusLoad.textContent = `↓ ${d.filename}`
 })
 
 window.YAMIL_IPC?.onDownloadProgress((d) => {
