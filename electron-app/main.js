@@ -11,6 +11,12 @@ const CTRL_PORT    = parseInt(process.env.CTRL_PORT || '9300', 10)
 const BROWSER_SVC  = process.env.BROWSER_SERVICE || 'http://127.0.0.1:4000'
 const START_MINIMIZED = process.argv.includes('--minimized')
 
+// ── Chrome-compatible rendering flags ───────────────────────────────
+// Match Chrome's rendering pipeline so pages look identical
+app.commandLine.appendSwitch('enable-features', 'SharedArrayBuffer')
+app.commandLine.appendSwitch('enable-gpu-rasterization')
+app.commandLine.appendSwitch('enable-zero-copy')
+app.commandLine.appendSwitch('ignore-gpu-blocklist')
 
 let mainWindow
 let tray = null

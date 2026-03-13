@@ -140,6 +140,7 @@ function createTab (url, activate = true, type = 'yamil') {
     wv.setAttribute('allowpopups', '')
     wv.setAttribute('partition', getPartition())
     wv.setAttribute('webpreferences', 'contextIsolation=yes, sandbox=no')
+    wv.setAttribute('useragent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36')
     wv.src = url
     container.appendChild(wv)
     tab.webview = wv
