@@ -16,14 +16,14 @@
     yamil-local tunnel    yamil-qnap tunnel
          |                      |
    Windows Server          QNAP NAS
-   192.168.1.190           192.168.1.188
+   192.168.1.190           192.168.0.102
    (LW + YAMIL App)       (Storage + Monitoring)
 ```
 
 | Host | IP | Role | Always On |
 |------|-----|------|-----------|
 | Windows Server (Logic Weaver) | 192.168.1.190 | YAMIL app, all LW microservices, Grafana, Loki | Yes |
-| QNAP NAS (FridayAI / TS-251+) | 192.168.1.188 | Storage, Uptime Kuma, ntfy, cloudflared | Yes |
+| QNAP NAS (FridayAI / TS-251+) | 192.168.0.102 | Storage, Uptime Kuma, ntfy, cloudflared | Yes |
 
 ---
 
@@ -42,7 +42,7 @@
 - **Binary**: `C:\project\Ai-Tools\cloudflared.exe`
 - **Status**: Windows service (currently DISABLED — start manually or re-enable)
 
-### yamil-qnap (QNAP NAS — 192.168.1.188)
+### yamil-qnap (QNAP NAS — 192.168.0.102)
 
 | Hostname | Service | Purpose |
 |----------|---------|---------|
@@ -58,32 +58,32 @@
 
 ### Uptime Kuma (QNAP :3001)
 
-- **URL**: http://192.168.1.188:3001
+- **URL**: http://192.168.0.102:3001
 - **Monitors**: 23 active, all services
 - **Alerts**: Sends to ntfy topic `yamil-alerts`
 
 ### ntfy Push Notifications (QNAP :8090)
 
-- **URL**: http://192.168.1.188:8090/yamil-alerts
+- **URL**: http://192.168.0.102:8090/yamil-alerts
 - **External**: https://ntfy.yamil-ai.com/yamil-alerts (via Cloudflare tunnel)
 - **Purpose**: Receive Uptime Kuma alerts on phone when away from home network
 - **Docker**: Part of `yamil-monitor` stack on QNAP
 
 ### Grafana (QNAP :3000)
 
-- **URL**: http://192.168.1.188:3000
+- **URL**: http://192.168.0.102:3000
 - **Credentials**: admin / Ashley2029
 - **Data source**: Loki
 - **Purpose**: Log visualization, dashboards
 
 ### Loki (QNAP :3100)
 
-- **URL**: http://192.168.1.188:3100
+- **URL**: http://192.168.0.102:3100
 - **Purpose**: Log aggregation from all services
 
 ### Prometheus (QNAP :9090)
 
-- **URL**: http://192.168.1.188:9090
+- **URL**: http://192.168.0.102:9090
 - **Purpose**: Metrics scraping from all LW services on Windows
 
 ---
@@ -129,14 +129,14 @@
 
 ## 6. QNAP Access
 
-- **Admin UI**: https://192.168.1.188:8443
+- **Admin UI**: https://192.168.0.102:8443
 - **SSH**: Port 2222, user: admin
 - **Container Station**: Installed, manages Docker
 - **QuFirewall**: Installed, v2.5.0
 
 ### QuFirewall API
 
-**Base URL**: `https://192.168.1.188:8443/qufirewall/api/`
+**Base URL**: `https://192.168.0.102:8443/qufirewall/api/`
 **Auth**: Pass `sid=<NAS_SID>` as query parameter (get SID from QTS login cookie)
 
 | Endpoint | Method | Purpose |

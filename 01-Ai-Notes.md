@@ -90,3 +90,45 @@
 ### Files Created
 - `/Users/yaml/Project/Git/Yamil/Ai-Tools/136-MonitoringPipeline.md`
 - `/Users/yaml/Project/Git/Yamil/Ai-Tools/Memobyte-Infrastructure-Architecture-Diagram.html`
+
+## 2026-03-14 — Docker Pipeline + Vault Fix + GHCR Auth
+
+### Task
+- Fix missing .env files, broken GHCR auth, and Vault on Docker
+- Create Docker image pipeline instructions (137-DockerImagePipeline.md)
+- Update 135-InfrastructureHA.md for MacBook Air as primary dev with Docker
+
+### Steps Taken
+1. **GHCR auth fixed**: `gh auth token | docker login ghcr.io -u velezy --password-stdin` → Login Succeeded
+2. **Discovered active repo**: Running containers come from `parser_lite.py/logic-weaver/` (not `Yamil/parser_lite/logic-weaver/`)
+   - `parser_lite.py` has all .env files: `.env`, `.env.local`, `.env.prod`, `.env.secrets`
+   - `Yamil/parser_lite` only has templates (`.env.example`, `.env.prod.template`)
+3. **Vault server crashed**: `logic-weaver-vault-1` had Exit 255 for 9 days
+   - Also down: postgres, redis, etcd, apisix, envoy-external (all Exit 255, 9 days)
+   - Vault agent was running but failing ("token file validation failed" every ~5 min)
+4. **Fixed Vault chain**:
+   - `docker compose up -d vault` → started
+   - `docker compose up -d vault-unseal` → "Vault unsealed"
+   - `docker compose restart vault-agent` → "renewed auth token", rendered fresh DB creds
+   - Fresh dynamic credentials in `vault-secrets/env` (new Vault-generated Postgres user/pass)
+5. **Brought full stack back**: `docker compose up -d` → 25 services running, all healthy
+6. **Known issues (not critical)**:
+   - `certbot` — crash loop, missing `CLOUDFLARE_API_TOKEN` env var
+   - `infinity` (embedding model) — exited 2 weeks ago
+   - `credential-watcher` — project path mismatch ("project-" vs "logic-weaver-")
+
+### Key Findings
+- **Vault manages secrets dynamically**: DB credentials auto-rotate via `vault-secrets/env`
+- **No manual .env copying needed**: Vault renders secrets from its encrypted store
+- **Two repos**: `parser_lite.py` (active, has .env files + running stack) vs `Yamil/parser_lite` (templates only)
+
+### Files Created/Modified
+- Created: `/Users/yaml/Project/Git/Yamil/Ai-Tools/137-DockerImagePipeline.md`
+- Modified: `/Users/yaml/Project/Git/Yamil/Ai-Tools/135-InfrastructureHA.md`
+
+### Next Steps
+- Commit and push 135 + 137 docs to Ai-Tools repo
+- On Windows: set up Docker buildx, GHCR auth, create push-images.ps1
+- On Mac: create docker-compose.override.yml for GHCR pulls (after Windows pushes)
+- Fix certbot CLOUDFLARE_API_TOKEN
+- Fix credential-watcher project path mismatch
