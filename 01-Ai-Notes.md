@@ -294,3 +294,35 @@ After deploying VNC auth changes, `docker compose up -d frontend` cascaded and *
 - **Vault dynamic credentials expire**: When postgres restarts, existing Vault-generated DB users may become invalid
 - **JWT_SECRET_KEY in `.env.prod`** becomes stale when Vault rotates it — the vault-rendered file should always be loaded last (and it is, but service-specific files load even later)
 - **Always recreate ALL dependent services** after recreating postgres/auth, not just the target service
+
+---
+
+## 2026-03-15: Security Audit — Secrets Hardened + HIPAA/Attack Assessment
+
+### Security Hardening Completed
+1. **Moved Cloudflare tokens to AWS Secrets Manager** — `CLOUDFLARE_TUNNEL_TOKEN` and `CLOUDFLARE_API_TOKEN` added to `yamil/cloudflare/tunnel` secret in AWS SM
+2. **Cleaned `.env.prod`** — all hardcoded secret values replaced with empty placeholders (Vault overrides them at runtime)
+3. **Confirmed Vault rotation running** — vault-agent renders templates every 5 minutes with fresh credentials
+
+### Gateway Comparison: YAMIL vs MuleSoft/Kong/Apigee
+- Performed comprehensive codebase audit of all security modules
+- YAMIL has comparable security depth to Kong OSS: rate limiting, circuit breaker, mTLS, bot detection, ACL, CORS, injection protection
+- Exceeds Kong in some areas (Python code sandboxing, behavioral bot analysis)
+- Gaps vs commercial products: automated key rotation, BAA management, breach notification
+
+### HIPAA Compliance Assessment
+- **~80% ready**, 8 gaps identified
+- Created `doc/logicweaver/improvements/130-HIPAACompliance-SecurityPosture.md` with full plan
+- Estimated ~6 months (13 sprints) to full compliance
+- Most gaps are process/documentation, not code
+
+### Attack Surface Assessment (Grade: B+)
+- **Strong**: TLS, injection protection (5 types), brute force lockout, 4-tier rate limiting, circuit breaker, bot detection, mTLS
+- **Critical gaps found**: Token endpoint has no rate limit, API keys hashed without salt (SHA-256), timing attack on secret comparison, no SSRF protection on upstream URLs
+- **Quick wins (~1 day)**: Rate limit token endpoint, use `hmac.compare_digest()`, block private IPs in upstream_url, suppress stack traces, enforce strict CORS
+- Full details in `130-HIPAACompliance-SecurityPosture.md`
+
+### Next Steps
+- Close 6 critical/high security gaps (~1-2 sprints)
+- Start HIPAA Phase 1: BAA enforcement, risk assessment documentation, DR plan
+- Run dependency scanning (Snyk/Trivy) to assess component vulnerabilities
