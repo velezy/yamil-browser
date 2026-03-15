@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, safeStorage } = require('electron')
+const { app, BaseWindow, WebContentsView, ipcMain, Tray, Menu, nativeImage, session, safeStorage } = require('electron')
 const path = require('path')
 const http  = require('http')
 const fs    = require('fs')
@@ -13,13 +13,522 @@ const START_MINIMIZED = process.argv.includes('--minimized')
 
 // ── Chrome-compatible rendering flags ───────────────────────────────
 // Match Chrome's rendering pipeline so pages look identical
-app.commandLine.appendSwitch('enable-features', 'SharedArrayBuffer')
+
+// GPU & compositing
 app.commandLine.appendSwitch('enable-gpu-rasterization')
 app.commandLine.appendSwitch('enable-zero-copy')
 app.commandLine.appendSwitch('ignore-gpu-blocklist')
+app.commandLine.appendSwitch('force_high_performance_gpu')
 
-let mainWindow
+// ANGLE backend: Metal on macOS (Chrome default since ~113)
+if (process.platform === 'darwin') {
+  app.commandLine.appendSwitch('use-angle', 'metal')
+}
+
+// Font rendering: LCD subpixel text on Windows/Linux
+app.commandLine.appendSwitch('enable-lcd-text')
+
+// Smooth scrolling (Chrome default)
+app.commandLine.appendSwitch('enable-smooth-scrolling')
+
+// Prevent background throttling (important for browser with multiple tabs)
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('disable-background-timer-throttling')
+
+// Combined --enable-features (MUST be a single call, comma-separated)
+app.commandLine.appendSwitch('enable-features', [
+  'SharedArrayBuffer',
+  'OverlayScrollbar',
+  'OverlayScrollbarFlashAfterAnyScrollUpdate',
+  'OverlayScrollbarFlashWhenMouseEnter',
+  'BackForwardCache',
+  'CanvasOopRasterization',
+  'WebAssemblyLazyCompilation',
+  'PlatformHEVCDecoderSupport',
+].join(','))
+
+// Disable features that hurt Electron browser apps
+app.commandLine.appendSwitch('disable-features', [
+  'WebContentsOcclusion',  // Prevent hidden window from freezing renderers
+].join(','))
+
+let mainWindow     // BaseWindow
+let toolbarView    // WebContentsView for toolbar UI (tab bar, navbar, sidebar, status bar)
 let tray = null
+
+// ── Chrome UA for spoofing ──────────────────────────────────────────
+const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+
+// ══════════════════════════════════════════════════════════════════════
+// ── TAB MANAGER (WebContentsView-based) ─────────────────────────────
+// ══════════════════════════════════════════════════════════════════════
+
+class TabManager {
+  constructor () {
+    this.tabs = new Map()   // id → { view: WebContentsView, title, url, favicon, zoom, type }
+    this.activeTabId = null
+    this.nextId = 1
+    this.sidebarOpen = true
+    this.sidebarWidth = 300
+    this.consoleLogs = []       // circular buffer of { ts, level, message, source, line }
+    this.consoleLogsMax = 500
+  }
+
+  createTab (url, activate = true, type = 'yamil') {
+    const id = this.nextId++
+    url = url || 'https://yamil-ai.com'
+
+    if (type === 'yamil') {
+      const yamilSession = session.fromPartition('persist:yamil')
+
+      const view = new WebContentsView({
+        webPreferences: {
+          session: yamilSession,
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: false,
+          webviewTag: false,
+        },
+      })
+
+      const wc = view.webContents
+      wc.setUserAgent(CHROME_UA)
+
+      const tab = { id, view, title: 'New Tab', url, favicon: null, zoom: 0, type: 'yamil' }
+      this.tabs.set(id, tab)
+
+      // Wire webContents events
+      this._wireEvents(tab)
+
+      // Load URL
+      wc.loadURL(url)
+
+      // Add to window but hidden
+      if (mainWindow) {
+        mainWindow.contentView.addChildView(view)
+        view.setVisible(false)
+      }
+
+      if (activate) this.switchTab(id)
+
+      // Notify toolbar
+      this._sendTabEvent('tab-created', { tabId: id, url, type: 'yamil' })
+
+      return { id, url, type: 'yamil' }
+    }
+
+    if (type === 'stealth') {
+      // Stealth tabs use browser-service (no WebContentsView)
+      const tab = { id, view: null, title: 'Stealth Tab', url, favicon: null, zoom: 0, type: 'stealth', sessionId: null }
+      this.tabs.set(id, tab)
+      if (activate) this.switchTab(id)
+      this._sendTabEvent('tab-created', { tabId: id, url, type: 'stealth' })
+      return { id, url, type: 'stealth' }
+    }
+
+    return null
+  }
+
+  switchTab (id) {
+    const tab = this.tabs.get(id)
+    if (!tab) return
+
+    const prevId = this.activeTabId
+    this.activeTabId = id
+
+    // Hide all tab views, show the active one
+    for (const [tid, t] of this.tabs) {
+      if (t.view) {
+        if (tid === id) {
+          t.view.setVisible(true)
+          // Tab view on top — sized to viewport area only, so toolbar
+          // (tab bar, navbar, sidebar, status bar) remains visible around it
+          if (mainWindow) {
+            mainWindow.contentView.removeChildView(t.view)
+            mainWindow.contentView.addChildView(t.view) // append = topmost z-order
+          }
+        } else {
+          t.view.setVisible(false)
+        }
+      }
+    }
+
+    this.layoutViews()
+
+    // Notify toolbar
+    this._sendTabEvent('tab-switched', {
+      tabId: id,
+      url: tab.url,
+      title: tab.title,
+      type: tab.type,
+      canGoBack: tab.view ? tab.view.webContents.canGoBack() : false,
+      canGoForward: tab.view ? tab.view.webContents.canGoForward() : false,
+    })
+  }
+
+  closeTab (id) {
+    const tab = this.tabs.get(id)
+    if (!tab) return
+
+    // If closing the last tab, create a new one first
+    if (this.tabs.size === 1) {
+      this.createTab('https://yamil-ai.com', true)
+    }
+
+    // Remove view
+    if (tab.view) {
+      if (mainWindow) mainWindow.contentView.removeChildView(tab.view)
+      tab.view.webContents.close()
+    }
+
+    // Clean up stealth session
+    if (tab.type === 'stealth' && tab.sessionId) {
+      browserServiceDelete(`/sessions/${tab.sessionId}`).catch(() => {})
+    }
+
+    this.tabs.delete(id)
+
+    // If we closed the active tab, switch to nearest
+    if (this.activeTabId === id) {
+      const ids = [...this.tabs.keys()]
+      if (ids.length > 0) this.switchTab(ids[ids.length - 1])
+    }
+
+    this._sendTabEvent('tab-closed', { tabId: id, remaining: this.tabs.size })
+  }
+
+  getActiveView () {
+    const tab = this.tabs.get(this.activeTabId)
+    return (tab && tab.view) ? tab.view : null
+  }
+
+  getActiveTab () {
+    return this.tabs.get(this.activeTabId) || null
+  }
+
+  getActiveTabInfo () {
+    const tab = this.getActiveTab()
+    if (!tab) return null
+    return { id: tab.id, type: tab.type, url: tab.url, title: tab.title, sessionId: tab.sessionId || null }
+  }
+
+  getTabList () {
+    const result = []
+    for (const [id, tab] of this.tabs) {
+      result.push({
+        id,
+        type: tab.type,
+        url: tab.url,
+        title: tab.title,
+        active: id === this.activeTabId,
+        sessionId: tab.sessionId || null,
+      })
+    }
+    return result
+  }
+
+  // ── Layout: position tab views in the viewport area ──────────────
+
+  layoutViews () {
+    if (!mainWindow) return
+    const bounds = mainWindow.getContentBounds()
+    const { width, height } = bounds
+
+    // Toolbar spans full window
+    if (toolbarView) {
+      toolbarView.setBounds({ x: 0, y: 0, width, height })
+    }
+
+    // Calculate viewport area (below tab bar + navbar, above status bar)
+    const TAB_BAR_H = 34
+    const NAVBAR_H = 42
+    const STATUS_H = 24
+    const topOffset = TAB_BAR_H + NAVBAR_H
+    const sidebarW = this.sidebarOpen ? this.sidebarWidth : 0
+
+    const tabBounds = {
+      x: 0,
+      y: topOffset,
+      width: width - sidebarW,
+      height: height - topOffset - STATUS_H,
+    }
+
+    // Position the active tab view
+    for (const [id, tab] of this.tabs) {
+      if (tab.view) {
+        if (id === this.activeTabId) {
+          tab.view.setBounds(tabBounds)
+        }
+      }
+    }
+  }
+
+  setSidebarOpen (open) {
+    this.sidebarOpen = open
+    this.layoutViews()
+  }
+
+  setBookmarkBarVisible (visible) {
+    // Adjust layout when bookmark bar is toggled
+    this._bookmarkBarVisible = visible
+    this.layoutViews()
+  }
+
+  // Override layoutViews to account for bookmark bar
+  get _topOffset () {
+    const TAB_BAR_H = 34
+    const NAVBAR_H = 42
+    const BMBAR_H = this._bookmarkBarVisible ? 28 : 0
+    return TAB_BAR_H + NAVBAR_H + BMBAR_H
+  }
+
+  // ── Wire webContents events for a tab ────────────────────────────
+
+  _wireEvents (tab) {
+    const wc = tab.view.webContents
+
+    wc.on('did-start-loading', () => {
+      this._sendTabEvent('loading', { tabId: tab.id })
+    })
+
+    wc.on('did-stop-loading', () => {
+      this._sendTabEvent('loaded', { tabId: tab.id })
+      // Inject credential watcher
+      this._injectCredentialWatcher(tab)
+    })
+
+    wc.on('did-navigate', (_e, url) => {
+      tab.url = url
+      this._sendTabEvent('navigated', {
+        tabId: tab.id,
+        url,
+        canGoBack: wc.canGoBack(),
+        canGoForward: wc.canGoForward(),
+      })
+    })
+
+    wc.on('did-navigate-in-page', (_e, url) => {
+      tab.url = url
+      this._sendTabEvent('url-updated', {
+        tabId: tab.id,
+        url,
+        canGoBack: wc.canGoBack(),
+        canGoForward: wc.canGoForward(),
+      })
+    })
+
+    wc.on('page-title-updated', (_e, title) => {
+      tab.title = title
+      this._sendTabEvent('title-updated', { tabId: tab.id, title })
+    })
+
+    wc.on('page-favicon-updated', (_e, favicons) => {
+      if (favicons && favicons.length > 0) {
+        tab.favicon = favicons[0]
+        this._sendTabEvent('favicon-updated', { tabId: tab.id, favicon: favicons[0] })
+      }
+    })
+
+    wc.on('did-fail-load', (_e, errorCode, errorDescription) => {
+      if (errorCode !== -3) {
+        this._sendTabEvent('load-error', { tabId: tab.id, errorCode, errorDescription })
+      }
+    })
+
+    wc.on('did-finish-load', () => {
+      // Check for autofill
+      this._checkAutofill(tab)
+    })
+
+    // Handle target="_blank" links by opening in new tab
+    wc.setWindowOpenHandler(({ url }) => {
+      this.createTab(url, true)
+      return { action: 'deny' }
+    })
+
+    // Find in page results
+    wc.on('found-in-page', (_e, result) => {
+      if (tab.id === this.activeTabId) {
+        this._sendTabEvent('find-result', {
+          tabId: tab.id,
+          activeMatchOrdinal: result.activeMatchOrdinal,
+          matches: result.matches,
+        })
+      }
+    })
+
+    // Console messages
+    wc.on('console-message', (_e, level, message, line, sourceId) => {
+      const levelMap = { 0: 'verbose', 1: 'info', 2: 'warning', 3: 'error' }
+      this.consoleLogs.push({
+        ts: Date.now(),
+        level: levelMap[level] || 'info',
+        message,
+        source: sourceId || '',
+        line: line || 0,
+        tabId: tab.id,
+      })
+      if (this.consoleLogs.length > this.consoleLogsMax) {
+        this.consoleLogs = this.consoleLogs.slice(-this.consoleLogsMax)
+      }
+    })
+
+    // Context menu
+    wc.on('context-menu', (_event, params) => {
+      this._showContextMenu(tab, params)
+    })
+  }
+
+  // ── Native context menu (Phase 10) ────────────────────────────────
+
+  _showContextMenu (tab, params) {
+    const wc = tab.view.webContents
+    const menuItems = []
+
+    if (params.linkURL) {
+      menuItems.push({ label: 'Open Link in New Tab', click: () => this.createTab(params.linkURL, true) })
+      menuItems.push({ label: 'Copy Link Address', click: () => { require('electron').clipboard.writeText(params.linkURL) } })
+      menuItems.push({ type: 'separator' })
+    }
+
+    if (params.mediaType === 'image' && params.srcURL) {
+      menuItems.push({ label: 'Open Image in New Tab', click: () => this.createTab(params.srcURL, true) })
+      menuItems.push({ label: 'Copy Image Address', click: () => { require('electron').clipboard.writeText(params.srcURL) } })
+      menuItems.push({ type: 'separator' })
+    }
+
+    if (params.selectionText) {
+      menuItems.push({ label: 'Copy', click: () => wc.copy() })
+      menuItems.push({ type: 'separator' })
+    }
+
+    if (params.isEditable) {
+      menuItems.push({ label: 'Cut', click: () => wc.cut() })
+      menuItems.push({ label: 'Copy', click: () => wc.copy() })
+      menuItems.push({ label: 'Paste', click: () => wc.paste() })
+      menuItems.push({ label: 'Select All', click: () => wc.selectAll() })
+      menuItems.push({ type: 'separator' })
+    }
+
+    menuItems.push({ label: 'Back', enabled: wc.canGoBack(), click: () => wc.goBack() })
+    menuItems.push({ label: 'Forward', enabled: wc.canGoForward(), click: () => wc.goForward() })
+    menuItems.push({ label: 'Reload', click: () => wc.reload() })
+    menuItems.push({ type: 'separator' })
+    menuItems.push({ label: 'Inspect Element', click: () => wc.inspectElement(params.x, params.y) })
+
+    const menu = Menu.buildFromTemplate(menuItems)
+    menu.popup()
+  }
+
+  // ── Credential injection (Phase 7) ────────────────────────────────
+
+  _injectCredentialWatcher (tab) {
+    const wc = tab.view.webContents
+    wc.executeJavaScript(`(function() {
+      if (window.__yamil_cred_observer) return;
+      window.__yamil_cred_observer = true;
+
+      function watchForms() {
+        const pwFields = document.querySelectorAll('input[type="password"]');
+        if (!pwFields.length) return;
+
+        pwFields.forEach(pw => {
+          if (pw.__yamil_watched) return;
+          pw.__yamil_watched = true;
+
+          const form = pw.closest('form') || pw.parentElement?.closest('div');
+          if (!form) return;
+
+          function captureAndSave(e) {
+            const password = pw.value;
+            if (!password) return;
+            let username = '';
+            const container = pw.closest('form') || document.body;
+            const inputs = container.querySelectorAll('input[type="email"], input[type="text"], input[name*="user"], input[name*="email"], input[name*="login"], input[name*="account"], input[autocomplete="username"]');
+            for (const inp of inputs) {
+              if (inp.value && inp.value.trim()) { username = inp.value.trim(); break; }
+            }
+            if (!username) {
+              for (const inp of document.querySelectorAll('input[type="email"], input[type="text"]')) {
+                if (inp.value && inp.value.trim() && inp !== pw && !inp.type.match(/hidden|search/)) {
+                  username = inp.value.trim(); break;
+                }
+              }
+            }
+            if (!username || !password) return;
+
+            const domain = location.hostname.replace(/^www\\\\./, '');
+            function bestSelector(el) {
+              if (el.id) return '#' + el.id;
+              if (el.name) return el.tagName.toLowerCase() + '[name="' + el.name + '"]';
+              if (el.type) return el.tagName.toLowerCase() + '[type="' + el.type + '"]';
+              return el.tagName.toLowerCase();
+            }
+            const usernameField = container.querySelector('input[type="email"], input[type="text"], input[name*="user"], input[name*="email"]');
+            const submitBtn = container.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
+            const formRecipe = {
+              usernameSelector: usernameField ? bestSelector(usernameField) : null,
+              passwordSelector: bestSelector(pw),
+              submitSelector: submitBtn ? bestSelector(submitBtn) : null,
+            };
+            fetch('http://127.0.0.1:9300/credentials/auto-save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ domain, username, password, formUrl: location.href, formRecipe }),
+            }).catch(() => {});
+          }
+
+          if (pw.closest('form')) {
+            pw.closest('form').addEventListener('submit', captureAndSave, { once: true });
+          }
+          pw.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') setTimeout(() => captureAndSave(e), 100);
+          }, { once: true });
+
+          const btns = (pw.closest('form') || pw.parentElement?.closest('div') || document).querySelectorAll('button[type="submit"], button:not([type]), input[type="submit"], [role="button"]');
+          btns.forEach(btn => {
+            const txt = (btn.textContent || btn.value || '').toLowerCase();
+            if (txt.match(/log.?in|sign.?in|submit|continue|next/)) {
+              btn.addEventListener('click', (e) => setTimeout(() => captureAndSave(e), 100), { once: true });
+            }
+          });
+        });
+      }
+
+      watchForms();
+      let _yamilWatchTimer = null;
+      new MutationObserver(() => {
+        if (_yamilWatchTimer) return;
+        _yamilWatchTimer = setTimeout(() => { _yamilWatchTimer = null; watchForms(); }, 2000);
+      }).observe(document.body, { childList: true, subtree: true });
+    })()`, true).catch(() => {})
+  }
+
+  async _checkAutofill (tab) {
+    if (tab.type !== 'yamil' || !tab.view) return
+    const wc = tab.view.webContents
+    try {
+      const hasLogin = await wc.executeJavaScript(`!!document.querySelector('input[type="password"]')`)
+      if (!hasLogin) return
+      const pageUrl = wc.getURL()
+      let domain
+      try { domain = new URL(pageUrl).hostname.replace(/^www\./, '') } catch { return }
+
+      // Notify toolbar to check for autofill
+      this._sendTabEvent('check-autofill', { tabId: tab.id, domain, url: pageUrl })
+    } catch {}
+  }
+
+  // ── Send events to toolbar ────────────────────────────────────────
+
+  _sendTabEvent (type, data) {
+    if (toolbarView && !toolbarView.webContents.isDestroyed()) {
+      toolbarView.webContents.send('tab:event', { type, ...data })
+    }
+  }
+}
+
+const tabManager = new TabManager()
 
 // ── Window control IPC ──────────────────────────────────────────────
 ipcMain.on('toggle-fullscreen', () => {
@@ -33,6 +542,138 @@ ipcMain.on('window-maximize', () => {
   }
 })
 ipcMain.on('window-close', () => { if (mainWindow) mainWindow.close() })
+
+// ── Tab IPC handlers (Phase 3) ─────────────────────────────────────
+
+ipcMain.handle('tab:create', (_e, url, type) => {
+  return tabManager.createTab(url, true, type || 'yamil')
+})
+
+ipcMain.handle('tab:switch', (_e, id) => {
+  tabManager.switchTab(id)
+  return { ok: true }
+})
+
+ipcMain.handle('tab:close', (_e, id) => {
+  tabManager.closeTab(id)
+  return { ok: true, remaining: tabManager.tabs.size }
+})
+
+ipcMain.handle('tab:navigate', (_e, url) => {
+  const view = tabManager.getActiveView()
+  if (!view) return { error: 'no active tab' }
+  view.webContents.loadURL(url)
+  return { ok: true }
+})
+
+ipcMain.handle('tab:goBack', () => {
+  const view = tabManager.getActiveView()
+  if (view && view.webContents.canGoBack()) view.webContents.goBack()
+  return { ok: true }
+})
+
+ipcMain.handle('tab:goForward', () => {
+  const view = tabManager.getActiveView()
+  if (view && view.webContents.canGoForward()) view.webContents.goForward()
+  return { ok: true }
+})
+
+ipcMain.handle('tab:reload', () => {
+  const view = tabManager.getActiveView()
+  if (view) view.webContents.reload()
+  return { ok: true }
+})
+
+ipcMain.handle('tab:eval', (_e, script) => {
+  const view = tabManager.getActiveView()
+  if (!view) return { error: 'no active tab' }
+  return view.webContents.executeJavaScript(script)
+})
+
+ipcMain.handle('tab:zoom', (_e, level) => {
+  const tab = tabManager.getActiveTab()
+  if (!tab || !tab.view) return { error: 'no active tab' }
+  tab.zoom = level
+  tab.view.webContents.setZoomLevel(level)
+  return { ok: true, zoom: level }
+})
+
+ipcMain.handle('tab:find', (_e, text, opts) => {
+  const view = tabManager.getActiveView()
+  if (!view) return { error: 'no active tab' }
+  if (text) {
+    view.webContents.findInPage(text, opts || {})
+  }
+  return { ok: true }
+})
+
+ipcMain.handle('tab:stopFind', () => {
+  const view = tabManager.getActiveView()
+  if (view) view.webContents.stopFindInPage('clearSelection')
+  return { ok: true }
+})
+
+ipcMain.handle('tab:print', () => {
+  const view = tabManager.getActiveView()
+  if (view) view.webContents.print()
+  return { ok: true }
+})
+
+ipcMain.handle('tab:devtools', () => {
+  const view = tabManager.getActiveView()
+  if (!view) return { error: 'no active tab' }
+  if (view.webContents.isDevToolsOpened()) {
+    view.webContents.closeDevTools()
+  } else {
+    view.webContents.openDevTools()
+  }
+  return { ok: true }
+})
+
+ipcMain.handle('tab:getInfo', () => {
+  return tabManager.getActiveTabInfo()
+})
+
+ipcMain.handle('tab:list', () => {
+  return tabManager.getTabList()
+})
+
+ipcMain.handle('tab:getUrl', () => {
+  const tab = tabManager.getActiveTab()
+  if (!tab) return { url: null }
+  if (tab.view) return { url: tab.view.webContents.getURL() }
+  return { url: tab.url }
+})
+
+ipcMain.handle('tab:savePageAs', () => {
+  const view = tabManager.getActiveView()
+  if (!view) return { error: 'no active tab' }
+  return view.webContents.executeJavaScript('document.documentElement.outerHTML')
+})
+
+ipcMain.handle('tab:copyUrl', () => {
+  const tab = tabManager.getActiveTab()
+  if (!tab || !tab.view) return { error: 'no active tab' }
+  const url = tab.view.webContents.getURL()
+  require('electron').clipboard.writeText(url)
+  return { ok: true, url }
+})
+
+ipcMain.handle('tab:viewSource', () => {
+  const tab = tabManager.getActiveTab()
+  if (!tab || !tab.view) return { error: 'no active tab' }
+  const url = tab.view.webContents.getURL()
+  return tabManager.createTab('view-source:' + url, true)
+})
+
+// Sidebar state from toolbar
+ipcMain.on('sidebar-toggled', (_e, open) => {
+  tabManager.setSidebarOpen(open)
+})
+
+ipcMain.on('bookmark-bar-toggled', (_e, visible) => {
+  tabManager.setBookmarkBarVisible(visible)
+})
 
 // ── Custom URL protocol: yamil-browser:// ─────────────────────────────
 if (process.platform === 'win32') {
@@ -58,74 +699,53 @@ function focusWindow () {
   }
 }
 
-// ── Helper: run JS in the active tab's webview ────────────────────────
-// All endpoints that interact with the page go through this helper.
-// It asks the renderer for the active webview and executes code inside it.
+// ── Helper: run JS in the active tab's webContents (direct!) ────────
+// No more renderer IPC chain — this goes straight to the tab.
 
 function execInActiveWebview (script) {
-  if (!mainWindow) return Promise.reject(new Error('no window'))
-  return mainWindow.webContents.executeJavaScript(
-    `(function(){
-      const wv = window._yamil && window._yamil.getActiveWebview()
-      if (!wv) return Promise.resolve({error:'no webview'})
-      return wv.executeJavaScript(${JSON.stringify(script)})
-    })()`
-  )
+  const view = tabManager.getActiveView()
+  if (!view) return Promise.reject(new Error('no active tab'))
+  return view.webContents.executeJavaScript(script)
 }
 
 function captureActiveWebview ({ quality = 40, maxWidth = 1280, maxBytes = 400_000 } = {}) {
-  if (!mainWindow) return Promise.reject(new Error('no window'))
-  return mainWindow.webContents.executeJavaScript(
-    `(function(){
-      const wv = window._yamil && window._yamil.getActiveWebview()
-      if (!wv) return Promise.resolve(null)
-      return wv.capturePage().then(img => {
-        const sz = img.getSize()
-        // Reject empty captures (page not rendered yet)
-        if (!sz.width || !sz.height) return null
-        const MAX_BYTES = ${maxBytes}
-        let w = ${maxWidth}
-        let q = ${quality}
-        // Cap height to avoid extremely tall images that Claude API rejects
-        const maxH = 768
-        if (sz.height > maxH) {
-          const cropScale = maxH / sz.height
-          img = img.resize({ width: Math.round(sz.width * cropScale), height: maxH })
-        }
-        // Use current (possibly cropped) dimensions for resize calculations
-        const cur = img.getSize()
-        // Adaptive loop: shrink until under budget
-        for (let attempt = 0; attempt < 5; attempt++) {
-          let ni = img
-          if (cur.width > w) {
-            const scale = w / cur.width
-            ni = ni.resize({ width: w, height: Math.round(cur.height * scale) })
-          }
-          const jpegBuf = ni.toJPEG(q)
-          if (jpegBuf.length <= MAX_BYTES) {
-            return 'data:image/jpeg;base64,' + jpegBuf.toString('base64')
-          }
-          // Reduce quality first, then resolution
-          if (q > 30) { q = Math.max(30, q - 20) }
-          else { w = Math.round(w * 0.7) }
-        }
-        // Final fallback: smallest possible
-        const fw = Math.min(w, 640)
-        let ni = img.resize({ width: fw, height: Math.round(cur.height * (fw / cur.width)) })
-        return 'data:image/jpeg;base64,' + ni.toJPEG(20).toString('base64')
-      })
-    })()`
-  )
+  const view = tabManager.getActiveView()
+  if (!view) return Promise.resolve(null)
+  return view.webContents.capturePage().then(img => {
+    const sz = img.getSize()
+    if (!sz.width || !sz.height) return null
+    // Cap height
+    const maxH = 768
+    if (sz.height > maxH) {
+      const cropScale = maxH / sz.height
+      img = img.resize({ width: Math.round(sz.width * cropScale), height: maxH })
+    }
+    const cur = img.getSize()
+    let w = maxWidth
+    let q = quality
+    for (let attempt = 0; attempt < 5; attempt++) {
+      let ni = img
+      if (cur.width > w) {
+        const scale = w / cur.width
+        ni = ni.resize({ width: w, height: Math.round(cur.height * scale) })
+      }
+      const jpegBuf = ni.toJPEG(q)
+      if (jpegBuf.length <= maxBytes) {
+        return 'data:image/jpeg;base64,' + jpegBuf.toString('base64')
+      }
+      if (q > 30) { q = Math.max(30, q - 20) }
+      else { w = Math.round(w * 0.7) }
+    }
+    const fw = Math.min(w, 640)
+    let ni = img.resize({ width: fw, height: Math.round(cur.height * (fw / cur.width)) })
+    return 'data:image/jpeg;base64,' + ni.toJPEG(20).toString('base64')
+  })
 }
 
 function getActiveWebviewUrl () {
-  if (!mainWindow) return Promise.reject(new Error('no window'))
-  return mainWindow.webContents.executeJavaScript(
-    `(function(){
-      const wv = window._yamil && window._yamil.getActiveWebview()
-      return wv ? wv.getURL() : null
-    })()`
-  )
+  const view = tabManager.getActiveView()
+  if (!view) return Promise.resolve(null)
+  return Promise.resolve(view.webContents.getURL())
 }
 
 // ── Browser-service proxy helpers ─────────────────────────────────────
@@ -201,16 +821,6 @@ function browserServiceRaw (method, path, body) {
   })
 }
 
-// Get active tab info from renderer
-function getActiveTabInfo () {
-  if (!mainWindow) return Promise.resolve(null)
-  return mainWindow.webContents.executeJavaScript(
-    `(function(){
-      return window._yamil && window._yamil.getActiveTabInfo ? window._yamil.getActiveTabInfo() : null
-    })()`
-  )
-}
-
 // ── HTTP control server on port 9300 ─────────────────────────────────
 
 function startControlServer () {
@@ -228,7 +838,31 @@ function startControlServer () {
       return
     }
 
-
+    // ── GET /debug-toolbar ─────────────────────────────────────────
+    if (req.method === 'GET' && url.pathname === '/debug-toolbar') {
+      if (!toolbarView) { json(res, { error: 'no toolbar' }, 503); return }
+      const wc = toolbarView.webContents
+      const bounds = toolbarView.getBounds()
+      const children = mainWindow ? mainWindow.contentView.children.map((c, i) => ({
+        index: i,
+        isToolbar: c === toolbarView,
+        bounds: c.getBounds(),
+        visible: c.getVisible ? c.getVisible() : 'unknown',
+      })) : []
+      wc.executeJavaScript(`JSON.stringify({
+        title: document.title,
+        tabBarH: document.getElementById('tab-bar')?.offsetHeight,
+        navbarH: document.getElementById('navbar')?.offsetHeight,
+        tabCount: document.querySelectorAll('.tab').length,
+        bodyBg: getComputedStyle(document.body).background,
+        error: window._lastError || null,
+      })`).then(info => {
+        json(res, { toolbar: { url: wc.getURL(), bounds }, children, rendererInfo: JSON.parse(info) })
+      }).catch(err => {
+        json(res, { toolbar: { url: wc.getURL(), bounds }, children, evalError: err.message })
+      })
+      return
+    }
 
     // ── POST /focus ────────────────────────────────────────────────
     if (req.method === 'POST' && url.pathname === '/focus') {
@@ -239,19 +873,13 @@ function startControlServer () {
 
     // ── POST /clear-cache ───────────────────────────────────────────
     if (req.method === 'POST' && url.pathname === '/clear-cache') {
-      if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-      mainWindow.webContents.session.clearCache()
-        .then(() => mainWindow.webContents.session.clearStorageData({ storages: ['cachestorage'] }))
+      const yamilSession = session.fromPartition('persist:yamil')
+      yamilSession.clearCache()
+        .then(() => yamilSession.clearStorageData({ storages: ['cachestorage'] }))
         .then(() => {
-          // Reload the active webview without cache
-          mainWindow.webContents.executeJavaScript(
-            `(function(){
-              const wv = window._yamil && window._yamil.getActiveWebview()
-              if(wv) wv.reloadIgnoringCache()
-              return !!wv
-            })()`
-          ).then(ok => json(res, { ok, cleared: true }))
-            .catch(e => json(res, { error: e.message }, 500))
+          const view = tabManager.getActiveView()
+          if (view) view.webContents.reloadIgnoringCache()
+          json(res, { ok: true, cleared: true })
         })
         .catch(e => json(res, { error: e.message }, 500))
       return
@@ -259,45 +887,32 @@ function startControlServer () {
 
     // ── GET /active-tab-info ─────────────────────────────────────
     if (req.method === 'GET' && url.pathname === '/active-tab-info') {
-      if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-      getActiveTabInfo()
-        .then(info => json(res, info || { error: 'no tab info' }))
-        .catch(e => json(res, { error: e.message }, 500))
+      const info = tabManager.getActiveTabInfo()
+      json(res, info || { error: 'no tab info' })
       return
     }
 
     // ── POST /new-stealth-tab ─────────────────────────────────────
     if (req.method === 'POST' && url.pathname === '/new-stealth-tab') {
       readBody(req, body => {
-        const tabUrl = body.url || ''
-        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-        mainWindow.webContents.executeJavaScript(`
-          (function() {
-            if (!window._yamil) return { error: 'tabs not ready' }
-            const tab = window._yamil.createTab(${JSON.stringify(tabUrl)} || undefined, true, 'stealth')
-            return { ok: true, id: tab.id, type: 'stealth', url: tab.url }
-          })()
-        `).then(result => json(res, result))
-          .catch(e => json(res, { error: e.message }, 500))
+        const result = tabManager.createTab(body.url || '', true, 'stealth')
+        json(res, result || { error: 'failed to create tab' })
       })
       return
     }
 
     // ── GET /url ──────────────────────────────────────────────────
     if (req.method === 'GET' && url.pathname === '/url') {
-      if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-      getActiveTabInfo().then(async (info) => {
-        if (info && info.type === 'stealth' && info.sessionId) {
-          try {
-            const r = await browserServiceGet(`/sessions/${info.sessionId}/url`)
-            json(res, r.json || { url: info.url })
-          } catch { json(res, { url: info.url }) }
-        } else {
-          getActiveWebviewUrl()
-            .then(u => json(res, { url: u }))
-            .catch(e => json(res, { error: e.message }, 500))
-        }
-      }).catch(e => json(res, { error: e.message }, 500))
+      const info = tabManager.getActiveTabInfo()
+      if (info && info.type === 'stealth' && info.sessionId) {
+        browserServiceGet(`/sessions/${info.sessionId}/url`)
+          .then(r => json(res, r.json || { url: info.url }))
+          .catch(() => json(res, { url: info.url }))
+      } else {
+        getActiveWebviewUrl()
+          .then(u => json(res, { url: u }))
+          .catch(e => json(res, { error: e.message }, 500))
+      }
       return
     }
 
@@ -306,38 +921,33 @@ function startControlServer () {
       readBody(req, body => {
         const { url: navUrl } = body
         if (!navUrl) { json(res, { error: 'url required' }, 400); return }
-        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
         focusWindow()
-        getActiveTabInfo().then(async (info) => {
-          if (info && info.type === 'stealth' && info.sessionId) {
-            try {
-              const r = await browserServicePost(`/sessions/${info.sessionId}/navigate`, { url: navUrl })
-              json(res, r.json || { ok: true })
-            } catch (e) { json(res, { error: e.message }, 500) }
+        const info = tabManager.getActiveTabInfo()
+        if (info && info.type === 'stealth' && info.sessionId) {
+          browserServicePost(`/sessions/${info.sessionId}/navigate`, { url: navUrl })
+            .then(r => json(res, r.json || { ok: true }))
+            .catch(e => json(res, { error: e.message }, 500))
+        } else {
+          const view = tabManager.getActiveView()
+          if (view) {
+            view.webContents.loadURL(navUrl)
+            json(res, { ok: true })
           } else {
-            mainWindow.webContents.executeJavaScript(
-              `(function(){
-                const wv = window._yamil && window._yamil.getActiveWebview()
-                if(wv) wv.loadURL(${JSON.stringify(navUrl)})
-                return !!wv
-              })()`
-            ).then(ok => json(res, { ok }))
-              .catch(e => json(res, { error: e.message }, 500))
+            json(res, { error: 'no active tab' }, 503)
           }
-        }).catch(e => json(res, { error: e.message }, 500))
+        }
       })
       return
     }
 
     // ── GET /screenshot ──────────────────────────────────────────
     if (req.method === 'GET' && url.pathname === '/screenshot') {
-      if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-      getActiveTabInfo().then(async (info) => {
-        if (info && info.type === 'stealth' && info.sessionId) {
-          try {
-            const maxBytes = parseInt(url.searchParams.get('maxBytes')) || 400_000
-            const qs = url.search || '?quality=40&scale=0.5'
-            const r = await browserServiceRaw('GET', `/sessions/${info.sessionId}/screenshot${qs}`)
+      const info = tabManager.getActiveTabInfo()
+      if (info && info.type === 'stealth' && info.sessionId) {
+        const maxBytes = parseInt(url.searchParams.get('maxBytes')) || 400_000
+        const qs = url.search || '?quality=40&scale=0.5'
+        browserServiceRaw('GET', `/sessions/${info.sessionId}/screenshot${qs}`)
+          .then(r => {
             if (r.buf && r.buf.length > maxBytes) {
               json(res, { error: `Screenshot too large (${(r.buf.length/1024).toFixed(0)}KB). Use yamil_browser_a11y_snapshot instead.` }, 413)
             } else {
@@ -345,96 +955,64 @@ function startControlServer () {
               res.writeHead(r.status)
               res.end(r.buf)
             }
-          } catch (e) { json(res, { error: e.message }, 500) }
-        } else {
-          const quality = parseInt(url.searchParams.get('quality')) || 40
-          const maxWidth = parseInt(url.searchParams.get('maxWidth')) || 1280
-          const maxBytes = parseInt(url.searchParams.get('maxBytes')) || 400_000
-          captureActiveWebview({ quality, maxWidth, maxBytes }).then(dataUrl => {
-            if (!dataUrl) { json(res, { error: 'webview not ready' }, 503); return }
-            const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '')
-            res.setHeader('Content-Type', 'image/jpeg')
-            res.writeHead(200)
-            res.end(Buffer.from(base64, 'base64'))
-          }).catch(e => json(res, { error: e.message }, 500))
-        }
-      }).catch(e => json(res, { error: e.message }, 500))
+          })
+          .catch(e => json(res, { error: e.message }, 500))
+      } else {
+        const quality = parseInt(url.searchParams.get('quality')) || 40
+        const maxWidth = parseInt(url.searchParams.get('maxWidth')) || 1280
+        const maxBytes = parseInt(url.searchParams.get('maxBytes')) || 400_000
+        captureActiveWebview({ quality, maxWidth, maxBytes }).then(dataUrl => {
+          if (!dataUrl) { json(res, { error: 'webview not ready' }, 503); return }
+          const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '')
+          res.setHeader('Content-Type', 'image/jpeg')
+          res.writeHead(200)
+          res.end(Buffer.from(base64, 'base64'))
+        }).catch(e => json(res, { error: e.message }, 500))
+      }
       return
     }
 
     // ── GET /dom ──────────────────────────────────────────────────
     if (req.method === 'GET' && url.pathname === '/dom') {
-      if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-      getActiveTabInfo().then(async (info) => {
-        if (info && info.type === 'stealth' && info.sessionId) {
-          // For stealth tabs, use browser-service evaluate
-          try {
-            const r = await browserServicePost(`/sessions/${info.sessionId}/evaluate`, {
-              script: `(function(){
-                function collectFromDoc(doc) {
-                  let text = (doc.body?.innerText || '').slice(0, 4000);
-                  let inputs = Array.from(doc.querySelectorAll('input,textarea,select')).slice(0,30).map(el=>({tag:el.tagName,type:el.type||null,name:el.name||null,placeholder:el.placeholder||null,id:el.id||null}));
-                  let buttons = Array.from(doc.querySelectorAll('button,[role=button],a')).slice(0,50).map(el=>({tag:el.tagName,text:(el.innerText||el.getAttribute('aria-label')||'').slice(0,80),href:el.href||null,id:el.id||null}));
-                  const iframes = doc.querySelectorAll('iframe');
-                  for (const iframe of iframes) {
-                    try {
-                      const iDoc = iframe.contentDocument || iframe.contentWindow?.document;
-                      if (iDoc && iDoc.body) {
-                        const sub = collectFromDoc(iDoc);
-                        text += '\\n' + sub.text;
-                        inputs = inputs.concat(sub.inputs);
-                        buttons = buttons.concat(sub.buttons);
-                      }
-                    } catch(e) {}
-                  }
-                  return { text, inputs, buttons };
-                }
-                const collected = collectFromDoc(document);
-                return {
-                  url:      location.href,
-                  title:    document.title,
-                  text:     collected.text.slice(0, 8000),
-                  inputs:   collected.inputs.slice(0, 50),
-                  buttons:  collected.buttons.slice(0, 80),
-                };
-              })()`
-            })
-            json(res, r.json?.result || {})
-          } catch (e) { json(res, { error: e.message }, 500) }
-        } else {
-          execInActiveWebview(`(function(){
-            function collectFromDoc(doc) {
-              let text = (doc.body?.innerText || '').slice(0, 4000);
-              let inputs = Array.from(doc.querySelectorAll('input,textarea,select')).slice(0,30).map(el=>({tag:el.tagName,type:el.type||null,name:el.name||null,placeholder:el.placeholder||null,id:el.id||null}));
-              let buttons = Array.from(doc.querySelectorAll('button,[role=button],a')).slice(0,50).map(el=>({tag:el.tagName,text:(el.innerText||el.getAttribute('aria-label')||'').slice(0,80),href:el.href||null,id:el.id||null}));
-              // Traverse same-origin iframes
-              const iframes = doc.querySelectorAll('iframe');
-              for (const iframe of iframes) {
-                try {
-                  const iDoc = iframe.contentDocument || iframe.contentWindow?.document;
-                  if (iDoc && iDoc.body) {
-                    const sub = collectFromDoc(iDoc);
-                    text += '\\n' + sub.text;
-                    inputs = inputs.concat(sub.inputs);
-                    buttons = buttons.concat(sub.buttons);
-                  }
-                } catch(e) {}
+      const info = tabManager.getActiveTabInfo()
+      const domScript = `(function(){
+        function collectFromDoc(doc) {
+          let text = (doc.body?.innerText || '').slice(0, 4000);
+          let inputs = Array.from(doc.querySelectorAll('input,textarea,select')).slice(0,30).map(el=>({tag:el.tagName,type:el.type||null,name:el.name||null,placeholder:el.placeholder||null,id:el.id||null}));
+          let buttons = Array.from(doc.querySelectorAll('button,[role=button],a')).slice(0,50).map(el=>({tag:el.tagName,text:(el.innerText||el.getAttribute('aria-label')||'').slice(0,80),href:el.href||null,id:el.id||null}));
+          const iframes = doc.querySelectorAll('iframe');
+          for (const iframe of iframes) {
+            try {
+              const iDoc = iframe.contentDocument || iframe.contentWindow?.document;
+              if (iDoc && iDoc.body) {
+                const sub = collectFromDoc(iDoc);
+                text += '\\n' + sub.text;
+                inputs = inputs.concat(sub.inputs);
+                buttons = buttons.concat(sub.buttons);
               }
-              return { text, inputs, buttons };
-            }
-            const collected = collectFromDoc(document);
-            return {
-              url:      location.href,
-              title:    document.title,
-              text:     collected.text.slice(0, 8000),
-              inputs:   collected.inputs.slice(0, 50),
-              buttons:  collected.buttons.slice(0, 80),
-            };
-          })()`)
-            .then(d => json(res, d || {}))
-            .catch(e => json(res, { error: e.message }, 500))
+            } catch(e) {}
+          }
+          return { text, inputs, buttons };
         }
-      }).catch(e => json(res, { error: e.message }, 500))
+        const collected = collectFromDoc(document);
+        return {
+          url:      location.href,
+          title:    document.title,
+          text:     collected.text.slice(0, 8000),
+          inputs:   collected.inputs.slice(0, 50),
+          buttons:  collected.buttons.slice(0, 80),
+        };
+      })()`
+
+      if (info && info.type === 'stealth' && info.sessionId) {
+        browserServicePost(`/sessions/${info.sessionId}/evaluate`, { script: domScript })
+          .then(r => json(res, r.json?.result || {}))
+          .catch(e => json(res, { error: e.message }, 500))
+      } else {
+        execInActiveWebview(domScript)
+          .then(d => json(res, d || {}))
+          .catch(e => json(res, { error: e.message }, 500))
+      }
       return
     }
 
@@ -443,19 +1021,16 @@ function startControlServer () {
       readBody(req, body => {
         const { script } = body
         if (!script) { json(res, { error: 'script required' }, 400); return }
-        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-        getActiveTabInfo().then(async (info) => {
-          if (info && info.type === 'stealth' && info.sessionId) {
-            try {
-              const r = await browserServicePost(`/sessions/${info.sessionId}/evaluate`, { script })
-              json(res, { result: r.json?.result })
-            } catch (e) { json(res, { error: e.message }, 500) }
-          } else {
-            execInActiveWebview(script)
-              .then(result => json(res, { result }))
-              .catch(e => json(res, { error: e.message }, 500))
-          }
-        }).catch(e => json(res, { error: e.message }, 500))
+        const info = tabManager.getActiveTabInfo()
+        if (info && info.type === 'stealth' && info.sessionId) {
+          browserServicePost(`/sessions/${info.sessionId}/evaluate`, { script })
+            .then(r => json(res, { result: r.json?.result }))
+            .catch(e => json(res, { error: e.message }, 500))
+        } else {
+          execInActiveWebview(script)
+            .then(result => json(res, { result }))
+            .catch(e => json(res, { error: e.message }, 500))
+        }
       })
       return
     }
@@ -466,22 +1041,23 @@ function startControlServer () {
       let quality = parseInt(url.searchParams.get('quality')) || 40
       let maxWidth = parseInt(url.searchParams.get('maxWidth')) || 800
       const maxBytes = parseInt(url.searchParams.get('maxBytes')) || 400_000
-      mainWindow.capturePage().then(img => {
+      // For BaseWindow, capture the toolbar view
+      const captureTarget = toolbarView || mainWindow
+      const captureFn = captureTarget.webContents ? captureTarget.webContents.capturePage() : Promise.resolve(null)
+      captureFn.then(img => {
+        if (!img) { json(res, { error: 'empty capture' }, 503); return }
         const sz = img.getSize()
         if (!sz.width || !sz.height) { json(res, { error: 'empty capture' }, 503); return }
-        // Cap height to avoid oversized images
         const maxH = 768
         if (sz.height > maxH) {
           const cropScale = maxH / sz.height
           img = img.resize({ width: Math.round(sz.width * cropScale), height: maxH })
         }
         const cur = img.getSize()
-        // Resize if wider than maxWidth
         if (cur.width > maxWidth) {
           const scale = maxWidth / cur.width
           img = img.resize({ width: maxWidth, height: Math.round(cur.height * scale) })
         }
-        // Adaptive loop: shrink until under budget
         let buf = img.toJPEG(quality)
         for (let attempt = 0; attempt < 4 && buf.length > maxBytes; attempt++) {
           if (quality > 25) { quality = Math.max(25, quality - 15) }
@@ -500,8 +1076,8 @@ function startControlServer () {
       readBody(req, body => {
         const { script } = body
         if (!script) { json(res, { error: 'script required' }, 400); return }
-        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-        mainWindow.webContents.executeJavaScript(script)
+        if (!toolbarView) { json(res, { error: 'no toolbar' }, 503); return }
+        toolbarView.webContents.executeJavaScript(script)
           .then(result => json(res, { result }))
           .catch(e => json(res, { error: e.message }, 500))
       })
@@ -513,9 +1089,9 @@ function startControlServer () {
       readBody(req, body => {
         const { message } = body
         if (!message) { json(res, { error: 'message required' }, 400); return }
-        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+        if (!toolbarView) { json(res, { error: 'no toolbar' }, 503); return }
         focusWindow()
-        mainWindow.webContents.executeJavaScript(`
+        toolbarView.webContents.executeJavaScript(`
           (function() {
             const ta = document.getElementById('chat-input')
             if (!ta) return { error: 'no chat input found' }
@@ -538,42 +1114,26 @@ function startControlServer () {
     if (req.method === 'POST' && url.pathname === '/dialog') {
       readBody(req, body => {
         const { action, promptText } = body
-        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-        getActiveTabInfo().then(async (info) => {
-          if (info && info.type === 'stealth' && info.sessionId) {
-            try {
-              const r = await browserServicePost(`/sessions/${info.sessionId}/dialog`, { accept: action === 'accept', promptText })
-              json(res, r.json || { ok: true })
-            } catch (e) { json(res, { error: e.message }, 500) }
-            return
-          }
-          execInActiveWebview(`(function(){
+        const info = tabManager.getActiveTabInfo()
+        if (info && info.type === 'stealth' && info.sessionId) {
+          browserServicePost(`/sessions/${info.sessionId}/dialog`, { accept: action === 'accept', promptText })
+            .then(r => json(res, r.json || { ok: true }))
+            .catch(e => json(res, { error: e.message }, 500))
+          return
+        }
+        execInActiveWebview(`(function(){
           window.__yamilDialogResult = null;
           const origAlert = window.alert;
           const origConfirm = window.confirm;
           const origPrompt = window.prompt;
-          window.alert = function(msg) {
-            window.__yamilDialogResult = { type: 'alert', message: msg };
-            return undefined;
-          };
-          window.confirm = function(msg) {
-            window.__yamilDialogResult = { type: 'confirm', message: msg };
-            return ${action === 'accept' ? 'true' : 'false'};
-          };
-          window.prompt = function(msg, def) {
-            window.__yamilDialogResult = { type: 'prompt', message: msg, defaultValue: def };
-            return ${action === 'accept' ? JSON.stringify(promptText || '') : 'null'};
-          };
-          setTimeout(() => {
-            window.alert = origAlert;
-            window.confirm = origConfirm;
-            window.prompt = origPrompt;
-          }, 30000);
+          window.alert = function(msg) { window.__yamilDialogResult = { type: 'alert', message: msg }; return undefined; };
+          window.confirm = function(msg) { window.__yamilDialogResult = { type: 'confirm', message: msg }; return ${action === 'accept' ? 'true' : 'false'}; };
+          window.prompt = function(msg, def) { window.__yamilDialogResult = { type: 'prompt', message: msg, defaultValue: def }; return ${action === 'accept' ? JSON.stringify(promptText || '') : 'null'}; };
+          setTimeout(() => { window.alert = origAlert; window.confirm = origConfirm; window.prompt = origPrompt; }, 30000);
           return { handler: 'set', action: ${JSON.stringify(action || 'accept')} };
         })()`)
-            .then(result => json(res, result))
-            .catch(e => json(res, { error: e.message }, 500))
-        }).catch(e => json(res, { error: e.message }, 500))
+          .then(result => json(res, result))
+          .catch(e => json(res, { error: e.message }, 500))
       })
       return
     }
@@ -583,95 +1143,76 @@ function startControlServer () {
       readBody(req, body => {
         const { selector } = body
         if (!selector) { json(res, { error: 'selector required' }, 400); return }
-        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-        getActiveTabInfo().then(async (info) => {
-          if (info && info.type === 'stealth' && info.sessionId) {
-            try {
-              const r = await browserServiceRaw('POST', `/sessions/${info.sessionId}/screenshot-element`, { selector })
+        const info = tabManager.getActiveTabInfo()
+        if (info && info.type === 'stealth' && info.sessionId) {
+          browserServiceRaw('POST', `/sessions/${info.sessionId}/screenshot-element`, { selector })
+            .then(r => {
               if (r.status >= 400) { json(res, { error: 'element not found' }, r.status); return }
               if (r.buf && r.buf.length > 400_000) {
-                json(res, { error: `Element screenshot too large (${(r.buf.length/1024).toFixed(0)}KB). Use yamil_browser_a11y_snapshot instead.` }, 413)
+                json(res, { error: `Element screenshot too large (${(r.buf.length/1024).toFixed(0)}KB).` }, 413)
               } else {
                 res.setHeader('Content-Type', r.headers['content-type'] || 'image/jpeg')
                 res.writeHead(r.status)
                 res.end(r.buf)
               }
-            } catch (e) { json(res, { error: e.message }, 500) }
-          } else {
-            mainWindow.webContents.executeJavaScript(`
-              (function() {
-                const wv = window._yamil && window._yamil.getActiveWebview()
-                if (!wv) return Promise.resolve(null)
-                return wv.executeJavaScript(${JSON.stringify(`(function(){
-                  const el = document.querySelector(${JSON.stringify(selector)});
-                  if (!el) return null;
-                  el.scrollIntoView({ block: 'center', behavior: 'instant' });
-                  const r = el.getBoundingClientRect();
-                  return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
-                })()`)}).then(rect => {
-                  if (!rect) return null;
-                  return wv.capturePage({
-                    x: Math.max(0, rect.x),
-                    y: Math.max(0, rect.y),
-                    width: Math.max(1, rect.width),
-                    height: Math.max(1, rect.height)
-                  }).then(img => {
-                    const sz = img.getSize();
-                    let ni = img;
-                    if (sz.width > 1024) {
-                      const scale = 1024 / sz.width;
-                      ni = ni.resize({ width: 1024, height: Math.round(sz.height * scale) });
-                    }
-                    return 'data:image/jpeg;base64,' + ni.toJPEG(55).toString('base64');
-                  });
-                })
-              })()
-            `).then(dataUrl => {
-              if (!dataUrl) { json(res, { error: 'element not found or capture failed' }, 404); return }
-              const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '')
+            })
+            .catch(e => json(res, { error: e.message }, 500))
+        } else {
+          const view = tabManager.getActiveView()
+          if (!view) { json(res, { error: 'no active tab' }, 503); return }
+          view.webContents.executeJavaScript(`(function(){
+            const el = document.querySelector(${JSON.stringify(selector)});
+            if (!el) return null;
+            el.scrollIntoView({ block: 'center', behavior: 'instant' });
+            const r = el.getBoundingClientRect();
+            return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
+          })()`).then(rect => {
+            if (!rect) { json(res, { error: 'element not found' }, 404); return }
+            view.webContents.capturePage({
+              x: Math.max(0, rect.x),
+              y: Math.max(0, rect.y),
+              width: Math.max(1, rect.width),
+              height: Math.max(1, rect.height),
+            }).then(img => {
+              const sz = img.getSize()
+              let ni = img
+              if (sz.width > 1024) {
+                const scale = 1024 / sz.width
+                ni = ni.resize({ width: 1024, height: Math.round(sz.height * scale) })
+              }
+              const buf = ni.toJPEG(55)
               res.setHeader('Content-Type', 'image/jpeg')
               res.writeHead(200)
-              res.end(Buffer.from(base64, 'base64'))
+              res.end(buf)
             }).catch(e => json(res, { error: e.message }, 500))
-          }
-        }).catch(e => json(res, { error: e.message }, 500))
+          }).catch(e => json(res, { error: e.message }, 500))
+        }
       })
       return
     }
 
     // ── POST /print-pdf ──────────────────────────────────────────
     if (req.method === 'POST' && url.pathname === '/print-pdf') {
-      if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-      getActiveTabInfo().then(async (info) => {
-        if (info && info.type === 'stealth' && info.sessionId) {
-          try {
-            const r = await browserServiceRaw('POST', `/sessions/${info.sessionId}/pdf`, {})
+      const info = tabManager.getActiveTabInfo()
+      if (info && info.type === 'stealth' && info.sessionId) {
+        browserServiceRaw('POST', `/sessions/${info.sessionId}/pdf`, {})
+          .then(r => {
             res.setHeader('Content-Type', 'application/pdf')
             res.writeHead(r.status)
             res.end(r.buf)
-          } catch (e) { json(res, { error: e.message }, 500) }
-        } else {
-          mainWindow.webContents.executeJavaScript(`
-            (function() {
-              const wv = window._yamil && window._yamil.getActiveWebview()
-              if (!wv || !wv.getWebContentsId) return Promise.resolve(null)
-              return wv.getWebContentsId()
-            })()
-          `).then(async wcId => {
-            if (!wcId) { json(res, { error: 'webview not ready' }, 503); return }
-            const { webContents } = require('electron')
-            const wc = webContents.fromId(wcId)
-            if (!wc) { json(res, { error: 'webcontents not found' }, 503); return }
-            const pdfBuf = await wc.printToPDF({
-              printBackground: true,
-              preferCSSPageSize: true,
-            })
+          })
+          .catch(e => json(res, { error: e.message }, 500))
+      } else {
+        const view = tabManager.getActiveView()
+        if (!view) { json(res, { error: 'no active tab' }, 503); return }
+        view.webContents.printToPDF({ printBackground: true, preferCSSPageSize: true })
+          .then(pdfBuf => {
             res.setHeader('Content-Type', 'application/pdf')
             res.writeHead(200)
             res.end(pdfBuf)
-          }).catch(e => json(res, { error: e.message }, 500))
-        }
-      }).catch(e => json(res, { error: e.message }, 500))
+          })
+          .catch(e => json(res, { error: e.message }, 500))
+      }
       return
     }
 
@@ -680,31 +1221,28 @@ function startControlServer () {
       readBody(req, body => {
         const { sourceSelector, targetSelector } = body
         if (!sourceSelector || !targetSelector) { json(res, { error: 'sourceSelector and targetSelector required' }, 400); return }
-        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-        getActiveTabInfo().then(async (info) => {
-          if (info && info.type === 'stealth' && info.sessionId) {
-            try {
-              const r = await browserServicePost(`/sessions/${info.sessionId}/drag`, { sourceSelector, targetSelector })
-              json(res, r.json || { ok: true })
-            } catch (e) { json(res, { error: e.message }, 500) }
-          } else {
-            execInActiveWebview(`(function(){
-              const src = document.querySelector(${JSON.stringify(sourceSelector)});
-              const tgt = document.querySelector(${JSON.stringify(targetSelector)});
-              if (!src) return { error: 'source not found' };
-              if (!tgt) return { error: 'target not found' };
-              const dt = new DataTransfer();
-              src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
-              tgt.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
-              tgt.dispatchEvent(new DragEvent('dragover',  { bubbles: true, cancelable: true, dataTransfer: dt }));
-              tgt.dispatchEvent(new DragEvent('drop',      { bubbles: true, cancelable: true, dataTransfer: dt }));
-              src.dispatchEvent(new DragEvent('dragend',   { bubbles: true, cancelable: true, dataTransfer: dt }));
-              return { ok: true };
-            })()`)
-              .then(result => json(res, result))
-              .catch(e => json(res, { error: e.message }, 500))
-          }
-        }).catch(e => json(res, { error: e.message }, 500))
+        const info = tabManager.getActiveTabInfo()
+        if (info && info.type === 'stealth' && info.sessionId) {
+          browserServicePost(`/sessions/${info.sessionId}/drag`, { sourceSelector, targetSelector })
+            .then(r => json(res, r.json || { ok: true }))
+            .catch(e => json(res, { error: e.message }, 500))
+        } else {
+          execInActiveWebview(`(function(){
+            const src = document.querySelector(${JSON.stringify(sourceSelector)});
+            const tgt = document.querySelector(${JSON.stringify(targetSelector)});
+            if (!src) return { error: 'source not found' };
+            if (!tgt) return { error: 'target not found' };
+            const dt = new DataTransfer();
+            src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+            tgt.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+            tgt.dispatchEvent(new DragEvent('dragover',  { bubbles: true, cancelable: true, dataTransfer: dt }));
+            tgt.dispatchEvent(new DragEvent('drop',      { bubbles: true, cancelable: true, dataTransfer: dt }));
+            src.dispatchEvent(new DragEvent('dragend',   { bubbles: true, cancelable: true, dataTransfer: dt }));
+            return { ok: true };
+          })()`)
+            .then(result => json(res, result))
+            .catch(e => json(res, { error: e.message }, 500))
+        }
       })
       return
     }
@@ -714,100 +1252,46 @@ function startControlServer () {
     // ═══════════════════════════════════════════════════════════════
 
     // ── GET /tabs ─────────────────────────────────────────────────
-    // List all open tabs with index, url, title, type, active status
     if (req.method === 'GET' && url.pathname === '/tabs') {
-      if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-      mainWindow.webContents.executeJavaScript(`
-        (function() {
-          if (!window._yamil) return []
-          var info = window._yamil.getActiveTabInfo && window._yamil.getActiveTabInfo()
-          var activeId = info ? info.id : null
-          return window._yamil.tabs.map(function(t, i) {
-            return { index: i, id: t.id, type: t.type || 'yamil', sessionId: t.sessionId || null, url: t.url || '', title: t.title || '', active: t.id === activeId }
-          })
-        })()
-      `).then(tabs => json(res, { tabs: tabs || [] }))
-        .catch(e => json(res, { error: e.message }, 500))
+      const tabs = tabManager.getTabList()
+      json(res, { tabs: tabs.map((t, i) => ({ index: i, ...t })) })
       return
     }
 
     // ── POST /new-tab ─────────────────────────────────────────────
-    // Create a new tab, optionally with a URL and type ('yamil' | 'stealth')
     if (req.method === 'POST' && url.pathname === '/new-tab') {
       readBody(req, body => {
-        const tabUrl = body.url || ''
-        const tabType = body.type || 'yamil'
-        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-        mainWindow.webContents.executeJavaScript(`
-          (function() {
-            if (!window._yamil) return { error: 'tabs not ready' }
-            const tab = window._yamil.createTab(${JSON.stringify(tabUrl)} || undefined, true, ${JSON.stringify(tabType)})
-            return { ok: true, id: tab.id, type: tab.type, url: tab.url }
-          })()
-        `).then(result => json(res, result))
-          .catch(e => json(res, { error: e.message }, 500))
+        const result = tabManager.createTab(body.url || '', true, body.type || 'yamil')
+        json(res, result || { error: 'failed to create tab' })
       })
       return
     }
 
     // ── POST /switch-tab ──────────────────────────────────────────
-    // Switch to a tab by index or id
     if (req.method === 'POST' && url.pathname === '/switch-tab') {
       readBody(req, body => {
-        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-        const switchId = body.id != null ? body.id : null
-        const switchIdx = body.index != null ? body.index : null
-        mainWindow.webContents.executeJavaScript(`
-          (function() {
-            if (!window._yamil) return { error: 'tabs not ready' }
-            var tabs = window._yamil.tabs
-            var target = null
-            var wantId = ${switchId != null ? JSON.stringify(switchId) : 'null'}
-            var wantIdx = ${switchIdx != null ? JSON.stringify(switchIdx) : 'null'}
-            if (wantId != null) {
-              for (var i = 0; i < tabs.length; i++) { if (tabs[i].id === wantId) { target = tabs[i]; break } }
-            } else if (wantIdx != null) {
-              target = tabs[wantIdx] || null
-            }
-            if (!target) return { error: 'tab not found' }
-            window._yamil.switchTab(target.id)
-            return { ok: true, id: target.id, url: target.url, title: target.title }
-          })()
-        `).then(result => json(res, result))
-          .catch(e => json(res, { error: e.message }, 500))
+        const tabs = tabManager.getTabList()
+        let target = null
+        if (body.id != null) target = tabs.find(t => t.id === body.id)
+        else if (body.index != null) target = tabs[body.index]
+        if (!target) { json(res, { error: 'tab not found' }, 404); return }
+        tabManager.switchTab(target.id)
+        json(res, { ok: true, id: target.id, url: target.url, title: target.title })
       })
       return
     }
 
     // ── POST /close-tab ───────────────────────────────────────────
-    // Close a tab by index or id (defaults to active tab)
     if (req.method === 'POST' && url.pathname === '/close-tab') {
       readBody(req, body => {
-        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-        const closeId = body.id != null ? body.id : null
-        const closeIdx = body.index != null ? body.index : null
-        mainWindow.webContents.executeJavaScript(`
-          (function() {
-            if (!window._yamil) return { error: 'tabs not ready' }
-            var tabs = window._yamil.tabs
-            var target = null
-            var wantId = ${closeId != null ? JSON.stringify(closeId) : 'null'}
-            var wantIdx = ${closeIdx != null ? JSON.stringify(closeIdx) : 'null'}
-            if (wantId != null) {
-              for (var i = 0; i < tabs.length; i++) { if (tabs[i].id === wantId) { target = tabs[i]; break } }
-            } else if (wantIdx != null) {
-              target = tabs[wantIdx] || null
-            } else {
-              for (var i = 0; i < tabs.length; i++) {
-                if (tabs[i].webview && tabs[i].webview.classList.contains('active')) { target = tabs[i]; break }
-              }
-            }
-            if (!target) return { error: 'tab not found' }
-            window._yamil.closeTab(target.id)
-            return { ok: true, remaining: window._yamil.tabs.length }
-          })()
-        `).then(result => json(res, result))
-          .catch(e => json(res, { error: e.message }, 500))
+        const tabs = tabManager.getTabList()
+        let target = null
+        if (body.id != null) target = tabs.find(t => t.id === body.id)
+        else if (body.index != null) target = tabs[body.index]
+        else target = tabs.find(t => t.active)
+        if (!target) { json(res, { error: 'tab not found' }, 404); return }
+        tabManager.closeTab(target.id)
+        json(res, { ok: true, remaining: tabManager.tabs.size })
       })
       return
     }
@@ -816,26 +1300,24 @@ function startControlServer () {
     // ── BOOKMARK ENDPOINTS ──────────────────────────────────────
     // ═══════════════════════════════════════════════════════════════
 
-    // ── GET /bookmarks ─────────────────────────────────────────
     if (req.method === 'GET' && url.pathname === '/bookmarks') {
-      if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+      if (!toolbarView) { json(res, { error: 'no toolbar' }, 503); return }
       const query = url.searchParams.get('query') || ''
       const script = query
         ? `(function(){ return window._yamil && window._yamil.bookmarks ? window._yamil.bookmarks.search(${JSON.stringify(query)}) : [] })()`
         : `(function(){ return window._yamil && window._yamil.bookmarks ? window._yamil.bookmarks.getAll() : [] })()`
-      mainWindow.webContents.executeJavaScript(script)
+      toolbarView.webContents.executeJavaScript(script)
         .then(bookmarks => json(res, { bookmarks: bookmarks || [] }))
         .catch(e => json(res, { error: e.message }, 500))
       return
     }
 
-    // ── POST /bookmarks ─────────────────────────────────────────
     if (req.method === 'POST' && url.pathname === '/bookmarks') {
       readBody(req, body => {
-        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+        if (!toolbarView) { json(res, { error: 'no toolbar' }, 503); return }
         const { url: bmUrl, title, tags, category, favicon } = body
         if (!bmUrl) { json(res, { error: 'url required' }, 400); return }
-        mainWindow.webContents.executeJavaScript(`
+        toolbarView.webContents.executeJavaScript(`
           (function() {
             if (!window._yamil || !window._yamil.bookmarks) return { error: 'bookmarks not ready' }
             var bm = window._yamil.bookmarks.add(${JSON.stringify({ url: bmUrl, title: title || bmUrl, tags: tags || [], category: category || '', favicon: favicon || '' })})
@@ -849,16 +1331,15 @@ function startControlServer () {
       return
     }
 
-    // ── DELETE /bookmarks ────────────────────────────────────────
     if (req.method === 'DELETE' && url.pathname === '/bookmarks') {
       readBody(req, body => {
-        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+        if (!toolbarView) { json(res, { error: 'no toolbar' }, 503); return }
         const { id, url: bmUrl } = body
         if (!id && !bmUrl) { json(res, { error: 'id or url required' }, 400); return }
         const script = id
           ? `(function(){ if(!window._yamil||!window._yamil.bookmarks) return {error:'not ready'}; window._yamil.bookmarks.remove(${JSON.stringify(id)}); if(typeof updateBookmarkStar==='function') updateBookmarkStar(); if(typeof renderBookmarkBar==='function') renderBookmarkBar(); return {ok:true} })()`
           : `(function(){ if(!window._yamil||!window._yamil.bookmarks) return {error:'not ready'}; window._yamil.bookmarks.removeByUrl(${JSON.stringify(bmUrl)}); if(typeof updateBookmarkStar==='function') updateBookmarkStar(); if(typeof renderBookmarkBar==='function') renderBookmarkBar(); return {ok:true} })()`
-        mainWindow.webContents.executeJavaScript(script)
+        toolbarView.webContents.executeJavaScript(script)
           .then(result => json(res, result))
           .catch(e => json(res, { error: e.message }, 500))
       })
@@ -869,23 +1350,21 @@ function startControlServer () {
     // ── HISTORY ENDPOINTS ────────────────────────────────────────
     // ═══════════════════════════════════════════════════════════════
 
-    // ── GET /history ─────────────────────────────────────────────
     if (req.method === 'GET' && url.pathname === '/history') {
-      if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
+      if (!toolbarView) { json(res, { error: 'no toolbar' }, 503); return }
       const query = url.searchParams.get('query') || ''
       const script = query
         ? `(function(){ return window._yamil && window._yamil.history ? window._yamil.history.search(${JSON.stringify(query)}) : [] })()`
         : `(function(){ return window._yamil && window._yamil.history ? window._yamil.history.getAll() : [] })()`
-      mainWindow.webContents.executeJavaScript(script)
+      toolbarView.webContents.executeJavaScript(script)
         .then(history => json(res, { history: history || [] }))
         .catch(e => json(res, { error: e.message }, 500))
       return
     }
 
-    // ── DELETE /history ──────────────────────────────────────────
     if (req.method === 'DELETE' && url.pathname === '/history') {
-      if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-      mainWindow.webContents.executeJavaScript(
+      if (!toolbarView) { json(res, { error: 'no toolbar' }, 503); return }
+      toolbarView.webContents.executeJavaScript(
         `(function(){ if(window._yamil && window._yamil.history) { window._yamil.history.clear(); return {ok:true} } return {error:'not ready'} })()`
       ).then(result => json(res, result))
         .catch(e => json(res, { error: e.message }, 500))
@@ -901,7 +1380,6 @@ function startControlServer () {
       const yamilSession = session.fromPartition('persist:yamil')
       yamilSession.cookies.get(domain ? { domain } : {})
         .then(cookies => {
-          // Group by domain
           const grouped = {}
           cookies.forEach(c => {
             const d = c.domain.replace(/^\./, '')
@@ -919,12 +1397,10 @@ function startControlServer () {
         const yamilSession = session.fromPartition('persist:yamil')
         const { domain, name } = body
         if (domain && name) {
-          // Delete specific cookie
           const url = `https://${domain.replace(/^\./, '')}${body.path || '/'}`
           await yamilSession.cookies.remove(url, name)
           json(res, { ok: true, deleted: 1 })
         } else if (domain) {
-          // Delete all cookies for domain
           const cookies = await yamilSession.cookies.get({ domain: domain.replace(/^\./, '') })
           for (const c of cookies) {
             const u = `https://${c.domain.replace(/^\./, '')}${c.path || '/'}`
@@ -938,9 +1414,6 @@ function startControlServer () {
       return
     }
 
-    // Third-party cookie blocking toggle
-    // NOTE: The actual header stripping is done in the unified onHeadersReceived handler
-    // registered in createWindow(). We only toggle the flag here.
     if (req.method === 'POST' && url.pathname === '/cookies/block-third-party') {
       readBody(req, body => {
         const enabled = !!body.enabled
@@ -978,13 +1451,30 @@ function startControlServer () {
       readBody(req, body => {
         const { domain, action } = body
         if (!domain) { json(res, { error: 'domain required' }, 400); return }
-        if (action === 'remove') {
-          adBlocker.removeWhitelist(domain)
-        } else {
-          adBlocker.addWhitelist(domain)
-        }
+        if (action === 'remove') adBlocker.removeWhitelist(domain)
+        else adBlocker.addWhitelist(domain)
         json(res, { ok: true, whitelist: [...adBlocker.whitelist] })
       })
+      return
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ── CONSOLE LOGS ENDPOINT ───────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+
+    if (req.method === 'GET' && url.pathname === '/console-logs') {
+      const level = url.searchParams.get('level')
+      const last  = parseInt(url.searchParams.get('last') || '50', 10)
+      const clear = url.searchParams.get('clear') === 'true'
+
+      const levels = ['error', 'warning', 'info', 'verbose']
+      const maxLevel = level ? levels.indexOf(level) : 2 // default: info
+      let logs = tabManager.consoleLogs.filter(l => levels.indexOf(l.level) <= (maxLevel >= 0 ? maxLevel : 2))
+      logs = logs.slice(-last)
+
+      if (clear) tabManager.consoleLogs = []
+
+      json(res, { logs })
       return
     }
 
@@ -992,58 +1482,39 @@ function startControlServer () {
     // ── CREDENTIAL CRYPTO ENDPOINTS (safeStorage / OS keychain) ──
     // ═══════════════════════════════════════════════════════════════
 
-    // ── POST /credentials/encrypt ─────────────────────────────────
     if (req.method === 'POST' && url.pathname === '/credentials/encrypt') {
       readBody(req, body => {
-        if (!safeStorage.isEncryptionAvailable()) {
-          json(res, { error: 'OS keychain not available' }, 503)
-          return
-        }
+        if (!safeStorage.isEncryptionAvailable()) { json(res, { error: 'OS keychain not available' }, 503); return }
         const { password } = body
         if (!password) { json(res, { error: 'password required' }, 400); return }
         try {
           const encrypted = safeStorage.encryptString(password).toString('base64')
           json(res, { encrypted })
-        } catch (e) {
-          json(res, { error: e.message }, 500)
-        }
+        } catch (e) { json(res, { error: e.message }, 500) }
       })
       return
     }
 
-    // ── POST /credentials/decrypt ─────────────────────────────────
     if (req.method === 'POST' && url.pathname === '/credentials/decrypt') {
       readBody(req, body => {
-        if (!safeStorage.isEncryptionAvailable()) {
-          json(res, { error: 'OS keychain not available' }, 503)
-          return
-        }
+        if (!safeStorage.isEncryptionAvailable()) { json(res, { error: 'OS keychain not available' }, 503); return }
         const { encrypted } = body
         if (!encrypted) { json(res, { error: 'encrypted required' }, 400); return }
         try {
           const password = safeStorage.decryptString(Buffer.from(encrypted, 'base64'))
           json(res, { password })
-        } catch (e) {
-          json(res, { error: e.message }, 500)
-        }
+        } catch (e) { json(res, { error: e.message }, 500) }
       })
       return
     }
 
-    // ── POST /credentials/auto-save ── auto-save from login form detection
     if (req.method === 'POST' && url.pathname === '/credentials/auto-save') {
       readBody(req, async (body) => {
         const { domain, username, password, formUrl, formRecipe } = body
-        if (!domain || !username || !password) {
-          json(res, { error: 'domain, username, password required' }, 400); return
-        }
-        if (!safeStorage.isEncryptionAvailable()) {
-          json(res, { error: 'OS keychain not available' }, 503); return
-        }
+        if (!domain || !username || !password) { json(res, { error: 'domain, username, password required' }, 400); return }
+        if (!safeStorage.isEncryptionAvailable()) { json(res, { error: 'OS keychain not available' }, 503); return }
         try {
-          // Step 1: Encrypt password via OS keychain
           const encrypted = safeStorage.encryptString(password).toString('base64')
-          // Step 2: Store in DB via browser-service
           const svcUrl = process.env.YAMIL_BROWSER_URL || 'http://127.0.0.1:4000'
           const saveRes = await fetch(`${svcUrl}/credentials`, {
             method: 'POST',
@@ -1052,29 +1523,18 @@ function startControlServer () {
             signal: AbortSignal.timeout(5000),
           })
           const saveData = await saveRes.json()
-          if (saveData.error) {
-            json(res, { error: saveData.error }, 500); return
-          }
-          // Step 3: Log login form recipe to RAG knowledge pipeline
+          if (saveData.error) { json(res, { error: saveData.error }, 500); return }
           if (formRecipe) {
             fetch(`${svcUrl}/log-action`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                source: 'auto-credential',
-                action: 'login_recipe_learned',
-                details: { domain, username, formRecipe },
-                url: formUrl || `https://${domain}`,
-                status: 'ok',
-              }),
+              body: JSON.stringify({ source: 'auto-credential', action: 'login_recipe_learned', details: { domain, username, formRecipe }, url: formUrl || `https://${domain}`, status: 'ok' }),
               signal: AbortSignal.timeout(3000),
             }).catch(() => {})
           }
           console.log(`[YAMIL cred] Auto-saved credentials for ${domain} (user: ${username})`)
           json(res, { saved: true, domain, username })
-        } catch (e) {
-          json(res, { error: e.message }, 500)
-        }
+        } catch (e) { json(res, { error: e.message }, 500) }
       })
       return
     }
@@ -1083,21 +1543,22 @@ function startControlServer () {
     // ── ZOOM ENDPOINTS ──────────────────────────────────────────
     // ═══════════════════════════════════════════════════════════════
 
-    // ── POST /zoom ──────────────────────────────────────────────
     if (req.method === 'POST' && url.pathname === '/zoom') {
       readBody(req, body => {
-        if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
-        const { action } = body // 'in', 'out', 'reset'
-        const fn = action === 'in' ? 'zoomIn' : action === 'out' ? 'zoomOut' : 'zoomReset'
-        mainWindow.webContents.executeJavaScript(
-          `(function(){ if(window._yamil && window._yamil.zoom) { window._yamil.zoom.${fn}(); return {ok:true, zoom: window._yamil.zoom.getZoom()} } return {error:'not ready'} })()`
-        ).then(result => json(res, result))
-          .catch(e => json(res, { error: e.message }, 500))
+        const { action } = body
+        const tab = tabManager.getActiveTab()
+        if (!tab || !tab.view) { json(res, { error: 'no active tab' }, 503); return }
+        let zoom = tab.zoom || 0
+        if (action === 'in') zoom++
+        else if (action === 'out') zoom--
+        else zoom = 0
+        tab.zoom = zoom
+        tab.view.webContents.setZoomLevel(zoom)
+        json(res, { ok: true, zoom })
       })
       return
     }
 
-    // ── POST /fullscreen ─────────────────────────────────────────
     if (req.method === 'POST' && url.pathname === '/fullscreen') {
       if (!mainWindow) { json(res, { error: 'no window' }, 503); return }
       mainWindow.setFullScreen(!mainWindow.isFullScreen())
@@ -1158,41 +1619,76 @@ function createWindow () {
   const isMac = process.platform === 'darwin'
   const isWin = process.platform === 'win32'
 
-  mainWindow = new BrowserWindow({
+  // ── BaseWindow (replaces BrowserWindow) ──────────────────────
+  mainWindow = new BaseWindow({
     width:  state.width  || 1440,
     height: state.height || 900,
     x: state.x,
     y: state.y,
     minWidth:  900,
     minHeight: 600,
+    show: false,
     backgroundColor: '#0f172a',
     icon: path.join(__dirname, 'assets', isMac ? 'icon.icns' : isWin ? 'icon.ico' : 'icon.png'),
     titleBarStyle: isMac ? 'hiddenInset' : 'default',
     frame: isMac,
     autoHideMenuBar: true,
+  })
+
+  // Hide menu bar on Windows/Linux
+  if (!isMac) mainWindow.setMenuBarVisibility(false)
+
+  // ── Toolbar WebContentsView (UI: tab bar, navbar, sidebar, status bar) ──
+  toolbarView = new WebContentsView({
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      webviewTag: true,
+      webviewTag: false,
       sandbox: false,
     },
   })
 
-  // Hide menu bar on Windows/Linux for a clean browser look (Alt shows it)
-  if (!isMac) mainWindow.setMenuBarVisibility(false)
+  toolbarView.webContents.loadFile(path.join(__dirname, 'renderer', 'index.html'))
+  mainWindow.contentView.addChildView(toolbarView)
 
-  mainWindow.loadFile('renderer/index.html')
+  // Capture toolbar console messages so we can see renderer.js errors
+  toolbarView.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+    const levelMap = { 0: 'verbose', 1: 'info', 2: 'warning', 3: 'error' }
+    tabManager.consoleLogs.push({
+      ts: Date.now(),
+      level: levelMap[level] || 'info',
+      message,
+      source: sourceId ? `[toolbar] ${sourceId}` : '[toolbar]',
+      line: line || 0,
+      tabId: 'toolbar',
+    })
+    if (tabManager.consoleLogs.length > tabManager.consoleLogsMax) {
+      tabManager.consoleLogs = tabManager.consoleLogs.slice(-tabManager.consoleLogsMax)
+    }
+  })
+
+  // Set title
   mainWindow.setTitle(APP_TITLE)
 
-  mainWindow.on('resize', saveWindowState)
-  mainWindow.on('move',   saveWindowState)
+  // Show window after toolbar is ready
+  toolbarView.webContents.once('did-finish-load', () => {
+    // Initial layout
+    tabManager.layoutViews()
+    if (!START_MINIMIZED) mainWindow.show()
+  })
+
+  mainWindow.on('resize', () => {
+    saveWindowState()
+    tabManager.layoutViews()
+  })
+  mainWindow.on('move', saveWindowState)
 
   mainWindow.on('enter-full-screen', () => {
-    mainWindow.webContents.send('fullscreen-changed', true)
+    if (toolbarView) toolbarView.webContents.send('fullscreen-changed', true)
   })
   mainWindow.on('leave-full-screen', () => {
-    mainWindow.webContents.send('fullscreen-changed', false)
+    if (toolbarView) toolbarView.webContents.send('fullscreen-changed', false)
   })
 
   mainWindow.on('close', (e) => {
@@ -1202,7 +1698,7 @@ function createWindow () {
       mainWindow.hide()
     }
   })
-  mainWindow.on('closed', () => { mainWindow = null })
+  mainWindow.on('closed', () => { mainWindow = null; toolbarView = null })
 }
 
 // ── App lifecycle ─────────────────────────────────────────────────────
@@ -1245,38 +1741,27 @@ app.on('certificate-error', (event, webContents, url, error, certificate, callba
 })
 
 app.whenReady().then(() => {
-  // Spoof user agent to Chrome — prevents "Incompatible browser" blocks on sites
-  const chromeUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-  session.defaultSession.setUserAgent(chromeUA)
+  // Spoof user agent to Chrome
+  session.defaultSession.setUserAgent(CHROME_UA)
   const yamilSession = session.fromPartition('persist:yamil')
-  yamilSession.setUserAgent(chromeUA)
+  yamilSession.setUserAgent(CHROME_UA)
 
   // Install ad blocker on webview sessions
   adBlocker.install(yamilSession)
   console.log(`[YAMIL adblock] Installed — ${adBlocker.blockedDomains.size} domains blocked`)
 
   // Unified onHeadersReceived handler — strips frame-blocking headers and optionally blocks 3P cookies.
-  // IMPORTANT: Electron only supports ONE onHeadersReceived handler per session, so everything goes here.
   yamilSession.webRequest.onHeadersReceived((details, callback) => {
     const h = Object.assign({}, details.responseHeaders)
 
-    // Log localhost requests for debugging
-    if (details.url.includes('localhost')) {
-      console.log(`[YAMIL headers] onHeadersReceived: url=${details.url}, resourceType=${details.resourceType}`)
-      console.log(`[YAMIL headers] Original headers:`, JSON.stringify(h).slice(0, 500))
-    }
-
-    // 1. Strip frame-blocking and download-forcing headers so webview can load any page
+    // 1. Strip frame-blocking and download-forcing headers
     for (const key of Object.keys(h)) {
       const lk = key.toLowerCase()
-      if (lk === 'x-frame-options') { console.log('[YAMIL headers] Stripping X-Frame-Options'); delete h[key]; continue }
+      if (lk === 'x-frame-options') { delete h[key]; continue }
       if (lk === 'content-disposition') {
-        // Strip Content-Disposition: attachment for HTML responses — these force downloads
         const ct = Object.keys(h).find(k => k.toLowerCase() === 'content-type')
         const contentType = ct ? (Array.isArray(h[ct]) ? h[ct][0] : h[ct]) : ''
-        if (contentType.includes('text/html') || contentType.includes('application/xhtml')) {
-          delete h[key]
-        }
+        if (contentType.includes('text/html') || contentType.includes('application/xhtml')) { delete h[key] }
         continue
       }
       if (lk === 'content-security-policy') {
@@ -1306,12 +1791,11 @@ app.whenReady().then(() => {
     callback({ responseHeaders: h })
   })
 
-  // Auto-configure any new profile sessions (UA + ad blocker + downloads + header stripping)
+  // Auto-configure any new profile sessions
   app.on('session-created', (newSession) => {
-    newSession.setUserAgent(chromeUA)
+    newSession.setUserAgent(CHROME_UA)
     adBlocker.install(newSession)
     wireDownloadHandler(newSession)
-    // Strip frame-blocking headers on new profile sessions too
     newSession.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, callback) => {
       const h = Object.assign({}, details.responseHeaders)
       for (const key of Object.keys(h)) {
@@ -1336,7 +1820,7 @@ app.whenReady().then(() => {
   })
 
   // ── Download manager ─────────────────────────────────────────────
-  const activeDownloads = new Map() // savePath → DownloadItem
+  const activeDownloads = new Map()
 
   function wireDownloadHandler (sess) {
     sess.on('will-download', (event, item, webContents) => {
@@ -1347,45 +1831,36 @@ app.whenReady().then(() => {
 
       console.log(`[YAMIL download] will-download: url=${downloadUrl}, mime=${mimeType}, file=${filename}, bytes=${totalBytes}`)
 
-      // Cancel downloads that are actually page navigations (HTML/XHTML)
-      // These happen when X-Frame-Options or Content-Disposition triggers a download for page content
       const isPageDownload = mimeType.includes('text/html') || mimeType.includes('application/xhtml') ||
           filename === 'download' || !mimeType
       if (isPageDownload) {
         console.log('[YAMIL download] Cancelled — looks like a page navigation, not a real download')
-        // Use setSavePath to prevent the save dialog, then cancel immediately
         const tmpPath = path.join(app.getPath('temp'), 'yamil-cancelled-' + Date.now())
         item.setSavePath(tmpPath)
         item.cancel()
-        // Clean up the temp file if anything was written
         fs.unlink(tmpPath, () => {})
         return
       }
 
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
-
-      // Wait for the save dialog — only track after the user picks a path
-      // Electron shows the save dialog automatically; if the user cancels,
-      // the item state goes to 'cancelled' without us ever notifying the renderer.
       let notified = false
 
       item.on('updated', (_e, state) => {
         const savePath = item.getSavePath()
-        // Only start tracking once a save path is set (user confirmed the dialog)
         if (!savePath) return
 
         if (!notified) {
           notified = true
           activeDownloads.set(id, item)
-          if (mainWindow) {
-            mainWindow.webContents.send('download-started', {
+          if (toolbarView) {
+            toolbarView.webContents.send('download-started', {
               id, filename, totalBytes: item.getTotalBytes(), savePath, state: 'progressing', received: 0
             })
           }
         }
 
-        if (mainWindow) {
-          mainWindow.webContents.send('download-progress', {
+        if (toolbarView) {
+          toolbarView.webContents.send('download-progress', {
             id, received: item.getReceivedBytes(), totalBytes: item.getTotalBytes(),
             state: state === 'interrupted' ? 'interrupted' : 'progressing',
             paused: item.isPaused()
@@ -1395,9 +1870,8 @@ app.whenReady().then(() => {
 
       item.once('done', (_e, state) => {
         activeDownloads.delete(id)
-        // Only notify renderer if we actually tracked this download
-        if (notified && mainWindow) {
-          mainWindow.webContents.send('download-done', {
+        if (notified && toolbarView) {
+          toolbarView.webContents.send('download-done', {
             id, filename, state,
             savePath: item.getSavePath(),
             totalBytes: item.getTotalBytes()
@@ -1410,21 +1884,11 @@ app.whenReady().then(() => {
   wireDownloadHandler(yamilSession)
   wireDownloadHandler(session.defaultSession)
 
-  // IPC: pause/resume/cancel downloads
-  ipcMain.on('download-pause', (_e, id) => {
-    const item = activeDownloads.get(id)
-    if (item) item.pause()
-  })
-  ipcMain.on('download-resume', (_e, id) => {
-    const item = activeDownloads.get(id)
-    if (item) item.resume()
-  })
-  ipcMain.on('download-cancel', (_e, id) => {
-    const item = activeDownloads.get(id)
-    if (item) item.cancel()
-  })
+  ipcMain.on('download-pause', (_e, id) => { const item = activeDownloads.get(id); if (item) item.pause() })
+  ipcMain.on('download-resume', (_e, id) => { const item = activeDownloads.get(id); if (item) item.resume() })
+  ipcMain.on('download-cancel', (_e, id) => { const item = activeDownloads.get(id); if (item) item.cancel() })
 
-  // Grant microphone/media permissions for webviews (needed for voice input)
+  // Grant media permissions
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     const allowed = ['media', 'audioCapture', 'microphone', 'display-capture']
     callback(allowed.includes(permission))

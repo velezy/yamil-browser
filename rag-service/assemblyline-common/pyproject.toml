@@ -1,0 +1,180 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "assemblyline_common"
+version = "1.0.0"
+description = "Shared library for Logic Weaver microservices"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Logic Weaver Team"}
+]
+keywords = ["hl7", "healthcare", "integration", "microservices"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Healthcare Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+
+dependencies = [
+    "fastapi>=0.128.0",
+    "pydantic>=2.12.0",
+    "pydantic-settings>=2.12.0",
+    "sqlalchemy>=2.0.46",
+    "asyncpg>=0.31.0",
+    "greenlet>=3.3.0",  # Required for SQLAlchemy async
+    "PyJWT>=2.11.0",
+    "passlib[bcrypt]>=1.7.4",
+    "redis>=7.0.0",
+    "aiokafka>=0.12.0",
+    "httpx>=0.28.0",
+    "pyotp>=2.9.0",  # MFA/TOTP support
+    "cryptography>=46.0.0",  # Encryption utilities
+    "boto3>=1.35.0",  # AWS SDK (RDS IAM auth, Secrets Manager, S3, etc.)
+]
+
+[project.optional-dependencies]
+# --- Service-specific extras (install only what you need) ---
+auth = [
+    "PyJWT>=2.11.0",
+    "passlib[bcrypt]>=1.7.4",
+    "pyotp>=2.9.0",
+    "python-multipart>=0.0.6",
+]
+database = [
+    "sqlalchemy[asyncio]>=2.0.46",
+    "asyncpg>=0.31.0",
+    "greenlet>=3.3.0",
+    "alembic>=1.13.0",
+]
+ai = [
+    "langchain>=0.2.0",
+    "langchain-community>=0.2.0",
+    "langgraph>=0.2.0",
+    "ollama>=0.3.0",
+]
+voice = [
+    "faster-whisper>=1.0.0",
+    "edge-tts>=6.1.0",
+]
+connectors = [
+    "aiokafka>=0.12.0",
+    "aiohttp>=3.9.0",
+    "boto3>=1.35.0",
+    "paramiko>=3.4.0",
+]
+rag = [
+    "pgvector>=0.3.0",
+    "rank-bm25>=0.2.2",
+    "sentence-transformers>=3.0.0",
+]
+knowledge-graph = [
+    "networkx>=3.2.0",
+    "spacy>=3.7.0",
+]
+notifications = [
+    "aiosmtplib>=3.0.0",
+]
+middleware = [
+    "starlette>=0.37.0",
+]
+crawling = [
+    "crawl4ai>=0.3.0",
+    "playwright>=1.40.0",
+]
+llm = [
+    "openai>=1.30.0",
+    "anthropic>=0.30.0",
+    "google-generativeai>=0.7.0",
+    "ollama>=0.3.0",
+]
+observability = [
+    # Prometheus metrics
+    "prometheus-client>=0.24.1",
+    # OpenTelemetry core
+    "opentelemetry-api>=1.39.1",
+    "opentelemetry-sdk>=1.39.1",
+    # OpenTelemetry exporters
+    "opentelemetry-exporter-otlp>=1.39.1",
+    # OpenTelemetry instrumentation
+    "opentelemetry-instrumentation-fastapi>=0.60b1",
+    "opentelemetry-instrumentation-sqlalchemy>=0.60b1",
+    "opentelemetry-instrumentation-redis>=0.60b1",
+    "opentelemetry-instrumentation-httpx>=0.60b1",
+    # Langfuse for LLM observability
+    "langfuse>=2.0.0",
+]
+# --- Agentic AI platform extras ---
+memory = [
+    "redis>=7.0.0",
+    "httpx>=0.28.0",
+    "pgvector>=0.3.0",
+    "numpy>=2.0.0",
+]
+evaluation = [
+    "httpx>=0.28.0",
+    "numpy>=2.0.0",
+    "scikit-learn>=1.4.0",
+    "scipy>=1.12.0",
+    "nltk>=3.9.0",
+]
+hitl = [
+    "httpx>=0.28.0",
+]
+feedback = [
+    "httpx>=0.28.0",
+    "numpy>=2.0.0",
+    "scipy>=1.12.0",
+]
+# --- Convenience bundles ---
+all = [
+    "assemblyline-common[auth,database,ai,voice,connectors,rag,knowledge-graph,observability,notifications,middleware,crawling,llm,memory,evaluation,hitl,feedback]",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.5.0",
+    "ruff>=0.1.0",
+]
+load = [
+    "locust>=2.29.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/velezy/AssemblyLine"
+Documentation = "https://github.com/velezy/AssemblyLine/tree/master/docs"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.black]
+line-length = 100
+target-version = ["py311", "py312", "py313"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

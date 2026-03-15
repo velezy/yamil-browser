@@ -144,6 +144,13 @@
           <div class="settings-section">
             <div class="settings-section-title">Appearance</div>
             <label class="settings-row">
+              <span>Theme</span>
+              <select id="set-theme">
+                <option value="dark">Dark</option>
+                <option value="light">Light (YAMIL)</option>
+              </select>
+            </label>
+            <label class="settings-row">
               <span>Sidebar Position</span>
               <select id="set-sidebar-pos">
                 <option value="right">Right</option>
@@ -268,7 +275,7 @@
       <!-- Loading progress bar -->
       <div id="progress-bar"></div>
 
-      <!-- Webviews are created dynamically by renderer.js -->
+      <!-- Transparent viewport — WebContentsView tabs render behind this area -->
       <div id="webview-container">
         <!-- Autofill bar (shown when saved credentials match) -->
         <div id="autofill-bar">
@@ -285,8 +292,10 @@
           <span id="sidebar-title">
             <img src="../assets/yamil-logo.png" alt="" class="sidebar-logo">
             YAMIL AI
+            <span id="llm-status" title="AI connection status"></span>
           </span>
           <div id="sidebar-actions">
+            <button id="btn-theme-toggle" title="Toggle light/dark mode">&#x263E;</button>
             <button id="btn-summarize" title="Summarize page">&#x2211;</button>
             <button id="btn-tasks-toggle" title="Toggle task queue">&#x2630;</button>
             <button id="btn-sidebar-toggle" title="Collapse">&#x276E;</button>
@@ -320,6 +329,7 @@
               <input id="bg-check" type="checkbox">
               <span>BG</span>
             </label>
+            <button id="voice-btn" title="Hold to speak (push-to-talk)">&#x1F3A4;</button>
             <button id="chat-send" title="Send (Enter)">&#9658;</button>
           </div>
         </div>
@@ -354,8 +364,7 @@
       </div>
     </div>
 
-    <!-- ── Context menu ─────────────────────────────────────────── -->
-    <div id="context-menu"></div>
+    <!-- Context menus are now native (handled in main.js) -->
 
     <!-- ── Status bar ─────────────────────────────────────────── -->
     <div id="statusbar">

@@ -1,5 +1,79 @@
 # AI Notes
 
+## 2026-03-15 — 141: Connect AI Sidebar to AssemblyLine Chat-Service
+
+### Task
+- Deploy chat-service and rag-service as standalone Docker microservices
+- Power YAMIL Browser AI sidebar with multi-provider LLM routing
+- Expose agentic RAG API for MemoBytes, Drive-Sentinel, YAMIL apps
+
+### Architecture
+- **Hybrid**: Electron app runs native on desktop, AI services run in Docker
+- **chat-service** (:8020) — LLM routing via assemblyline-common, voice I/O, streaming SSE
+- **rag-service** (:8022) — agentic RAG, vector search, knowledge graph (pgvector)
+- **Shared Postgres** (pgvector:pg17) + **Redis** for all services
+- **Default LLM**: Ollama (local), with cloud fallback (OpenAI, Claude, Gemini, Grok)
+
+### Changes Made
+1. **Created `chat-service/`** — copied from AssemblyLine, adapted for standalone
+   - `browser_chat.py` — direct LLMRouter endpoint (no orchestrator needed)
+   - `app/main.py` — added CORS, SKIP_AUTH mode, mounted browser_chat router
+   - `docker-compose.yml`, `.env`, `.env.example` — Ollama host access, port offsets
+2. **Copied `rag-service/`** — full agentic RAG from AssemblyLine (118+ endpoints)
+3. **Updated root `docker-compose.yml`** — unified stack with shared ai-db and redis
+   - browser-service :4000, chat-service :8020, rag-service :8022
+   - Single Postgres instance with per-service databases
+4. **Created `init-databases.sql`** — creates yamil_chat, yamil_rag databases + pgvector
+5. **Updated `electron-app/preload.js`** — default AI_ENDPOINT to :8020/browser-chat
+6. **Updated `renderer.js`**:
+   - sendChat() now uses streaming (SSE) by default
+   - Server TTS via /voice/synthesize (fallback to browser speechSynthesis)
+   - Push-to-talk voice input via MediaRecorder + /voice/transcribe
+   - LLM status indicator (polls /llm/status every 30s)
+7. **Updated `index.html`** — voice button + LLM status dot
+8. **Updated `styles.css`** — voice button, recording animation, status indicator
+9. **Created `setup-all.sh`** — bundles assemblyline-common into both services
+10. **Created `start-with-ai.sh`** — starts Docker + waits for health + launches Electron
+
+### Key Decisions
+- Agentic RAG writes to its own Postgres DB — apps pull via API, not direct DB access
+- No JWT auth for local desktop use (SKIP_AUTH=true)
+- assemblyline-common bundled at build time into each container (setup.sh)
+- Cloud API keys optional — add to .env for fallback providers
+
+### Fixes Applied During Deployment
+1. **`setup_observability()` TypeError** — bundled assemblyline_common had different function signature than what chat-service/rag-service expected. Fixed by removing `setup_observability()` calls, using `get_logger()` directly.
+2. **Ollama model not found (404)** — default model `llama3.1:8b` not installed locally. Added `OLLAMA_MODEL=gemma3:4b` to `chat-service/.env`.
+3. **`file://` URLs broken in YAMIL Browser** — regex in `renderer.js` only allowed `http/https`, prepending `https://` to `file://` URLs. Fixed regex to `/^(https?|file):\/\//` in both occurrences (lines 795 and 1783).
+
+### Verification Results
+| Test | Status |
+|------|--------|
+| `curl http://localhost:8020/health` | Pass — `{"status":"healthy"}` |
+| `curl http://localhost:8022/health` | Pass — `{"status":"degraded"}` (DB not initialized, but running) |
+| `curl http://localhost:8020/llm/status` | Pass — Ollama healthy, providers configured |
+| Non-streaming browser-chat | Pass — gemma3:4b responds in ~2s, $0 cost |
+| Streaming browser-chat (SSE) | Pass — tokens stream correctly |
+| LLM status indicator in sidebar | Pass — green dot, `title="AI connected: ollama"` |
+| Chat via sidebar | Pass — sent "Hello YAMIL, who are you?" → got contextual response about the page |
+| Voice status `/voice/status` | Pass — STT available (lazy), TTS loaded (af_heart) |
+| TTS synthesis `/voice/synthesize` | Pass — generated 16KB audio file |
+| Docker containers stable | Pass — no crash loops |
+
+### How to Change LLM
+1. **Change Ollama model**: Edit `chat-service/.env` → `OLLAMA_MODEL=qwen3:8b` → `docker compose restart chat-service`
+2. **Add cloud providers**: Add API keys to `chat-service/.env` (OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, XAI_API_KEY)
+3. **Per-request**: POST to `/browser-chat` with `{"provider":"openai","model":"gpt-4o"}`
+4. **Fallback chain**: `LLM_FALLBACK_CHAIN=ollama,gemini,openai,anthropic` in `.env`
+
+### Next Steps
+1. Add provider/model selector dropdown to sidebar UI
+2. Initialize RAG database (currently degraded)
+3. Test voice input (push-to-talk) in the actual browser
+4. Push Docker containers to Windows PC (192.168.0.101)
+
+---
+
 ## 2026-03-14 — yamil-ai.com Slowness Investigation
 
 ### Task
@@ -326,3 +400,159 @@ After deploying VNC auth changes, `docker compose up -d frontend` cascaded and *
 - Close 6 critical/high security gaps (~1-2 sprints)
 - Start HIPAA Phase 1: BAA enforcement, risk assessment documentation, DR plan
 - Run dependency scanning (Snyk/Trivy) to assess component vulnerabilities
+
+---
+
+## 2026-03-15: Chrome Rendering Feature Flags Research for YAMIL Browser
+
+### Task
+Research what Chrome rendering features and command-line flags production Chrome uses that the Electron YAMIL Browser app is missing. Provide a comprehensive list covering font rendering, CSS/layout, GPU/hardware acceleration, media codecs, web platform features, V8 performance, and FOUC prevention.
+
+### Context
+- Electron 33 = Chromium 130
+- Current flags: `SharedArrayBuffer`, `enable-gpu-rasterization`, `enable-zero-copy`, `ignore-gpu-blocklist`
+- Current webview: `contextIsolation=yes, sandbox=no`, Chrome 131 UA string
+- macOS (darwin) is the primary platform
+
+### Research Approach
+1. Searched Electron docs for supported command-line switches
+2. Searched Chromium source for `--enable-features` flag names and defaults
+3. Checked Peter Beverloo's Chromium switches database
+4. Investigated font rendering issues specific to Electron on macOS
+5. Researched FOUC prevention (show:false + ready-to-show pattern)
+6. Verified feature availability against Chromium 130 (Electron 33's engine)
+
+### Key Findings
+See the comprehensive list in the response. Organized into 7 categories with specific `app.commandLine.appendSwitch()` calls, BrowserWindow config changes, and webview FOUC prevention techniques.
+
+---
+
+## 2026-03-15: WebContentsView Migration Research
+
+### Task
+Research Electron's `WebContentsView` API as a replacement for `<webview>` tags in the YAMIL Browser app. Cover API surface, migration patterns, open-source browser examples, overlay UI handling, tab switching, resize, screenshots, JS execution, navigation events, and version compatibility.
+
+### Context
+- YAMIL Browser currently uses `<webview>` tags inside a BrowserWindow renderer process
+- Electron version: ^33.0.0 (Chromium 130)
+- ~86 references to `webview` across 4 files (main.js, renderer.js, index.html, styles.css)
+- The `<webview>` tag is officially deprecated in Electron docs in favor of WebContentsView
+
+### Key Findings
+1. **WebContentsView** introduced in Electron v30 as stable API, replaces both `<webview>` and deprecated `BrowserView`
+2. Uses **BaseWindow** (not BrowserWindow) as container — BaseWindow has no renderer of its own
+3. The **View** base class provides: `setBounds()`, `getBounds()`, `setVisible()`, `addChildView()`, `removeChildView()`, `setBackgroundColor()`, `setBorderRadius()`, `children` property
+4. **No auto-resize** — must listen to window `resize` event and manually update bounds
+5. **No built-in z-index** — child view ordering controlled by `addChildView(view, index)` parameter; calling `addChildView()` on existing child reorders to top
+6. **Tab switching**: use `setVisible(false)` to hide inactive tabs, `setVisible(true)` + bring to top for active
+7. **Screenshots**: `view.webContents.capturePage([rect])` returns Promise<NativeImage>
+8. **JS execution**: `view.webContents.executeJavaScript(code)` returns Promise with result
+9. **Navigation events**: `did-navigate`, `did-start-navigation`, `will-navigate`, `page-title-updated`, `page-favicon-updated` all on `view.webContents`
+10. **Memory management critical**: When BaseWindow closes, webContents are NOT auto-destroyed — must call `view.webContents.close()` manually in `closed` event
+11. **Min Browser** (minbrowser/min) uses one BrowserView per tab with IPC communication pattern
+12. **Overlay UI** (autofill bar, context menus): must be a separate WebContentsView layered on top with higher z-order
+
+### Architecture Decision: BaseWindow vs BrowserWindow
+- **BaseWindow + WebContentsView**: Recommended path. UI toolbar is a WebContentsView, each tab is a WebContentsView. All views are siblings under `win.contentView`.
+- **BrowserWindow + WebContentsView**: Also works but BrowserWindow's own webContents conflicts with the view hierarchy. Possible but not recommended.
+
+### Migration Complexity for YAMIL Browser
+- HIGH: 86 webview references across 4 files
+- Renderer process (renderer.js) creates/manages webview DOM elements — all of this moves to main process
+- IPC bridge between renderer and main process needs redesign
+- HTTP control server (port 9300) endpoints that eval in webview need to use `webContents.executeJavaScript()` instead
+- Screenshot pipeline changes from webview.capturePage to view.webContents.capturePage
+
+### Sources
+- Electron official: WebContentsView API, View API, webContents API, Migration blog post
+- Mamezou-tech: WebContentsView implementation guide, App structure visualization
+- Ika.im: Building a Browser in Electron (Yoga layout, React portals for overlay UI)
+- GitHub: mamezou-tech/electron-example-browserview, minbrowser/min Architecture wiki
+
+## 2026-03-15 — WebContentsView Migration Implementation
+
+### Task
+Implement the full migration from `<webview>` to `WebContentsView` as planned in `140-WebContentsView-Migration.md`.
+
+### Changes Made
+
+#### `electron-app/main.js` (Complete rewrite)
+- Replaced `BrowserWindow` with `BaseWindow` + `WebContentsView`
+- Created `TabManager` class managing WebContentsView tabs directly
+- All HTTP control server endpoints now access `tabManager.getActiveView().webContents` directly
+- Screenshots use `view.webContents.capturePage()` (no more IPC chain)
+- Native context menus via `Menu.popup()`
+- Credential watcher injection from main process
+- Layout management with `layoutViews()` on resize/sidebar toggle
+
+#### `electron-app/preload.js` (Extended)
+- Added `window.yamil` IPC bridge namespace with 20+ methods:
+  - Tab lifecycle: `createTab`, `switchTab`, `closeTab`
+  - Navigation: `navigate`, `goBack`, `goForward`, `reload`
+  - Page interaction: `eval`, `zoom`, `find`, `stopFind`, `print`, `devtools`
+  - Queries: `getInfo`, `list`, `getUrl`
+  - Actions: `savePageAs`, `copyUrl`, `viewSource`
+  - Layout: `sidebarToggled`, `bookmarkBarToggled`
+  - Events: `onTabEvent` listener for main→toolbar events
+
+#### `electron-app/renderer/renderer.js` (30+ surgical edits)
+- `createTab()`: Calls `window.yamil.createTab()` instead of creating `<webview>` DOM elements
+- `switchTab()`: Calls `window.yamil.switchTab()` to swap native views
+- `closeTab()`: Calls `window.yamil.closeTab()` instead of `webview.remove()`
+- Removed `wireWebviewEvents()` (~200 lines) — replaced with `window.yamil.onTabEvent()` listener
+- Removed `showContextMenu()` (~100 lines) — now native in main.js
+- All `tab.webview.executeJavaScript()` → `window.yamil.eval()`
+- All `tab.webview.loadURL()` → `window.yamil.navigate()`
+- All `tab.webview.goBack/goForward/reload` → `window.yamil.goBack/goForward/reload()`
+- All `tab.webview.findInPage/stopFindInPage` → `window.yamil.find/stopFind()`
+- All `tab.webview.setZoomLevel()` → `window.yamil.zoom()`
+- Autofill now triggered by main process `check-autofill` event
+- `setSidebarOpen()` notifies main via `window.yamil.sidebarToggled()`
+- `setBookmarkBarVisible()` notifies main via `window.yamil.bookmarkBarToggled()`
+- Stealth tab code (canvas, WebSocket screencast) unchanged
+
+#### `electron-app/renderer/index.html`
+- `#webview-container` comment updated (now transparent viewport)
+- Removed `#context-menu` div (native menus)
+
+#### `electron-app/renderer/styles.css`
+- `#webview-container`: Made transparent with `pointer-events: none` pass-through
+- Removed webview CSS rules, kept stealth-canvas rules
+- Removed `#context-menu` styles (~50 lines)
+
+### What's Preserved
+- Stealth tabs (canvas + browser-service) — fully unchanged
+- Sidebar chat UI, bookmarks, history, settings, downloads — all in toolbar DOM
+- MCP server — still calls port 9300 HTTP endpoints (no changes needed)
+- Tab bar drag-reorder, tab groups, pinning — all in toolbar DOM
+
+### Bug Fix: Missing `/console-logs` endpoint
+- The MCP tool `yamil_browser_console_logs` calls `GET /console-logs` on port 9300
+- This endpoint was missing from the new main.js — returned 404
+- **Fix**: Added `consoleLogs` circular buffer (max 500) to TabManager, wired `console-message` webContents event, added `/console-logs` HTTP endpoint with `level`, `last`, `clear` query params
+- Verified: all three console levels (info, warning, error) captured and returned correctly
+
+### Verification Results (All Passed)
+| Test | Status |
+|------|--------|
+| Window opens with tab bar, navbar, status bar | Pass |
+| Pages render in native WebContentsView (no clipping) | Pass |
+| Tab switching between multiple tabs | Pass |
+| Navigation (forward/back/URL bar) | Pass |
+| `yamil_browser_screenshot` | Pass |
+| `yamil_browser_navigate` | Pass |
+| `yamil_browser_dom` | Pass |
+| `yamil_browser_eval` | Pass |
+| `yamil_browser_click` | Pass |
+| `yamil_browser_fill` | Pass |
+| `yamil_browser_go_back` | Pass |
+| `yamil_browser_list_tabs` | Pass |
+| `yamil_browser_switch_tab` | Pass |
+| `yamil_browser_scroll` | Pass |
+| `yamil_browser_console_logs` | Pass (fixed) |
+| Layout resize (sidebar closed = full-width) | Pass |
+
+### Remaining Tests (not yet verified)
+- Self-signed cert handling (QNAP at 192.168.0.102)
+- Autofill on a login page
+- Find-in-page UI (Cmd+F from toolbar)

@@ -837,3 +837,38 @@ Detection failures logged automatically for review and improvement.
 
 ---
 
+### 2026-03-15T04:13:10.847Z — `yamil_browser_wait`
+- **Page**: https://yamil-ai.com/login
+- **Params**: `{"selector":"nav","timeout":10000}`
+- **Error**: Timeout waiting for visible: nav
+
+---
+
+### 2026-03-15T04:13:39.500Z — `yamil_browser_wait`
+- **Page**: https://yamil-ai.com/login
+- **Params**: `{"selector":".sidebar, nav, [class*='dashboard']","timeout":8000}`
+- **Error**: Timeout waiting for visible: .sidebar, nav, [class*='dashboard']
+
+---
+
+### 2026-03-15T04:19:11.761Z — `yamil_browser_eval`
+- **Page**: https://yamil-ai.com/login
+- **Params**: `{"script":"\n// Reset debug\nsessionStorage.setItem('_debug2', '[]');\n\n// Store valid auth\nconst loginRes = await fetch('/api/v1/auth/login', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n"}`
+- **Error**: Eval failed after all retries
+
+---
+
+### 2026-03-15T04:19:24.425Z — `yamil_browser_eval`
+- **Page**: https://yamil-ai.com/login
+- **Params**: `{"script":"\nvar r = await fetch('/api/v1/auth/login', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: JSON.stringify({ email: 'logicweaver@hss.edu', password: 'Ashley2026$$' })\n});"}`
+- **Error**: Eval failed after all retries
+
+---
+
+### 2026-03-15T16:47:33.374Z — `yamil_browser_eval`
+- **Page**: unknown
+- **Params**: `{"script":"document.readyState + ' | ' + document.title + ' | ' + document.body?.innerText?.substring(0, 200)"}`
+- **Error**: Eval failed after all retries
+
+---
+

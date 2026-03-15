@@ -34,6 +34,9 @@ body { background: var(--bg); color: var(--text); font-size: 13px; }
   -webkit-app-region: drag;
   overflow: hidden;
 }
+/* macOS: pad left for traffic light buttons, hide custom window controls */
+body.platform-darwin #tab-bar { padding-left: 74px; }
+body.platform-darwin #window-controls { display: none; }
 
 #tabs-list { -webkit-app-region: drag; }
 .tab, #btn-new-tab, #btn-new-stealth-tab, #window-controls, #window-controls button { -webkit-app-region: no-drag; }
@@ -517,40 +520,43 @@ body { background: var(--bg); color: var(--text); font-size: 13px; }
   display: flex;
   height: calc(100vh - var(--tab-h) - var(--navbar-h) - var(--status-h));
   overflow: hidden;
-  background: #fff;
+  background: var(--bg);
 }
 #main.with-bmbar {
   height: calc(100vh - var(--tab-h) - var(--navbar-h) - var(--bmbar-h) - var(--status-h));
 }
 
 /* ── Webview container ──────────────────────────────────────────── */
+/* Transparent viewport — WebContentsView tabs render behind this area */
 #webview-container {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+  position: relative;
   overflow: hidden;
+  background: transparent;  /* Let native WebContentsView show through */
+  pointer-events: none;     /* Pass clicks through to native view below */
 }
 
-#webview-container webview,
+/* Autofill bar and stealth canvases need pointer events */
+#webview-container > * {
+  pointer-events: auto;
+}
+
 #webview-container .stealth-canvas {
-  flex: 1;
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
   width: 100%;
+  height: 100%;
   border: none;
   display: none;
-}
-
-#webview-container webview.active,
-#webview-container .stealth-canvas.active {
-  display: flex;
-}
-
-#webview-container .stealth-canvas {
   cursor: default;
   object-fit: contain;
   background: #1a1a2e;
   outline: none;
+}
+
+#webview-container .stealth-canvas.active {
+  display: block;
 }
 
 /* ── Sidebar ─────────────────────────────────────────────────────── */
@@ -676,6 +682,44 @@ body { background: var(--bg); color: var(--text); font-size: 13px; }
   transition: opacity .15s;
 }
 #chat-send:hover { opacity: .85; }
+
+/* ── Voice button ────────────────────────────────────────────────── */
+#voice-btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 28px; height: 28px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all .15s;
+  user-select: none;
+}
+#voice-btn:hover { border-color: var(--green); color: var(--green); }
+#voice-btn.recording {
+  background: var(--red);
+  color: #fff;
+  border-color: var(--red);
+  animation: pulse-recording 1s infinite;
+}
+@keyframes pulse-recording {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ── LLM status indicator ────────────────────────────────────────── */
+#llm-status {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+#llm-status.connected { background: var(--green); }
+#llm-status.disconnected { background: var(--red); }
 
 /* ── Status bar ──────────────────────────────────────────────────── */
 #statusbar {
@@ -953,57 +997,7 @@ body { background: var(--bg); color: var(--text); font-size: 13px; }
   padding: 4px 8px;
 }
 
-/* ── Context menu ───────────────────────────────────────────────── */
-#context-menu {
-  position: fixed;
-  z-index: 99999;
-  min-width: 200px;
-  max-width: 320px;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 6px 24px rgba(0,0,0,.5);
-  padding: 4px 0;
-  font-size: 12px;
-  display: none;
-}
-#context-menu .ctx-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  color: var(--text);
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-#context-menu .ctx-item:hover {
-  background: var(--bg3);
-}
-#context-menu .ctx-item.disabled {
-  opacity: .4;
-  pointer-events: none;
-}
-#context-menu .ctx-item kbd {
-  margin-left: auto;
-  font-size: 10px;
-  color: var(--text-muted);
-  padding-left: 16px;
-}
-#context-menu .ctx-sep {
-  height: 1px;
-  background: var(--border);
-  margin: 4px 0;
-}
-#context-menu .ctx-label {
-  padding: 4px 12px;
-  font-size: 10px;
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 300px;
-}
+/* Context menus are now native (handled in main.js via Menu.popup()) */
 
 /* ── Fullscreen mode ────────────────────────────────────────────── */
 body.fullscreen #tab-bar,
@@ -1377,3 +1371,308 @@ body.fullscreen #main {
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
+
+/* ══════════════════════════════════════════════════════════════════
+   LIGHT THEME — yamil-ai.com color palette
+   Activated via data-theme="light" on <html>
+   ══════════════════════════════════════════════════════════════════ */
+:root[data-theme="light"] {
+  --bg:        #f1f5f9;   /* slate-100 — main background */
+  --bg2:       #ffffff;   /* white — panels, cards, sidebar */
+  --bg3:       #e2e8f0;   /* slate-200 — hover, elevated surfaces */
+  --border:    #cbd5e1;   /* slate-300 — borders */
+  --text:      #0f172a;   /* slate-900 — primary text */
+  --text-muted:#64748b;   /* slate-500 — secondary text */
+  --green:     #0891b2;   /* cyan-600 — yamil teal (primary accent) */
+  --blue:      #0284c7;   /* sky-600 — links, info */
+  --red:       #dc2626;   /* red-600 — errors, destructive */
+  --radius:    6px;
+}
+
+/* ── Light: body + main area ──────────────────────────────────────── */
+:root[data-theme="light"] body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ── Light: navbar (blue accent surround) ─────────────────────────── */
+:root[data-theme="light"] #navbar {
+  background: #e0f2fe;
+  border-bottom-color: #bae6fd;
+}
+
+/* ── Light: address bar (white input area) ────────────────────────── */
+:root[data-theme="light"] #address-wrap {
+  background: #ffffff;
+  border-color: #bae6fd;
+}
+:root[data-theme="light"] #address-wrap:focus-within {
+  border-color: #00b4d8;
+  box-shadow: 0 0 0 2px rgba(0, 180, 216, 0.15);
+}
+:root[data-theme="light"] #address-bar {
+  color: var(--text);
+}
+:root[data-theme="light"] #address-bar::placeholder {
+  color: var(--text-muted);
+}
+
+/* ── Light: navbar buttons ────────────────────────────────────────── */
+:root[data-theme="light"] #navbar button {
+  background: var(--bg3);
+  color: var(--text);
+}
+:root[data-theme="light"] #navbar button:hover {
+  background: #cbd5e1;
+}
+
+/* ── Light: tab bar (clean white) ─────────────────────────────────── */
+:root[data-theme="light"] #tab-bar {
+  background: #ffffff;
+  border-bottom-color: #e2e8f0;
+}
+:root[data-theme="light"] .tab {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+:root[data-theme="light"] .tab:hover {
+  background: #e2e8f0;
+}
+:root[data-theme="light"] .tab.active {
+  background: #ffffff;
+  border-bottom-color: #ffffff;
+  border-top: 2px solid #00b4d8;
+}
+:root[data-theme="light"] .tab-title {
+  color: var(--text-muted);
+}
+:root[data-theme="light"] .tab.active .tab-title {
+  color: var(--text);
+}
+
+/* ── Light: sidebar ───────────────────────────────────────────────── */
+:root[data-theme="light"] #sidebar {
+  background: #ffffff;
+  border-left-color: #e2e8f0;
+}
+:root[data-theme="light"] #sidebar-header {
+  background: #ffffff;
+  border-bottom-color: #e2e8f0;
+}
+
+/* ── Light: chat messages ─────────────────────────────────────────── */
+:root[data-theme="light"] .chat-msg.user {
+  background: #e0f2fe;
+  color: var(--text);
+}
+:root[data-theme="light"] .chat-msg.ai {
+  background: #ecfeff;
+  color: #0e7490;
+  border-color: #a5f3fc;
+}
+:root[data-theme="light"] .chat-msg.system {
+  color: var(--text-muted);
+}
+
+/* ── Light: chat input ────────────────────────────────────────────── */
+:root[data-theme="light"] #chat-input {
+  background: #f8fafc;
+  border-color: var(--border);
+  color: var(--text);
+}
+:root[data-theme="light"] #chat-input:focus {
+  border-color: var(--green);
+}
+
+/* ── Light: send button (teal gradient like yamil-ai.com) ─────────── */
+:root[data-theme="light"] #chat-send {
+  background: linear-gradient(to right, #00b4d8, #48cae4);
+  color: #fff;
+}
+
+/* ── Light: status bar (blue accent) ──────────────────────────────── */
+:root[data-theme="light"] #statusbar {
+  background: #e0f2fe;
+  border-top-color: #bae6fd;
+}
+
+/* ── Light: bookmark bar ──────────────────────────────────────────── */
+:root[data-theme="light"] #bookmark-bar {
+  background: #ffffff;
+  border-bottom-color: #e2e8f0;
+}
+:root[data-theme="light"] .bm-chip {
+  background: #f1f5f9;
+  color: var(--text-muted);
+}
+:root[data-theme="light"] .bm-chip:hover {
+  background: #e2e8f0;
+  color: var(--text);
+}
+
+/* ── Light: app menu ──────────────────────────────────────────────── */
+:root[data-theme="light"] #app-menu {
+  background: #ffffff;
+  border-color: var(--border);
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+}
+:root[data-theme="light"] .menu-item {
+  color: var(--text);
+}
+:root[data-theme="light"] .menu-item:hover {
+  background: #f1f5f9;
+}
+
+/* ── Light: settings/history/bookmark dialogs ─────────────────────── */
+:root[data-theme="light"] #settings-dialog,
+:root[data-theme="light"] #hist-dialog,
+:root[data-theme="light"] #bm-dialog,
+:root[data-theme="light"] #dl-dialog,
+:root[data-theme="light"] #cookie-dialog {
+  background: #ffffff;
+  border-color: var(--border);
+  box-shadow: 0 8px 32px rgba(0,0,0,.12);
+}
+:root[data-theme="light"] #settings-panel,
+:root[data-theme="light"] #history-panel,
+:root[data-theme="light"] #bookmark-manager,
+:root[data-theme="light"] #downloads-panel,
+:root[data-theme="light"] #cookie-panel {
+  background: rgba(0,0,0,.2);
+}
+
+/* ── Light: find bar ──────────────────────────────────────────────── */
+:root[data-theme="light"] #find-bar {
+  background: #ffffff;
+}
+:root[data-theme="light"] #find-input {
+  background: #f8fafc;
+  color: var(--text);
+}
+
+/* ── Light: settings inputs ───────────────────────────────────────── */
+:root[data-theme="light"] .settings-row input[type="text"],
+:root[data-theme="light"] .settings-row select {
+  background: #f8fafc;
+  border-color: var(--border);
+  color: var(--text);
+}
+:root[data-theme="light"] .settings-btn {
+  background: #e2e8f0;
+  color: var(--text);
+}
+:root[data-theme="light"] .settings-btn:hover {
+  background: #cbd5e1;
+}
+
+/* ── Light: skill buttons ─────────────────────────────────────────── */
+:root[data-theme="light"] .skill-btn {
+  background: #f8fafc;
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+:root[data-theme="light"] .skill-btn:hover {
+  background: #e0f2fe;
+  color: var(--green);
+  border-color: var(--green);
+}
+
+/* ── Light: skills editor modal ───────────────────────────────────── */
+:root[data-theme="light"] #skills-editor-dialog {
+  background: #ffffff;
+  border-color: var(--border);
+}
+:root[data-theme="light"] #skills-editor-dialog input,
+:root[data-theme="light"] #skills-editor-dialog textarea {
+  background: #f8fafc;
+  color: var(--text);
+}
+
+/* ── Light: task queue ────────────────────────────────────────────── */
+:root[data-theme="light"] .tq-item {
+  background: #f8fafc;
+  border-color: var(--border);
+}
+
+/* ── Light: autofill bar ──────────────────────────────────────────── */
+:root[data-theme="light"] #autofill-bar {
+  background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+
+/* ── Light: autocomplete dropdown ─────────────────────────────────── */
+:root[data-theme="light"] #addr-autocomplete {
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(0,0,0,.1);
+}
+:root[data-theme="light"] .ac-item:hover,
+:root[data-theme="light"] .ac-item.selected {
+  background: #f1f5f9;
+}
+
+/* ── Light: SVG icon overrides (darken for readability) ────────────── */
+:root[data-theme="light"] .menu-icon,
+:root[data-theme="light"] .lock-svg-icon,
+:root[data-theme="light"] .stealth-btn-icon,
+:root[data-theme="light"] .ai-eye-icon,
+:root[data-theme="light"] .reader-icon,
+:root[data-theme="light"] .pip-icon,
+:root[data-theme="light"] .translate-icon,
+:root[data-theme="light"] .pwa-icon,
+:root[data-theme="light"] .mi-icon,
+:root[data-theme="light"] .skill-icon {
+  filter: brightness(0.4);
+}
+:root[data-theme="light"] #btn-menu:hover .menu-icon,
+:root[data-theme="light"] #btn-ai-eye:hover .ai-eye-icon {
+  filter: brightness(0.2);
+}
+
+/* ── Light: progress bar uses teal gradient ───────────────────────── */
+:root[data-theme="light"] #progress-bar {
+  background: linear-gradient(to right, #00b4d8, #48cae4);
+}
+
+/* ── Light: voice button ──────────────────────────────────────────── */
+:root[data-theme="light"] #voice-btn:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+/* ── Light: zoom controls ─────────────────────────────────────────── */
+:root[data-theme="light"] .zoom-controls button {
+  background: #e2e8f0;
+  border-color: var(--border);
+  color: var(--text);
+}
+:root[data-theme="light"] .zoom-controls button:hover {
+  background: #cbd5e1;
+}
+
+/* ── Light: scrollbar ─────────────────────────────────────────────── */
+:root[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+
+/* ── Light: stealth canvas ────────────────────────────────────────── */
+:root[data-theme="light"] #webview-container .stealth-canvas {
+  background: #f1f5f9;
+}
+
+/* ── Theme toggle button ──────────────────────────────────────────── */
+#btn-theme-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#btn-theme-toggle:hover {
+  background: var(--bg3);
+  color: var(--text);
+}

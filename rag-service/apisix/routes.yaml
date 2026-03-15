@@ -1,0 +1,41 @@
+# rag-service — APISIX Route Configuration
+# Drop this into your app's apisix.yaml or merge with other service routes.
+
+routes:
+  - id: 1
+    uri: /api/v1/rag/*
+    name: rag-service
+    methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - PATCH
+      - OPTIONS
+    plugins:
+      proxy-rewrite:
+        regex_uri: ["^/api/v1/rag/(.*)", "/api/v1/$1"]
+      cors:
+        allow_origins: "*"
+        allow_methods: "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+        allow_headers: "Authorization, Content-Type, X-Tenant-ID"
+        expose_headers: "X-Request-ID"
+        max_age: 3600
+    upstream:
+      type: roundrobin
+      nodes:
+        "rag:8022": 1
+      timeout:
+        connect: 5
+        send: 30
+        read: 30
+      checks:
+        active:
+          type: http
+          http_path: /health
+          healthy:
+            interval: 10
+            successes: 2
+          unhealthy:
+            interval: 5
+            http_failures: 3

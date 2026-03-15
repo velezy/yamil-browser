@@ -1,0 +1,32 @@
+# T.A.L.O.S. Chat Service - LLM Inference
+# Aligned with Memobytes AI patterns
+
+# === CORE FRAMEWORK ===
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+httpx>=0.25.0
+aiohttp>=3.9.0
+websockets>=12.0
+
+# === AI/LLM ===
+ollama>=0.4.0                    # Ollama Python client
+
+# === STRUCTURED OUTPUT ===
+json-repair>=0.30.0              # JSON repair for malformed LLM output
+
+# === VOICE & STREAMING ===
+faster-whisper>=1.0.0            # STT - 6x faster than standard Whisper
+kokoro-onnx>=0.4.0               # TTS - Kokoro-82M ONNX (fast, no PyTorch needed)
+soundfile>=0.12.0                # Audio file I/O for Kokoro
+pydub>=0.25.0                    # Audio format conversion (WAV to MP3)
+numpy>=1.24.0                    # Audio processing
+
+# === TEXT PROCESSING ===
+markdown-text-clean>=1.0.3       # Strip markdown for TTS (removes **bold**, *italic*, etc.)
+inflect>=7.0.0                   # Number-to-words conversion for natural TTS
+asyncpg>=0.29.0                  # Async PostgreSQL
+pyjwt>=2.8.0                     # JWT token handling
+edge-tts>=6.1.0

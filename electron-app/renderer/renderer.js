@@ -13,6 +13,7 @@ const aiEndpoint = window.YAMIL_CONFIG?.AI_ENDPOINT || null
 const startUrl   = window.YAMIL_CONFIG?.START_URL   || 'https://yamil-ai.com'
 
 if (window.YAMIL_CONFIG?.APP_TITLE) document.title = window.YAMIL_CONFIG.APP_TITLE
+if (window.YAMIL_CONFIG?.PLATFORM) document.body.classList.add(`platform-${window.YAMIL_CONFIG.PLATFORM}`)
 
 // ── Persistence keys ──────────────────────────────────────────────────
 // Global keys (shared across profiles)
@@ -132,18 +133,13 @@ function createTab (url, activate = true, type = 'yamil') {
   const id = ++tabIdCounter
   url = url || (type === 'stealth' ? 'about:blank' : startUrl)
 
-  const tab = { id, type, title: 'New Tab', url, webview: null, canvasEl: null, sessionId: null, ws: null, tabEl: null, titleSpan: null, faviconEl: null, zoom: 0 }
+  const tab = { id, type, title: 'New Tab', url, canvasEl: null, sessionId: null, ws: null, tabEl: null, titleSpan: null, faviconEl: null, zoom: 0 }
 
   if (type === 'yamil') {
-    // Create webview element
-    const wv = document.createElement('webview')
-    wv.setAttribute('allowpopups', '')
-    wv.setAttribute('partition', getPartition())
-    wv.setAttribute('webpreferences', 'contextIsolation=yes, sandbox=no')
-    wv.setAttribute('useragent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36')
-    wv.src = url
-    container.appendChild(wv)
-    tab.webview = wv
+    // Tell main process to create a WebContentsView tab
+    window.yamil.createTab(url, type).then(mainTabId => {
+      tab.mainTabId = mainTabId
+    }).catch(() => {})
   } else if (type === 'stealth') {
     // Create canvas element for stealth rendering
     const canvas = document.createElement('canvas')
@@ -232,9 +228,6 @@ function createTab (url, activate = true, type = 'yamil') {
     e.stopPropagation()
     closeTab(id)
   })
-
-  // Wire webview events for yamil tabs
-  if (type === 'yamil') wireWebviewEvents(tab)
 
   if (activate) switchTab(id)
   saveTabs()
@@ -457,13 +450,16 @@ function switchTab (id) {
 
   // Update visibility for all tabs
   tabs.forEach(t => {
-    // Yamil tabs
-    if (t.webview) t.webview.classList.toggle('active', t.id === id)
     // Stealth tabs
     if (t.canvasEl) t.canvasEl.classList.toggle('active', t.id === id)
     // Tab bar
     t.tabEl.classList.toggle('active', t.id === id)
   })
+
+  // Tell main process to switch the WebContentsView
+  if (tab.type === 'yamil') {
+    window.yamil.switchTab(id).catch(() => {})
+  }
 
   // Focus canvas for keyboard input on stealth tabs
   if (tab.type === 'stealth' && tab.canvasEl) {
@@ -510,8 +506,8 @@ function closeTab (id) {
     // Remove canvas
     if (tab.canvasEl) tab.canvasEl.remove()
   } else {
-    // Remove webview
-    if (tab.webview) tab.webview.remove()
+    // Tell main process to close the WebContentsView
+    window.yamil.closeTab(id).catch(() => {})
   }
 
   tab.tabEl.remove()
@@ -531,9 +527,10 @@ function restoreClosedTab () {
   createTab(entry.url, true, entry.type || 'yamil')
 }
 
+// WebContentsView tabs are managed by main process — use window.yamil IPC for interaction
 function getActiveWebview () {
-  const tab = tabs.find(t => t.id === activeTabId)
-  return (tab && tab.type === 'yamil') ? tab.webview : null
+  // Legacy compat: returns null since webviews no longer exist in DOM
+  return null
 }
 
 function getActiveTabType () {
@@ -552,314 +549,100 @@ function getActiveTabInfo () {
   return { type: tab.type, sessionId: tab.sessionId || null, id: tab.id, url: tab.url, title: tab.title }
 }
 
-// Expose for main process queries
+// Expose for main process queries (via toolbarView.webContents.executeJavaScript)
 window._yamil = {
-  tabs, getActiveWebview, getActiveTabType, getActiveSessionId, getActiveTabInfo, createTab, switchTab, closeTab,
+  tabs, getActiveTabType, getActiveSessionId, getActiveTabInfo, createTab, switchTab, closeTab,
   bookmarks: { getAll: getBookmarks, add: addBookmark, remove: removeBookmark, removeByUrl: removeBookmarkByUrl, search: searchBookmarks, isBookmarked },
   history: { getAll: getHistory, search: searchHistory, clear: clearHistory },
-  zoom: { zoomIn, zoomOut, zoomReset, getZoom: function () { const t = tabs.find(t => t.id === activeTabId); return t ? t.zoom : 0 } },
+  zoom: { zoomIn, zoomOut, zoomReset, getZoom: function () { const t = tabs.find(t2 => t2.id === activeTabId); return t ? t.zoom : 0 } },
   toggleFullscreen,
   skills: { getAll: getAllSkills, getCustom: getCustomSkills, run: runSkill },
   aiPrivacy: { isBlocked: isAiBlockedForCurrentPage, toggle: toggleAiVisibility, getBlockedDomains },
   getTabContext,
 }
 
-// ── Wire webview events to a tab ──────────────────────────────────────
+// ── Tab events from main process (replaces wireWebviewEvents) ─────────
 
-function wireWebviewEvents (tab) {
-  const wv = tab.webview
-
-  wv.addEventListener('did-start-loading', () => {
-    if (tab.id === activeTabId) {
-      statusLoad.textContent = 'Loading...'
-      if (connDot) connDot.className = 'dot connecting'
-      showProgressBar()
-    }
-  })
-
-  wv.addEventListener('did-stop-loading', () => {
-    if (tab.id === activeTabId) {
-      statusLoad.textContent = ''
-      if (connDot) connDot.className = 'dot connected'
-      hideProgressBar()
-    }
-  })
-
-  wv.addEventListener('did-navigate', (e) => {
-    tab.url = e.url
-    if (tab.id === activeTabId) { updateBar(e.url); updateBookmarkStar(); updateAiEyeIcon() }
-    saveTabs()
-    recordHistory(e.url, tab.title)
-  })
-
-  wv.addEventListener('did-navigate-in-page', (e) => {
-    tab.url = e.url
-    if (tab.id === activeTabId) { updateBar(e.url); updateBookmarkStar() }
-    saveTabs()
-  })
-
-  wv.addEventListener('page-title-updated', (e) => {
-    tab.title = e.title
-    tab.titleSpan.textContent = e.title
-    if (tab.id === activeTabId) statusUrl.textContent = e.title
-  })
-
-  wv.addEventListener('did-fail-load', (e) => {
-    if (e.errorCode !== -3 && tab.id === activeTabId) {
-      statusLoad.textContent = `Error: ${e.errorDescription}`
-      if (connDot) connDot.className = 'dot disconnected'
-    }
-  })
-
-  // ── Auto-save credentials: detect login form submissions ─────────────
-  wv.addEventListener('did-stop-loading', () => {
-    wv.executeJavaScript(`(function() {
-      if (window.__yamil_cred_observer) return; // already injected
-      window.__yamil_cred_observer = true;
-
-      // Find password fields and watch for form submissions
-      function watchForms() {
-        const pwFields = document.querySelectorAll('input[type="password"]');
-        if (!pwFields.length) return;
-
-        pwFields.forEach(pw => {
-          if (pw.__yamil_watched) return;
-          pw.__yamil_watched = true;
-
-          // Find the form or nearest container
-          const form = pw.closest('form') || pw.parentElement?.closest('div');
-          if (!form) return;
-
-          // Capture credentials on submit
-          function captureAndSave(e) {
-            const password = pw.value;
-            if (!password) return;
-
-            // Find username: look for email/text input near the password field
-            let username = '';
-            const container = pw.closest('form') || document.body;
-            const inputs = container.querySelectorAll('input[type="email"], input[type="text"], input[name*="user"], input[name*="email"], input[name*="login"], input[name*="account"], input[autocomplete="username"]');
-            for (const inp of inputs) {
-              if (inp.value && inp.value.trim()) { username = inp.value.trim(); break; }
-            }
-            // Fallback: any text/email input on the page with a value
-            if (!username) {
-              for (const inp of document.querySelectorAll('input[type="email"], input[type="text"]')) {
-                if (inp.value && inp.value.trim() && inp !== pw && !inp.type.match(/hidden|search/)) {
-                  username = inp.value.trim(); break;
-                }
-              }
-            }
-            if (!username || !password) return;
-
-            const domain = location.hostname.replace(/^www\\./, '');
-            // Build login form recipe — selectors the AI can use to replay login
-            function bestSelector(el) {
-              if (el.id) return '#' + el.id;
-              if (el.name) return el.tagName.toLowerCase() + '[name="' + el.name + '"]';
-              if (el.type) return el.tagName.toLowerCase() + '[type="' + el.type + '"]';
-              return el.tagName.toLowerCase();
-            }
-            const usernameField = container.querySelector('input[type="email"], input[type="text"], input[name*="user"], input[name*="email"]');
-            const submitBtn = container.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
-            const formRecipe = {
-              usernameSelector: usernameField ? bestSelector(usernameField) : null,
-              passwordSelector: bestSelector(pw),
-              submitSelector: submitBtn ? bestSelector(submitBtn) : null,
-            };
-            // Send to Electron control server for encryption + storage
-            fetch('http://127.0.0.1:9300/credentials/auto-save', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ domain, username, password, formUrl: location.href, formRecipe }),
-            }).catch(() => {}); // fire and forget
-          }
-
-          // Watch form submit
-          if (pw.closest('form')) {
-            pw.closest('form').addEventListener('submit', captureAndSave, { once: true });
-          }
-
-          // Also watch Enter key on password field and button clicks
-          pw.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') setTimeout(() => captureAndSave(e), 100);
-          }, { once: true });
-
-          // Watch submit/login buttons
-          const btns = (pw.closest('form') || pw.parentElement?.closest('div') || document).querySelectorAll('button[type="submit"], button:not([type]), input[type="submit"], [role="button"]');
-          btns.forEach(btn => {
-            const txt = (btn.textContent || btn.value || '').toLowerCase();
-            if (txt.match(/log.?in|sign.?in|submit|continue|next/)) {
-              btn.addEventListener('click', (e) => setTimeout(() => captureAndSave(e), 100), { once: true });
-            }
-          });
-        });
+window.yamil.onTabEvent((data) => {
+  const tab = tabs.find(t => t.id === data.tabId)
+  switch (data.type) {
+    case 'loading':
+      if (tab && tab.id === activeTabId) {
+        statusLoad.textContent = 'Loading...'
+        if (connDot) connDot.className = 'dot connecting'
+        showProgressBar()
       }
-
-      // Run immediately and re-run on DOM changes (SPAs add password fields dynamically)
-      watchForms();
-      let _yamilWatchTimer = null;
-      new MutationObserver(() => {
-        if (_yamilWatchTimer) return;
-        _yamilWatchTimer = setTimeout(() => { _yamilWatchTimer = null; watchForms(); }, 2000);
-      }).observe(document.body, { childList: true, subtree: true });
-    })()`, true).catch(() => {});
-  })
-
-  // ── Autofill: check for saved credentials on page load ─────────
-  wv.addEventListener('did-finish-load', () => {
-    tryAutofill(tab)
-    checkPWA(tab)
-  })
-
-  // Handle new-window requests (e.g. target="_blank") by opening in a new tab
-  wv.addEventListener('new-window', (e) => {
-    e.preventDefault()
-    createTab(e.url, true)
-  })
-
-  // Favicon update
-  wv.addEventListener('page-favicon-updated', (e) => {
-    if (e.favicons && e.favicons.length > 0 && tab.faviconEl) {
-      const img = new Image()
-      img.onload = () => {
-        const newEl = document.createElement('img')
-        newEl.className = 'tab-favicon'
-        newEl.src = e.favicons[0]
-        tab.faviconEl.replaceWith(newEl)
-        tab.faviconEl = newEl
+      break
+    case 'loaded':
+      if (tab && tab.id === activeTabId) {
+        statusLoad.textContent = ''
+        if (connDot) connDot.className = 'dot connected'
+        hideProgressBar()
       }
-      img.src = e.favicons[0]
-    }
-  })
-
-  // Find-in-page result count
-  wv.addEventListener('found-in-page', (e) => {
-    if (e.result && tab.id === activeTabId) {
-      const { activeMatchOrdinal, matches } = e.result
-      const fc = document.getElementById('find-count')
-      if (fc) fc.textContent = matches > 0 ? `${activeMatchOrdinal} of ${matches}` : 'No matches'
-    }
-  })
-
-  // Context menu (right-click)
-  wv.addEventListener('context-menu', (e) => {
-    e.preventDefault()
-    showContextMenu(e.params, tab)
-  })
-}
+      break
+    case 'navigated':
+      if (tab) {
+        tab.url = data.url
+        if (tab.id === activeTabId) { updateBar(data.url); updateBookmarkStar(); updateAiEyeIcon() }
+        saveTabs()
+        recordHistory(data.url, tab.title)
+      }
+      break
+    case 'url-updated':
+      if (tab) {
+        tab.url = data.url
+        if (tab.id === activeTabId) { updateBar(data.url); updateBookmarkStar() }
+        saveTabs()
+      }
+      break
+    case 'title-updated':
+      if (tab) {
+        tab.title = data.title
+        tab.titleSpan.textContent = data.title
+        if (tab.id === activeTabId) statusUrl.textContent = data.title
+      }
+      break
+    case 'favicon-updated':
+      if (tab && tab.faviconEl && data.favicon) {
+        const img = new Image()
+        img.onload = () => {
+          const newEl = document.createElement('img')
+          newEl.className = 'tab-favicon'
+          newEl.src = data.favicon
+          tab.faviconEl.replaceWith(newEl)
+          tab.faviconEl = newEl
+        }
+        img.src = data.favicon
+      }
+      break
+    case 'load-error':
+      if (tab && data.errorCode !== -3 && tab.id === activeTabId) {
+        statusLoad.textContent = `Error: ${data.errorDescription}`
+        if (connDot) connDot.className = 'dot disconnected'
+      }
+      break
+    case 'find-result':
+      if (data.tabId === activeTabId) {
+        const fc = document.getElementById('find-count')
+        if (fc) fc.textContent = data.matches > 0 ? `${data.activeMatchOrdinal} of ${data.matches}` : 'No matches'
+      }
+      break
+    case 'check-autofill':
+      if (tab) tryAutofillFromMain(tab, data.domain, data.url)
+      break
+    case 'tab-created':
+      // Main created a tab — update our mapping if needed
+      break
+    case 'tab-switched':
+      break
+    case 'tab-closed':
+      break
+  }
+})
 
 // ── Context menu ─────────────────────────────────────────────────────
-
-const ctxMenu = document.getElementById('context-menu')
-
-function showContextMenu (params, tab) {
-  const items = []
-  const { x, y, linkURL, srcURL, mediaType, selectionText, isEditable, pageURL } = params
-
-  // Link context
-  if (linkURL) {
-    const shortUrl = linkURL.length > 40 ? linkURL.slice(0, 40) + '...' : linkURL
-    items.push({ type: 'label', text: shortUrl })
-    items.push({ label: 'Open Link in New Tab', action: () => createTab(linkURL, true) })
-    items.push({ label: 'Open Link in Stealth Tab', action: () => createTab(linkURL, true, 'stealth') })
-    items.push({ label: 'Copy Link Address', action: () => navigator.clipboard.writeText(linkURL) })
-    items.push({ type: 'sep' })
-  }
-
-  // Image context
-  if (mediaType === 'image' && srcURL) {
-    items.push({ label: 'Open Image in New Tab', action: () => createTab(srcURL, true) })
-    items.push({ label: 'Copy Image Address', action: () => navigator.clipboard.writeText(srcURL) })
-    items.push({ label: 'Save Image As...', action: () => downloadUrl(srcURL, 'image') })
-    items.push({ type: 'sep' })
-  }
-
-  // Text selection context
-  if (selectionText) {
-    const shortSel = selectionText.length > 30 ? selectionText.slice(0, 30) + '...' : selectionText
-    items.push({ label: `Copy "${shortSel}"`, action: () => { if (tab.webview) tab.webview.copy() } })
-    items.push({ label: `Search for "${shortSel}"`, action: () => {
-      const engine = localStorage.getItem('yamil_settings') ? JSON.parse(localStorage.getItem('yamil_settings')).searchEngine : 'google'
-      const urls = { google: 'https://www.google.com/search?q=', bing: 'https://www.bing.com/search?q=', duckduckgo: 'https://duckduckgo.com/?q=', brave: 'https://search.brave.com/search?q=' }
-      createTab((urls[engine] || urls.google) + encodeURIComponent(selectionText), true)
-    }})
-    items.push({ label: `Ask AI about "${shortSel}"`, action: () => {
-      const chatInput = document.getElementById('chat-input')
-      if (chatInput) { chatInput.value = selectionText; chatInput.focus() }
-      setSidebarOpen(true)
-    }})
-    items.push({ type: 'sep' })
-  }
-
-  // Editable field context
-  if (isEditable) {
-    items.push({ label: 'Cut', kbd: 'Ctrl+X', action: () => { if (tab.webview) tab.webview.cut() } })
-    items.push({ label: 'Copy', kbd: 'Ctrl+C', action: () => { if (tab.webview) tab.webview.copy() } })
-    items.push({ label: 'Paste', kbd: 'Ctrl+V', action: () => { if (tab.webview) tab.webview.paste() } })
-    items.push({ label: 'Select All', kbd: 'Ctrl+A', action: () => { if (tab.webview) tab.webview.selectAll() } })
-    items.push({ type: 'sep' })
-  }
-
-  // General page actions
-  items.push({ label: 'Back', kbd: 'Alt+\u2190', action: () => { if (tab.webview) tab.webview.goBack() }, disabled: !tab.webview?.canGoBack() })
-  items.push({ label: 'Forward', kbd: 'Alt+\u2192', action: () => { if (tab.webview) tab.webview.goForward() }, disabled: !tab.webview?.canGoForward() })
-  items.push({ label: 'Reload', kbd: 'Ctrl+R', action: () => { if (tab.webview) tab.webview.reload() } })
-  items.push({ type: 'sep' })
-  items.push({ label: 'Find in Page', kbd: 'Ctrl+F', action: () => openFindBar() })
-  items.push({ label: 'View Page Source', kbd: 'Ctrl+U', action: () => viewPageSource() })
-  items.push({ label: 'Inspect', kbd: 'F12', action: () => toggleDevTools() })
-
-  // Build the menu DOM
-  ctxMenu.innerHTML = ''
-  for (const item of items) {
-    if (item.type === 'sep') {
-      const sep = document.createElement('div')
-      sep.className = 'ctx-sep'
-      ctxMenu.appendChild(sep)
-    } else if (item.type === 'label') {
-      const lbl = document.createElement('div')
-      lbl.className = 'ctx-label'
-      lbl.textContent = item.text
-      ctxMenu.appendChild(lbl)
-    } else {
-      const el = document.createElement('div')
-      el.className = 'ctx-item' + (item.disabled ? ' disabled' : '')
-      el.textContent = item.label
-      if (item.kbd) {
-        const kbd = document.createElement('kbd')
-        kbd.textContent = item.kbd
-        el.appendChild(kbd)
-      }
-      el.addEventListener('click', () => {
-        ctxMenu.style.display = 'none'
-        if (item.action) item.action()
-      })
-      ctxMenu.appendChild(el)
-    }
-  }
-
-  // Position: keep within viewport
-  ctxMenu.style.display = 'block'
-  const mw = ctxMenu.offsetWidth, mh = ctxMenu.offsetHeight
-  const vw = window.innerWidth, vh = window.innerHeight
-  ctxMenu.style.left = (x + mw > vw ? Math.max(0, x - mw) : x) + 'px'
-  ctxMenu.style.top = (y + mh > vh ? Math.max(0, y - mh) : y) + 'px'
-}
-
-// Helper for context menu image save
-function downloadUrl (url, type) {
-  const a = document.createElement('a')
-  a.href = url
-  a.download = type || 'download'
-  a.click()
-}
-
-// Close context menu on click anywhere or Escape
-document.addEventListener('click', () => { ctxMenu.style.display = 'none' })
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && ctxMenu.style.display === 'block') ctxMenu.style.display = 'none'
-})
+// Native context menus are now handled in main.js via Menu.popup()
+// The #context-menu DOM element is no longer used for page content menus
 
 // ── Autofill ─────────────────────────────────────────────────────────
 
@@ -872,22 +655,12 @@ let _afPending = null // { tab, username, password, usernameSelector, passwordSe
 // Dismissed domains for this session (don't nag)
 const _afDismissed = new Set()
 
-async function tryAutofill (tab) {
-  if (!tab.webview || tab.type !== 'yamil') return
+// Autofill triggered from main process event (replaces webview-based tryAutofill)
+async function tryAutofillFromMain (tab, domain, pageUrl) {
+  if (tab.type !== 'yamil') return
+  if (_afDismissed.has(domain)) return
   try {
-    // Step 1: Check if page has a password field
-    const hasLogin = await tab.webview.executeJavaScript(
-      `!!document.querySelector('input[type="password"]')`
-    )
-    if (!hasLogin) return
-
-    // Step 2: Get domain
-    const pageUrl = tab.webview.getURL()
-    let domain
-    try { domain = new URL(pageUrl).hostname.replace(/^www\./, '') } catch (_) { return }
-    if (_afDismissed.has(domain)) return
-
-    // Step 3: Fetch credentials from browser-service
+    // Fetch credentials from browser-service
     const credRes = await fetch(`http://127.0.0.1:4000/credentials?domain=${encodeURIComponent(domain)}`)
     const credData = await credRes.json()
     if (!credData.credentials || !credData.credentials.length) return
@@ -895,7 +668,7 @@ async function tryAutofill (tab) {
     const cred = credData.credentials[0]
     if (!cred.password_encrypted) return
 
-    // Step 4: Decrypt password via Electron safeStorage
+    // Decrypt password via Electron safeStorage
     const decRes = await fetch('http://127.0.0.1:9300/credentials/decrypt', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -904,8 +677,8 @@ async function tryAutofill (tab) {
     const decData = await decRes.json()
     if (!decData.password) return
 
-    // Step 5: Detect field selectors
-    const selectors = await tab.webview.executeJavaScript(`(function() {
+    // Detect field selectors via IPC eval
+    const selectors = await window.yamil.eval(`(function() {
       var pw = document.querySelector('input[type="password"]');
       if (!pw) return null;
       var container = pw.closest('form') || document.body;
@@ -925,7 +698,7 @@ async function tryAutofill (tab) {
     })()`)
     if (!selectors) return
 
-    // Step 6: Show autofill bar
+    // Show autofill bar
     _afPending = {
       tab,
       username: cred.username,
@@ -940,17 +713,21 @@ async function tryAutofill (tab) {
   }
 }
 
+// Legacy compat — no longer called from wireWebviewEvents
+async function tryAutofill (tab) {
+  // Now handled via main process check-autofill event
+}
+
 function doAutofill () {
   if (!_afPending) return
   const { tab, username, password, usernameSelector, passwordSelector } = _afPending
-  if (!tab.webview) return
 
   const uSel = usernameSelector ? JSON.stringify(usernameSelector) : 'null'
   const pSel = JSON.stringify(passwordSelector)
   const uVal = JSON.stringify(username)
   const pVal = JSON.stringify(password)
 
-  tab.webview.executeJavaScript(`(function() {
+  window.yamil.eval(`(function() {
     function fillField(selector, value) {
       var el = document.querySelector(selector);
       if (!el) return;
@@ -961,7 +738,7 @@ function doAutofill () {
     }
     if (${uSel}) fillField(${uSel}, ${uVal});
     fillField(${pSel}, ${pVal});
-  })()`, true).catch(() => {})
+  })()`).catch(() => {})
 
   afBar.style.display = 'none'
   _afPending = null
@@ -972,7 +749,7 @@ afDismissBtn.addEventListener('click', () => {
   afBar.style.display = 'none'
   if (_afPending) {
     try {
-      const domain = new URL(_afPending.tab.webview.getURL()).hostname.replace(/^www\./, '')
+      const domain = new URL(_afPending.tab.url).hostname.replace(/^www\./, '')
       _afDismissed.add(domain)
     } catch (_) {}
   }
@@ -1015,7 +792,7 @@ addrBar.addEventListener('keydown', (e) => {
   if (ac) ac.style.display = 'none'
   let url = addrBar.value.trim()
   if (!url) return
-  if (!url.match(/^https?:\/\//)) url = 'https://' + url
+  if (!url.match(/^(https?|file):\/\//)) url = 'https://' + url
 
   const tab = tabs.find(t => t.id === activeTabId)
   if (tab && tab.type === 'stealth' && tab.sessionId) {
@@ -1026,8 +803,7 @@ addrBar.addEventListener('keydown', (e) => {
       body: JSON.stringify({ url }),
     }).catch(() => {})
   } else {
-    const wv = getActiveWebview()
-    if (wv) wv.loadURL(url)
+    window.yamil.navigate(url).catch(() => {})
   }
 })
 
@@ -1038,8 +814,7 @@ document.getElementById('btn-back').addEventListener('click', () => {
   if (tab && tab.type === 'stealth' && tab.sessionId) {
     fetch(`${BROWSER_SERVICE}/sessions/${tab.sessionId}/back`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
   } else {
-    const wv = getActiveWebview()
-    if (wv && wv.canGoBack()) wv.goBack()
+    window.yamil.goBack().catch(() => {})
   }
 })
 
@@ -1048,8 +823,7 @@ document.getElementById('btn-forward').addEventListener('click', () => {
   if (tab && tab.type === 'stealth' && tab.sessionId) {
     fetch(`${BROWSER_SERVICE}/sessions/${tab.sessionId}/forward`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
   } else {
-    const wv = getActiveWebview()
-    if (wv && wv.canGoForward()) wv.goForward()
+    window.yamil.goForward().catch(() => {})
   }
 })
 
@@ -1062,8 +836,7 @@ document.getElementById('btn-refresh').addEventListener('click', () => {
       body: JSON.stringify({ url: tab.url }),
     }).catch(() => {})
   } else {
-    const wv = getActiveWebview()
-    if (wv) wv.reload()
+    window.yamil.reload().catch(() => {})
   }
 })
 
@@ -1165,6 +938,8 @@ function setSidebarOpen (open) {
     if (navRight) navRight.classList.add('sidebar-collapsed')
   }
   try { localStorage.setItem(KEY_SIDEBAR_OPEN, open ? '1' : '0') } catch (_) {}
+  // Notify main process to re-layout tab views
+  window.yamil.sidebarToggled(open)
 }
 
 btnToggle.addEventListener('click',      () => setSidebarOpen(false))
@@ -1244,8 +1019,7 @@ function navigateWebview (url) {
       body: JSON.stringify({ url }),
     }).catch(() => {})
   } else {
-    const wv = getActiveWebview()
-    if (wv) wv.loadURL(url)
+    window.yamil.navigate(url).catch(() => {})
   }
 }
 
@@ -1387,17 +1161,14 @@ async function sendChat () {
         const pcData = await pcRes.json()
         pageContext = pcData.result || {}
       } catch (_) {}
-    } else {
-      const wv = getActiveWebview()
-      if (wv) {
-        try {
-          pageContext = await wv.executeJavaScript(`({
-            url:   location.href,
-            title: document.title,
-            text:  document.body.innerText.slice(0, 4000),
-          })`)
-        } catch (_) {}
-      }
+    } else if (activeTab && activeTab.type === 'yamil') {
+      try {
+        pageContext = await window.yamil.eval(`({
+          url:   location.href,
+          title: document.title,
+          text:  document.body.innerText.slice(0, 4000),
+        })`)
+      } catch (_) {}
     }
   }
 
@@ -1413,24 +1184,30 @@ async function sendChat () {
   const memory = getAiMemory()
   const memCtx = memory.length > 0 ? '\n\n[User memories: ' + memory.map(m => m.fact).join('; ') + ']' : ''
 
+  // Use streaming by default for responsive UI
   try {
-    const res = await fetch(aiEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: resolvedText + memCtx + crossTabCtx, pageContext }),
-    })
-    const data = await res.json()
-    const reply = data.response || data.message || JSON.stringify(data)
-    addAiMsg(reply)
-
-    if (data.navigatedUrl) {
-      navigateWebview(data.navigatedUrl)
-    } else if (navMatch) {
-      const url = extractUrl(reply)
-      if (url) navigateWebview(url)
-    }
+    await sendChatStreaming(resolvedText + memCtx + crossTabCtx, pageContext)
   } catch (err) {
-    addErrorMsg('AI request failed: ' + err.message)
+    // Fallback to non-streaming if streaming fails
+    try {
+      const res = await fetch(aiEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: resolvedText + memCtx + crossTabCtx, pageContext, stream: false }),
+      })
+      const data = await res.json()
+      const reply = data.response || data.message || JSON.stringify(data)
+      addAiMsg(reply)
+
+      if (data.navigatedUrl) {
+        navigateWebview(data.navigatedUrl)
+      } else if (navMatch) {
+        const url = extractUrl(reply)
+        if (url) navigateWebview(url)
+      }
+    } catch (err2) {
+      addErrorMsg('AI request failed: ' + err2.message)
+    }
   }
 }
 
@@ -1654,6 +1431,8 @@ function setBookmarkBarVisible (visible) {
   mainEl.classList.toggle('with-bmbar', visible)
   try { localStorage.setItem(KEY_BMBAR_VIS, visible ? '1' : '0') } catch (_) {}
   if (visible) renderBookmarkBar()
+  // Notify main process for layout recalc
+  window.yamil.bookmarkBarToggled(visible)
 }
 
 btnBmMore.addEventListener('click', () => openBookmarkManager())
@@ -1776,8 +1555,7 @@ function closeFindBar () {
   findBarEl.style.display = 'none'
   findInput.value = ''
   findCount.textContent = ''
-  const wv = getActiveWebview()
-  if (wv) wv.stopFindInPage('clearSelection')
+  window.yamil.stopFind().catch(() => {})
 }
 
 function doFind (forward = true) {
@@ -1785,8 +1563,8 @@ function doFind (forward = true) {
   if (!text) { findCount.textContent = ''; return }
   const tab = tabs.find(t => t.id === activeTabId)
   if (!tab) return
-  if (tab.type === 'yamil' && tab.webview) {
-    tab.webview.findInPage(text, { forward })
+  if (tab.type === 'yamil') {
+    window.yamil.find(text, { forward }).catch(() => {})
   }
 }
 
@@ -1819,8 +1597,8 @@ function setZoom (level) {
   const tab = tabs.find(t => t.id === activeTabId)
   if (!tab) return
   tab.zoom = level
-  if (tab.type === 'yamil' && tab.webview) {
-    tab.webview.setZoomLevel(level)
+  if (tab.type === 'yamil') {
+    window.yamil.zoom(level).catch(() => {})
   }
   updateZoomDisplay()
 }
@@ -2002,7 +1780,7 @@ function showAutocomplete () {
       addrBar.value = item.url
       hideAutocomplete()
       let url = item.url
-      if (!url.match(/^https?:\/\//)) url = 'https://' + url
+      if (!url.match(/^(https?|file):\/\//)) url = 'https://' + url
       const tab = tabs.find(t => t.id === activeTabId)
       if (tab && tab.type === 'stealth' && tab.sessionId) {
         fetch(`${BROWSER_SERVICE}/sessions/${tab.sessionId}/navigate`, {
@@ -2010,8 +1788,7 @@ function showAutocomplete () {
           body: JSON.stringify({ url }),
         }).catch(() => {})
       } else {
-        const wv = getActiveWebview()
-        if (wv) wv.loadURL(url)
+        window.yamil.navigate(url).catch(() => {})
       }
     })
     acDropdown.appendChild(row)
@@ -2035,8 +1812,7 @@ function navigateToSearch (query) {
       body: JSON.stringify({ url: searchUrl }),
     }).catch(() => {})
   } else {
-    const wv = getActiveWebview()
-    if (wv) wv.loadURL(searchUrl)
+    window.yamil.navigate(searchUrl).catch(() => {})
   }
 }
 
@@ -2104,8 +1880,8 @@ document.getElementById('btn-summarize').addEventListener('click', async () => {
       const d = await r.json()
       pageText = d.result || ''
     } catch (_) {}
-  } else if (tab.webview) {
-    try { pageText = await tab.webview.executeJavaScript('document.body.innerText.slice(0, 8000)') } catch (_) {}
+  } else if (tab.type === 'yamil') {
+    try { pageText = await window.yamil.eval('document.body.innerText.slice(0, 8000)') } catch (_) {}
   }
 
   if (!pageText) { addSystemMsg('Could not extract page text.'); return }
@@ -2242,59 +2018,27 @@ function updateMenuZoom () {
 // ── Print, Save, DevTools ────────────────────────────────────────────
 
 function printPage () {
-  const tab = tabs.find(t => t.id === activeTabId)
-  if (tab && tab.webview) tab.webview.print()
+  window.yamil.print().catch(() => {})
 }
 
 function savePageAs () {
-  const tab = tabs.find(t => t.id === activeTabId)
-  if (!tab || !tab.webview) return
-  // Use Electron's save dialog via IPC
-  if (window.electronAPI && window.electronAPI.savePageAs) {
-    window.electronAPI.savePageAs(tab.webview.getURL())
-  } else {
-    // Fallback: download the page content
-    tab.webview.executeJavaScript(`document.documentElement.outerHTML`).then(html => {
-      const blob = new Blob([html], { type: 'text/html' })
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = (tab.title || 'page') + '.html'
-      a.click()
-      URL.revokeObjectURL(a.href)
-    })
-  }
+  window.yamil.savePageAs().catch(() => {})
 }
 
 function copyUrl () {
-  const tab = tabs.find(t => t.id === activeTabId)
-  if (tab && tab.webview) {
-    const url = tab.webview.getURL()
-    navigator.clipboard.writeText(url).then(() => {
-      // Brief visual feedback in address bar
-      const orig = addrBar.value
-      addrBar.value = 'URL copied!'
-      setTimeout(() => { addrBar.value = orig }, 1000)
-    })
-  }
+  window.yamil.copyUrl().then(() => {
+    const orig = addrBar.value
+    addrBar.value = 'URL copied!'
+    setTimeout(() => { addrBar.value = orig }, 1000)
+  }).catch(() => {})
 }
 
 function viewPageSource () {
-  const tab = tabs.find(t => t.id === activeTabId)
-  if (tab && tab.webview) {
-    const url = tab.webview.getURL()
-    createTab('view-source:' + url, true, 'yamil')
-  }
+  window.yamil.viewSource().catch(() => {})
 }
 
 function toggleDevTools () {
-  const tab = tabs.find(t => t.id === activeTabId)
-  if (tab && tab.webview) {
-    if (tab.webview.isDevToolsOpened()) {
-      tab.webview.closeDevTools()
-    } else {
-      tab.webview.openDevTools()
-    }
-  }
+  window.yamil.devtools().catch(() => {})
 }
 
 // ── Settings panel ───────────────────────────────────────────────────
@@ -2320,8 +2064,10 @@ function openSettingsPanel () {
   const sp = document.getElementById('set-sidebar-pos')
   const bb = document.getElementById('set-bmbar')
   const ae = document.getElementById('set-ai-endpoint')
+  const th = document.getElementById('set-theme')
   if (hp) hp.value = s.homepage || startUrl
   if (se) se.value = s.searchEngine || 'google'
+  if (th) th.value = s.theme || 'dark'
   if (sp) sp.value = s.sidebarPos || 'right'
   if (bb) bb.checked = bookmarkBar.style.display !== 'none'
   if (ae) ae.value = s.aiEndpoint || aiEndpoint || ''
@@ -2352,6 +2098,28 @@ document.getElementById('set-sidebar-pos')?.addEventListener('change', (e) => {
 })
 document.getElementById('set-bmbar')?.addEventListener('change', (e) => setBookmarkBarVisible(e.target.checked))
 document.getElementById('set-ai-endpoint')?.addEventListener('change', (e) => saveSetting('aiEndpoint', e.target.value))
+
+// ── Theme toggle ──────────────────────────────────────────────────────
+function applyTheme (theme) {
+  document.documentElement.setAttribute('data-theme', theme)
+  const toggleBtn = document.getElementById('btn-theme-toggle')
+  if (toggleBtn) toggleBtn.innerHTML = theme === 'light' ? '&#x2600;' : '&#x263E;'
+  const sel = document.getElementById('set-theme')
+  if (sel) sel.value = theme
+}
+
+function toggleTheme () {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark'
+  const next = current === 'dark' ? 'light' : 'dark'
+  applyTheme(next)
+  saveSetting('theme', next)
+}
+
+document.getElementById('btn-theme-toggle')?.addEventListener('click', toggleTheme)
+document.getElementById('set-theme')?.addEventListener('change', (e) => {
+  applyTheme(e.target.value)
+  saveSetting('theme', e.target.value)
+})
 document.getElementById('set-clear-history')?.addEventListener('click', () => {
   clearHistory()
   addSystemMsg('History cleared.')
@@ -2379,10 +2147,10 @@ async function toggleReaderMode () {
   }
 
   const tab = tabs.find(t => t.id === activeTabId)
-  if (!tab || !tab.webview) return
+  if (!tab || tab.type !== 'yamil') return
 
   try {
-    const data = await tab.webview.executeJavaScript(`(function() {
+    const data = await window.yamil.eval(`(function() {
       // Simple article extraction
       var article = document.querySelector('article') || document.querySelector('[role="main"]') || document.querySelector('main') || document.querySelector('.post-content, .article-content, .entry-content, .content');
       var root = article || document.body;
@@ -2448,10 +2216,10 @@ document.getElementById('reader-font-dec')?.addEventListener('click', () => {
 
 async function togglePiP () {
   const tab = tabs.find(t => t.id === activeTabId)
-  if (!tab || !tab.webview) return
+  if (!tab || tab.type !== 'yamil') return
 
   try {
-    await tab.webview.executeJavaScript(`(function() {
+    await window.yamil.eval(`(function() {
       // Find the largest playing video, or first video
       var videos = Array.from(document.querySelectorAll('video'));
       if (!videos.length) { alert('No video found on this page.'); return; }
@@ -2481,7 +2249,7 @@ document.getElementById('btn-pip')?.addEventListener('click', togglePiP)
 
 async function translatePage () {
   const tab = tabs.find(t => t.id === activeTabId)
-  if (!tab || !tab.webview) return
+  if (!tab || tab.type !== 'yamil') return
 
   // Get target language from user
   const lang = prompt('Translate page to (e.g., Spanish, French, Japanese):', 'Spanish')
@@ -2489,7 +2257,7 @@ async function translatePage () {
 
   try {
     // Extract page text
-    const text = await tab.webview.executeJavaScript('document.body.innerText.slice(0, 6000)')
+    const text = await window.yamil.eval('document.body.innerText.slice(0, 6000)')
     if (!text) return
 
     // Use AI endpoint for translation
@@ -2544,9 +2312,9 @@ document.getElementById('set-adblock-toggle')?.addEventListener('click', async (
 
 document.getElementById('set-adblock-whitelist')?.addEventListener('click', async () => {
   const tab = tabs.find(t => t.id === activeTabId)
-  if (!tab || !tab.webview) return
+  if (!tab || !tab.url) return
   try {
-    const domain = new URL(tab.webview.getURL()).hostname.replace(/^www\./, '')
+    const domain = new URL(tab.url).hostname.replace(/^www\./, '')
     await fetch('http://127.0.0.1:9300/adblock/whitelist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2948,14 +2716,139 @@ async function sendChatStreaming (text, pageContext) {
   saveChatHistory()
 }
 
-// ── Text-to-Speech (output only) ─────────────────────────────────────
-function speakText (text) {
+// ── Text-to-Speech (server TTS with browser fallback) ────────────────
+async function speakText (text) {
+  if (!text) return
+  const ttsEndpoint = aiEndpoint?.replace('/browser-chat', '/voice/synthesize')
+  if (ttsEndpoint && ttsEndpoint.includes('/voice/synthesize')) {
+    try {
+      const res = await fetch(ttsEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text.slice(0, 2000), voice: 'af_heart', strip_markdown: true }),
+      })
+      if (res.ok) {
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const audio = new Audio(url)
+        audio.onended = () => URL.revokeObjectURL(url)
+        audio.play()
+        return
+      }
+    } catch (_) { /* fall through to browser TTS */ }
+  }
+  // Browser TTS fallback
   if (!window.speechSynthesis) return
   const utt = new SpeechSynthesisUtterance(text.slice(0, 500))
   utt.rate = 1.1
   utt.pitch = 1
   window.speechSynthesis.speak(utt)
 }
+
+// ── Voice Input (push-to-talk) ────────────────────────────────────────
+
+;(function initVoiceInput () {
+  const voiceBtn = document.getElementById('voice-btn')
+  if (!voiceBtn) return
+
+  let mediaRecorder = null
+  let audioChunks = []
+
+  voiceBtn.addEventListener('mousedown', async (e) => {
+    e.preventDefault()
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+      audioChunks = []
+
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data) }
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        if (audioChunks.length === 0) return
+
+        const blob = new Blob(audioChunks, { type: 'audio/webm' })
+        const reader = new FileReader()
+        reader.onloadend = async () => {
+          const base64 = reader.result.split(',')[1]
+          const sttEndpoint = aiEndpoint?.replace('/browser-chat', '/voice/transcribe')
+          if (!sttEndpoint) return
+
+          addSystemMsg('Transcribing...')
+          try {
+            const res = await fetch(sttEndpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audio: base64 }),
+            })
+            const data = await res.json()
+            if (data.text) {
+              chatInput.value = data.text
+              sendChat()
+            } else {
+              addSystemMsg('Could not transcribe audio.')
+            }
+          } catch (err) {
+            addErrorMsg('STT failed: ' + err.message)
+          }
+        }
+        reader.readAsDataURL(blob)
+      }
+
+      mediaRecorder.start()
+      voiceBtn.classList.add('recording')
+    } catch (err) {
+      addErrorMsg('Microphone access denied: ' + err.message)
+    }
+  })
+
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      mediaRecorder.stop()
+    }
+    voiceBtn.classList.remove('recording')
+  }
+
+  voiceBtn.addEventListener('mouseup', stopRecording)
+  voiceBtn.addEventListener('mouseleave', stopRecording)
+})()
+
+// ── LLM Status Check ─────────────────────────────────────────────────
+
+;(function initLLMStatus () {
+  const statusDot = document.getElementById('llm-status')
+  if (!statusDot || !aiEndpoint) return
+
+  async function checkStatus () {
+    const statusEndpoint = aiEndpoint.replace('/browser-chat', '/llm/status')
+    try {
+      const res = await fetch(statusEndpoint, { signal: AbortSignal.timeout(5000) })
+      const data = await res.json()
+      if (data.available) {
+        statusDot.className = 'connected'
+        statusDot.title = 'AI connected: ' + (data.healthy || []).join(', ')
+      } else {
+        statusDot.className = 'disconnected'
+        statusDot.title = 'No AI providers available'
+      }
+    } catch (_) {
+      statusDot.className = 'disconnected'
+      statusDot.title = 'AI service offline'
+    }
+  }
+
+  // Check on load and periodically
+  checkStatus()
+  setInterval(checkStatus, 30000)
+
+  // Also check when sidebar opens
+  const sidebar = document.getElementById('sidebar')
+  if (sidebar) {
+    const observer = new MutationObserver(() => {
+      if (!sidebar.classList.contains('collapsed')) checkStatus()
+    })
+    observer.observe(sidebar, { attributes: true, attributeFilter: ['class'] })
+  }
+})()
 
 // ── AI Skills ─────────────────────────────────────────────────────────
 
@@ -3039,8 +2932,8 @@ async function runSkill (skill) {
       const d = await r.json()
       pageText = d.result || ''
     } catch (_) {}
-  } else if (tab.webview) {
-    try { pageText = await tab.webview.executeJavaScript('document.body.innerText.slice(0, 8000)') } catch (_) {}
+  } else if (tab.type === 'yamil') {
+    try { pageText = await window.yamil.eval('document.body.innerText.slice(0, 8000)') } catch (_) {}
   }
 
   if (!pageText) { addSystemMsg('Could not extract page text.'); return }
@@ -3165,8 +3058,8 @@ async function getTabContext (tabId) {
       })
       const d = await r.json()
       return d.result || null
-    } else if (tab.webview) {
-      return await tab.webview.executeJavaScript(`({
+    } else if (tab.type === 'yamil') {
+      return await window.yamil.eval(`({
         url: location.href, title: document.title, text: document.body.innerText.slice(0, 3000),
       })`)
     }
@@ -3371,9 +3264,15 @@ async function captureTaskScreenshot () {
         const buf = await r.arrayBuffer()
         return 'data:image/png;base64,' + btoa(String.fromCharCode(...new Uint8Array(buf)))
       }
-    } else if (tab.webview) {
-      const nativeImg = await tab.webview.capturePage()
-      if (nativeImg) return nativeImg.toDataURL()
+    } else if (tab.type === 'yamil') {
+      // Screenshots are captured by main process via HTTP /screenshot endpoint
+      try {
+        const r = await fetch('http://127.0.0.1:9300/screenshot?quality=35&maxBytes=350000')
+        if (r.ok) {
+          const buf = await r.arrayBuffer()
+          return 'data:image/jpeg;base64,' + btoa(String.fromCharCode(...new Uint8Array(buf)))
+        }
+      } catch (_) {}
     }
   } catch (_) {}
   return null
@@ -3442,9 +3341,9 @@ async function runBackgroundTask (task) {
         const d = await r.json()
         pageContext = d.result || {}
       } catch (_) {}
-    } else if (tab && tab.webview) {
+    } else if (tab && tab.type === 'yamil') {
       try {
-        pageContext = await tab.webview.executeJavaScript(`({
+        pageContext = await window.yamil.eval(`({
           url: location.href, title: document.title, text: document.body.innerText.slice(0, 4000),
         })`)
       } catch (_) {}
@@ -3539,6 +3438,7 @@ updateBookmarkStar()
 // Apply saved settings
 ;(function applySettings () {
   const s = getSettings()
+  if (s.theme) applyTheme(s.theme)
   if (s.sidebarPos === 'left') {
     const m = document.getElementById('main')
     const sb = document.getElementById('sidebar')
@@ -3609,9 +3509,9 @@ initProfileSwitcher()
 // ── PWA install detection ────────────────────────────────────────────
 
 function checkPWA (tab) {
-  if (!tab || !tab.webview || tab.type !== 'yamil') return
+  if (!tab || tab.type !== 'yamil') return
   try {
-    tab.webview.executeJavaScript(`(function() {
+    window.yamil.eval(`(function() {
       var link = document.querySelector('link[rel="manifest"]');
       return link ? link.href : null;
     })()`)
@@ -3638,7 +3538,7 @@ document.getElementById('btn-pwa-install')?.addEventListener('click', async () =
   if (!manifestUrl) return
   try {
     const tab = tabs.find(t => t.id === Number(btn.dataset.tabId))
-    if (!tab || !tab.webview) return
+    if (!tab) return
     const manifest = await (await fetch(manifestUrl)).json()
     const name = manifest.name || manifest.short_name || 'App'
     const startUrl = manifest.start_url || tab.url

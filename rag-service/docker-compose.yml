@@ -1,0 +1,68 @@
+# rag-service - Standalone Docker Compose
+services:
+  rag:
+    build: .
+    ports:
+      - "${PORT:-8022}:${PORT:-8022}"
+    environment:
+      PORT: ${PORT:-8022}
+      SERVICE_NAME: rag
+      DATABASE_URL: postgresql+asyncpg://${DB_USER:-assemblyline}:${DB_PASSWORD:-assemblyline}@postgres:5432/${DB_NAME:-assemblyline}
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-4}
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - rag-net
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: ${DB_NAME:-assemblyline}
+      POSTGRES_USER: ${DB_USER:-assemblyline}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-assemblyline}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-assemblyline}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+    networks:
+      - rag-net
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - rag-net
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  rag-net:
+    driver: bridge

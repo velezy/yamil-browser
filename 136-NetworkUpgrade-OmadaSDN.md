@@ -1,8 +1,9 @@
-# 136 — Network Upgrade: TP-Link Omada SDN
+# 136 — Network Upgrade: Alta Labs + Zyxel
 
-**Status**: In Progress — Phases 1-8 Complete (except 2,4,5)
+**Status**: In Progress
 **Created**: 2026-03-08
-**Philosophy**: AI-Managed Network — the AI controls the entire network via Omada dashboard through YAMIL Browser
+**Updated**: 2026-03-15
+**Philosophy**: AI-Managed Network — the AI controls the entire network via Alta Labs dashboard through YAMIL Browser
 
 ---
 
@@ -17,29 +18,28 @@ Current network is bottlenecked at 1G everywhere:
 
 ## 2. Hardware Purchased
 
-| Device | Price | Role |
-|--------|-------|------|
-| **TP-Link ER707-M2** | ~$120 | Omada VPN Router — replaces CR1000A as primary router |
-| **TP-Link SG2210XMP-M2** | ~$250 | Omada 8-port 2.5G PoE+ switch + 2x 10G SFP+ |
-| **Total** | **~$370** | |
+| Device | Role |
+|--------|------|
+| **Alta Labs Route10** | 10G Multi-WAN Router — primary router replacing CR1000A |
+| **Zyxel XMG1915-10EP** | 8-port 2.5G PoE++ switch — core switch |
 
-### ER707-M2 Specs
-- 2x 2.5G WAN/LAN ports
-- 4x 1G WAN/LAN ports
-- 1x SFP WAN/LAN slot
-- VPN: 100 IPsec, 66 OpenVPN, 60 L2TP, 60 PPTP
-- SPI Firewall, ACL, DoS defense
-- Load balancing (multi-WAN)
-- 500K concurrent sessions, 1000+ clients
-- Omada SDN integrated
+### Alta Labs Route10 Specs
+- 2x 10G SFP+ ports (WAN/LAN)
+- 4x 2.5G RJ45 ports (WAN/LAN)
+- Qualcomm Quad-Core processor
+- Hardware-accelerated VPN (WireGuard, IPsec, OpenVPN)
+- Multi-WAN load balancing / failover
+- 40W PoE+ output
+- Real-time stats dashboard
+- Stateful firewall, ACL, DoS defense
 
-### SG2210XMP-M2 Specs
-- 8x 2.5G 802.3at/af PoE+ ports (160W budget, 30W/port)
+### Zyxel XMG1915-10EP Specs
+- 8x 2.5G RJ45 PoE++ ports (130W total budget)
 - 2x 10G SFP+ uplink slots
-- Smart managed (L2)
-- Omada SDN integrated
-- Fanless / silent
+- Cloud-managed (Nebula) or standalone smart-managed
+- Desktop or wall mount
 - VLAN, QoS, IGMP snooping, link aggregation
+- Fanless / silent
 
 ## 3. Current Network Topology
 
@@ -68,18 +68,20 @@ Fiber ONT (black box)
 ```
 Fiber ONT (black box)
   └── CR1000A (BRIDGE MODE — passthrough only, WiFi disabled)
-        ├── ER707-M2 (Omada Router) — WAN: 2.5G
-        │     └── SG2210XMP-M2 (Omada Switch) — 2.5G backbone
-        │           ├── Port 1: ER707-M2 (uplink to router, 2.5G)
-        │           ├── Port 2: Dark-Knight / Windows PC (2.5G Realtek)
-        │           ├── Port 3: GEEKOM A8 Max (2.5G port 1)
-        │           ├── Port 4: FridayAI / QNAP TS-251+
-        │           ├── Port 5: brainiac7 / Synology
-        │           ├── Port 6: Mac Mini M4 (1G, negotiates down)
-        │           ├── Port 7: eero Pro 6E (mesh WiFi)
-        │           └── Port 8: spare
-        │           SFP+ 1: future 10G uplink
-        │           SFP+ 2: future 10G uplink
+        ├── Alta Labs Route10 (Router) — WAN: 10G SFP+
+        │     ├── 2.5G Port → Zyxel XMG1915-10EP (Switch) — 2.5G backbone
+        │     │     ├── Port 1: Route10 (uplink to router, 2.5G)
+        │     │     ├── Port 2: Dark-Knight / Windows PC (2.5G Realtek)
+        │     │     ├── Port 3: GEEKOM A8 Max (2.5G port 1)
+        │     │     ├── Port 4: FridayAI / QNAP TS-251+
+        │     │     ├── Port 5: brainiac7 / Synology
+        │     │     ├── Port 6: Mac Mini M4 (1G, negotiates down)
+        │     │     ├── Port 7: eero Pro 6E (mesh WiFi)
+        │     │     └── Port 8: spare
+        │     │     SFP+ 1: future 10G device
+        │     │     SFP+ 2: future 10G device
+        │     │
+        │     └── 40W PoE+ port available for AP or camera
         │
         └── Bitdefender BOX (1G, monitoring only — not inline)
               └── Aruba DAGGER (1G) — IoT only
@@ -94,52 +96,54 @@ Fiber ONT (black box)
 
 | VLAN | Name | Devices | Purpose |
 |------|------|---------|---------|
-| 1 | Default/Management | ER707-M2, SG2210XMP-M2 | Network management |
+| 1 | Default/Management | Route10, XMG1915-10EP | Network management |
 | 10 | Production | Dark-Knight, GEEKOM, QNAP, Synology, Mac Mini | Docker Swarm, NAS, dev machines |
 | 20 | IoT | Aruba DAGGER → TV, Lutron, SmartThings, eero | Isolated IoT — no access to Production VLAN |
 
 ## 6. Implementation Order
 
-- [x] Phase 1: Unbox and firmware update both devices (ER707-M2 → fw 1.3.1)
-- [x] Phase 2: CR1000A port forwarding for VPN (UDP 500, 4500, 1701 → ER707-M2 at 192.168.1.226; bridge mode skipped — double NAT)
-- [x] Phase 3: Connect ER707-M2 as primary router, configure WAN (DHCP from CR1000A, 192.168.1.226)
-- [x] Phase 4: Connect SG2210XMP-M2 to ER707-M2
-- [x] Phase 5: Move devices from Aruba to TP-Link switch (PC, NAS units, GEEKOM)
-- [x] Phase 6: Set up Omada SDN dashboard (controller on QNAP, ER707-M2 adopted)
-- [x] Phase 7: Configure VLANs (Default=1, Production=10 192.168.10.0/24, IoT=20 192.168.20.0/24)
-- [x] Phase 8: Configure firewall rules (Gateway ACL: Deny All, IoT→Production, LAN→LAN)
-- [x] Phase 9: Set up VPN (L2TP/IPsec, policy: YAMIL_Remote_Access, pool: 192.168.30.0/24, user: yvelez)
-- [x] Phase 10: Configure QoS (Bandwidth Control: Docker-NAS-Priority 1.5G/2G, IoT-Throttle 100M/200M, WAN1)
-- [ ] Phase 11: Retire Aruba CLOAK, keep DAGGER for IoT sub-switch
-- [ ] Phase 12: Verify all services (Uptime Kuma, Grafana, Logic Weaver, YAMIL Browser)
-- [ ] Phase 13: Test AI management — YAMIL Browser manages Omada dashboard
+- [ ] Phase 1: Unbox and firmware update Alta Labs Route10 + Zyxel XMG1915-10EP
+- [ ] Phase 2: Connect Route10 as primary router, configure WAN (DHCP from CR1000A or bridge mode)
+- [ ] Phase 3: Connect Zyxel XMG1915-10EP to Route10
+- [ ] Phase 4: Move devices to Zyxel switch (PC, NAS units, GEEKOM, Mac Mini)
+- [ ] Phase 5: Configure VLANs (Default=1, Production=10 192.168.10.0/24, IoT=20 192.168.20.0/24)
+- [ ] Phase 6: Configure firewall rules (ACL: deny IoT→Production, allow Production→Internet)
+- [ ] Phase 7: Set up VPN (WireGuard or IPsec — hardware-accelerated on Route10)
+- [ ] Phase 8: Configure QoS / bandwidth control
+- [ ] Phase 9: Retire Aruba CLOAK, keep DAGGER for IoT sub-switch
+- [ ] Phase 10: Verify all services (Uptime Kuma, Grafana, Logic Weaver, YAMIL Browser)
+- [ ] Phase 11: Test AI management — YAMIL Browser manages Alta Labs dashboard
 
-## 7. AI Management Capabilities (via Omada Dashboard + YAMIL Browser)
+## 7. AI Management Capabilities (via Alta Labs Dashboard + YAMIL Browser)
 
-### Router (ER707-M2)
+### Router (Alta Labs Route10)
 - Firewall rules — block/allow traffic between devices or VLANs
-- VPN — create/manage VPN tunnels for remote access
+- VPN — hardware-accelerated WireGuard/IPsec/OpenVPN tunnels
 - VLANs — create/modify isolated networks
 - Port forwarding — open/close ports for services
+- Multi-WAN load balancing / failover
 - Bandwidth control — throttle or prioritize per device/VLAN
 - DHCP — static IP assignments, reservations
 - Routing — static routes between subnets
+- Real-time stats — live throughput, latency, session counts
+- 40W PoE+ — power an AP or camera directly from router
 
-### Switch (SG2210XMP-M2)
+### Switch (Zyxel XMG1915-10EP)
 - Port monitoring — speed, traffic, errors per port
-- PoE control — power cycle devices remotely (toggle PoE per port)
+- PoE++ control — power cycle devices remotely (130W budget, per-port toggle)
 - VLAN assignment — assign ports to VLANs
 - QoS — prioritize traffic classes
 - Link aggregation — bond ports for more bandwidth
 - IGMP snooping — optimize multicast
+- Cloud management — Zyxel Nebula or standalone web UI
 
 ## 8. Rollback Plan
 
 If anything goes wrong:
-1. Unplug ER707-M2 from CR1000A
+1. Unplug Route10 from CR1000A
 2. Take CR1000A out of bridge mode (factory reset if needed)
 3. Re-plug Aruba switches into CR1000A LAN ports
-4. Network returns to current state — nothing lost
+4. Network returns to original state — nothing lost
 
 ## 9. Notes
 
@@ -149,3 +153,6 @@ If anything goes wrong:
 - Windows PC should use the 2.5G Realtek port (not the 1G Intel port)
 - QNAP and Synology are 1G devices — they'll negotiate down but benefit from the faster backbone
 - All configuration done through YAMIL Browser for RAG learning
+- Alta Labs Route10 default management IP: check documentation (typically 192.168.1.1)
+- Zyxel XMG1915-10EP default management IP: typically 192.168.1.1 (may conflict — assign static IPs during setup)
+- No controller dependency — both devices are self-contained (no external software like Omada Controller needed)

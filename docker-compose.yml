@@ -1,4 +1,20 @@
+# YAMIL Browser — All Docker Microservices
+# Electron app runs natively on desktop, connects to these containers.
+#
+# Services:
+#   browser-service :4000  — Playwright headless (stealth tabs)
+#   chat-service    :8020  — AI sidebar (LLM routing, voice I/O)
+#   rag-service     :8022  — Agentic RAG (search, ingest, knowledge)
+#   ai-db           :5432  — Shared PostgreSQL + pgvector
+#   redis           :6379  — Caching, rate limiting
+#
+# Usage:
+#   ./setup-all.sh                    # One-time: bundle assemblyline-common
+#   docker compose up -d              # Start all services
+#   cd electron-app && npm start      # Start desktop app
+
 services:
+  # ── Browser Service (stealth tabs via Playwright) ──────────────────
   browser-service:
     build:
       context: browser-service
@@ -6,35 +22,136 @@ services:
     container_name: yamil-browser-service
     ports:
       - "4000:4000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - PORT=4000
-      - SESSION_TIMEOUT_MS=900000   # 15 min idle timeout
-      - DATABASE_URL=postgresql://yamil_browser:yamil_browser_secret@browser-db:5432/yamil_browser
+      - SESSION_TIMEOUT_MS=900000
+      - DATABASE_URL=postgresql://yamil:yamil_secret@ai-db:5432/yamil_browser
       - OLLAMA_URL=http://host.docker.internal:11434
     depends_on:
-      browser-db:
+      ai-db:
         condition: service_healthy
-    shm_size: "2gb"                 # Chrome needs extra shared memory
+    shm_size: "2gb"
     restart: unless-stopped
+    networks:
+      - yamil-net
 
-  browser-db:
-    image: pgvector/pgvector:pg17
-    container_name: yamil-browser-db
+  # ── Chat Service (AI sidebar, LLM routing, voice) ─────────────────
+  chat-service:
+    build:
+      context: chat-service
+      dockerfile: Dockerfile
+    container_name: yamil-chat-service
     ports:
-      - "127.0.0.1:5433:5432"       # 5433 to avoid conflict with other postgres instances; bound to localhost only
+      - "8020:8020"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
-      - POSTGRES_DB=yamil_browser
-      - POSTGRES_USER=yamil_browser
-      - POSTGRES_PASSWORD=yamil_browser_secret
+      PORT: 8020
+      SERVICE_NAME: yamil-chat
+      DATABASE_URL: postgresql+asyncpg://yamil:yamil_secret@ai-db:5432/yamil_chat
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_URL: http://host.docker.internal:11434
+      RAG_SERVICE_URL: http://rag-service:8022
+      SKIP_AUTH: "true"
+      USE_SECRETS_MANAGER: "false"
+      LLM_PREFER_LOCAL: "true"
+      LLM_FALLBACK_CHAIN: "ollama,gemini,openai,anthropic"
+      LOG_LEVEL: INFO
+      UVICORN_WORKERS: 2
+    env_file:
+      - path: chat-service/.env
+        required: false
+    depends_on:
+      ai-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - yamil-net
+
+  # ── RAG Service (agentic RAG, knowledge base) ─────────────────────
+  rag-service:
+    build:
+      context: rag-service
+      dockerfile: Dockerfile
+    container_name: yamil-rag-service
+    ports:
+      - "8022:8022"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      PORT: 8022
+      SERVICE_NAME: yamil-rag
+      DATABASE_URL: postgresql+asyncpg://yamil:yamil_secret@ai-db:5432/yamil_rag
+      REDIS_URL: redis://redis:6379/1
+      OLLAMA_URL: http://host.docker.internal:11434
+      EMBEDDING_MODEL: nomic-embed-text
+      EMBEDDING_DIM: 768
+      SKIP_AUTH: "true"
+      USE_SECRETS_MANAGER: "false"
+      LOG_LEVEL: INFO
+      UVICORN_WORKERS: 2
+    env_file:
+      - path: rag-service/.env
+        required: false
+    depends_on:
+      ai-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - yamil-net
+
+  # ── Shared PostgreSQL + pgvector ───────────────────────────────────
+  ai-db:
+    image: pgvector/pgvector:pg17
+    container_name: yamil-ai-db
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_USER: yamil
+      POSTGRES_PASSWORD: yamil_secret
+      POSTGRES_DB: yamil_browser
     volumes:
-      - browser-db-data:/var/lib/postgresql/data
-      - ./browser-service/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ai-db-data:/var/lib/postgresql/data
+      - ./browser-service/sql/init.sql:/docker-entrypoint-initdb.d/01-browser.sql:ro
+      - ./chat-service/migrations/V001__chat_schema.sql:/docker-entrypoint-initdb.d/02-chat.sql:ro
+      - ./rag-service/migrations/V001__rag_schema.sql:/docker-entrypoint-initdb.d/03-rag.sql:ro
+      - ./init-databases.sql:/docker-entrypoint-initdb.d/00-init-databases.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U yamil_browser"]
+      test: ["CMD-SHELL", "pg_isready -U yamil"]
       interval: 5s
       timeout: 3s
       retries: 5
     restart: unless-stopped
+    networks:
+      - yamil-net
+
+  # ── Redis (caching, rate limiting) ─────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: yamil-redis
+    ports:
+      - "127.0.0.1:6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - yamil-net
 
 volumes:
-  browser-db-data:
+  ai-db-data:
+  redis-data:
+
+networks:
+  yamil-net:
+    driver: bridge
