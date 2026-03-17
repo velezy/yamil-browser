@@ -137,8 +137,9 @@ function createTab (url, activate = true, type = 'yamil') {
 
   if (type === 'yamil') {
     // Tell main process to create a WebContentsView tab
-    window.yamil.createTab(url, type).then(mainTabId => {
-      tab.mainTabId = mainTabId
+    window.yamil.createTab(url, type).then(result => {
+      tab.mainTabId = result
+      if (result && result.id != null) tab.mainId = result.id
     }).catch(() => {})
   } else if (type === 'stealth') {
     // Create canvas element for stealth rendering
@@ -564,7 +565,16 @@ window._yamil = {
 // ── Tab events from main process (replaces wireWebviewEvents) ─────────
 
 window.yamil.onTabEvent((data) => {
-  const tab = tabs.find(t => t.id === data.tabId)
+  // Look up tab by main-process ID (mainId), falling back to renderer id
+  let tab = tabs.find(t => t.mainId === data.tabId) || tabs.find(t => t.id === data.tabId)
+  // If no match found, assign mainId to the active tab (fixes race where mainId isn't set yet)
+  if (!tab && tabs.length > 0 && data.tabId != null) {
+    const active = tabs.find(t => t.id === activeTabId)
+    if (active && !active.mainId) {
+      active.mainId = data.tabId
+      tab = active
+    }
+  }
   switch (data.type) {
     case 'loading':
       if (tab && tab.id === activeTabId) {
@@ -634,6 +644,15 @@ window.yamil.onTabEvent((data) => {
       // Main created a tab — update our mapping if needed
       break
     case 'tab-switched':
+      // Main process switched tabs — sync address bar with actual URL
+      if (tab && data.url) {
+        tab.url = data.url
+        if (tab.id === activeTabId) {
+          updateBar(data.url)
+          updateBookmarkStar()
+          updateAiEyeIcon()
+        }
+      }
       break
     case 'tab-closed':
       break
@@ -792,7 +811,15 @@ addrBar.addEventListener('keydown', (e) => {
   if (ac) ac.style.display = 'none'
   let url = addrBar.value.trim()
   if (!url) return
-  if (!url.match(/^(https?|file):\/\//)) url = 'https://' + url
+  if (!url.match(/^(https?|file):\/\//)) {
+    // If it looks like a search query (has spaces, or no dots/colons), use search engine
+    if (url.includes(' ') || (!url.includes('.') && !url.includes(':'))) {
+      hideAutocomplete()
+      navigateToSearch(url)
+      return
+    }
+    url = 'https://' + url
+  }
 
   const tab = tabs.find(t => t.id === activeTabId)
   if (tab && tab.type === 'stealth' && tab.sessionId) {
@@ -1006,7 +1033,9 @@ function resolveUrl (input) {
   input = input.trim().replace(/[.!?]+$/, '')
   if (input.match(/^https?:\/\//i)) return input
   if (!input.includes(' ') && input.includes('.')) return 'https://' + input
-  return 'https://' + input.toLowerCase().replace(/\s+/g, '') + '.com'
+  // If it looks like a domain without TLD, add .com; otherwise treat as search
+  if (!input.includes(' ') && /^[a-zA-Z0-9-]+$/.test(input)) return 'https://' + input + '.com'
+  return 'https://www.google.com/search?q=' + encodeURIComponent(input)
 }
 
 function navigateWebview (url) {
