@@ -925,6 +925,9 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && !e.shiftKey && (e.key === 's' || e.key === 'S')) { e.preventDefault(); savePageAs() }
   // Ctrl+U → view source
   if (e.ctrlKey && !e.shiftKey && (e.key === 'u' || e.key === 'U')) { e.preventDefault(); viewPageSource() }
+  // Ctrl+Shift+I / Cmd+Option+I → developer tools
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'i' || e.key === 'I')) { e.preventDefault(); toggleDevTools() }
+  if (e.metaKey && e.altKey && (e.key === 'i' || e.key === 'I')) { e.preventDefault(); toggleDevTools() }
   // F12 → developer tools
   if (e.key === 'F12') { e.preventDefault(); toggleDevTools() }
   // F11 → fullscreen
@@ -1977,64 +1980,47 @@ document.getElementById('wc-close')?.addEventListener('click', () => {
   if (window.YAMIL_IPC?.close) window.YAMIL_IPC.close()
 })
 
-// ── App menu (three-dot dropdown) ────────────────────────────────────
+// ── App menu (three-dot dropdown → native popup menu) ───────────────
 
-const appMenu = document.getElementById('app-menu')
 const btnMenu = document.getElementById('btn-menu')
 
-function toggleAppMenu () {
-  if (!appMenu) return
-  const showing = appMenu.style.display !== 'none'
-  appMenu.style.display = showing ? 'none' : 'block'
-  if (!showing) {
-    // Position menu below the button, aligned right
-    const rect = btnMenu.getBoundingClientRect()
-    appMenu.style.top = (rect.bottom + 4) + 'px'
-    appMenu.style.right = (window.innerWidth - rect.right) + 'px'
-    // Update zoom level display
-    const tab = tabs.find(t => t.id === activeTabId)
-    const z = tab ? tab.zoom : 0
-    const pct = Math.round(100 * Math.pow(1.2, z))
-    const zl = document.getElementById('menu-zoom-level')
-    if (zl) zl.textContent = pct + '%'
-  }
-}
-
-if (btnMenu) btnMenu.addEventListener('click', (e) => { e.stopPropagation(); toggleAppMenu() })
-
-// Close menu on outside click
-document.addEventListener('click', (e) => {
-  if (appMenu && appMenu.style.display !== 'none' && !appMenu.contains(e.target) && e.target !== btnMenu) {
-    appMenu.style.display = 'none'
-  }
-})
-
-// Menu item actions
-if (appMenu) {
-  appMenu.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-action]')
-    if (!btn) return
-    const action = btn.dataset.action
-    switch (action) {
-      case 'new-tab':    createTab(startUrl, true, 'yamil'); break
-      case 'new-stealth': createTab(startUrl, true, 'stealth'); break
-      case 'history':    openHistoryPanel(); break
-      case 'bookmarks':  openBookmarkManager(); break
-      case 'downloads':  openDownloadsPanel(); break
-      case 'find':       openFindBar(); break
-      case 'zoom-in':    zoomIn(); e.stopPropagation(); updateMenuZoom(); return
-      case 'zoom-out':   zoomOut(); e.stopPropagation(); updateMenuZoom(); return
-      case 'print':      printPage(); break
-      case 'save-page':  savePageAs(); break
-      case 'copy-url':   copyUrl(); break
-      case 'view-source': viewPageSource(); break
-      case 'dev-tools':  toggleDevTools(); break
-      case 'fullscreen': toggleFullscreen(); break
-      case 'settings':   openSettingsPanel(); break
-    }
-    appMenu.style.display = 'none'
+function showNativeAppMenu () {
+  if (!btnMenu) return
+  const rect = btnMenu.getBoundingClientRect()
+  const tab = tabs.find(t => t.id === activeTabId)
+  const z = tab ? tab.zoom : 0
+  const zoomPct = Math.round(100 * Math.pow(1.2, z))
+  window.yamil.showAppMenu({
+    x: Math.round(rect.right - 240),
+    y: Math.round(rect.bottom + 4),
+    zoomPct,
   })
 }
+
+if (btnMenu) btnMenu.addEventListener('click', (e) => { e.stopPropagation(); showNativeAppMenu() })
+
+// Handle menu action responses from native menu
+function handleMenuAction (action) {
+  switch (action) {
+    case 'new-tab':    createTab(startUrl, true, 'yamil'); break
+    case 'new-stealth': createTab(startUrl, true, 'stealth'); break
+    case 'history':    openHistoryPanel(); break
+    case 'bookmarks':  openBookmarkManager(); break
+    case 'downloads':  openDownloadsPanel(); break
+    case 'find':       openFindBar(); break
+    case 'zoom-in':    zoomIn(); break
+    case 'zoom-out':   zoomOut(); break
+    case 'print':      printPage(); break
+    case 'save-page':  savePageAs(); break
+    case 'copy-url':   copyUrl(); break
+    case 'view-source': viewPageSource(); break
+    case 'dev-tools':  toggleDevTools(); break
+    case 'fullscreen': toggleFullscreen(); break
+    case 'settings':   openSettingsPanel(); break
+  }
+}
+
+if (window.yamil?.onMenuAction) window.yamil.onMenuAction(handleMenuAction)
 
 function updateMenuZoom () {
   const tab = tabs.find(t => t.id === activeTabId)

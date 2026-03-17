@@ -52,6 +52,14 @@ app.commandLine.appendSwitch('disable-features', [
   'WebContentsOcclusion',  // Prevent hidden window from freezing renderers
 ].join(','))
 
+// ── Gracefully handle EPIPE (broken pipe when MCP/stdio closes) ─────
+process.on('uncaughtException', (err) => {
+  if (err.code === 'EPIPE' || err.message?.includes('EPIPE')) return
+  console.error('[YAMIL] Uncaught exception:', err)
+})
+process.stdout?.on('error', (err) => { if (err.code !== 'EPIPE') throw err })
+process.stderr?.on('error', (err) => { if (err.code !== 'EPIPE') throw err })
+
 let mainWindow     // BaseWindow
 let toolbarView    // WebContentsView for toolbar UI (tab bar, navbar, sidebar, status bar)
 let tray = null
@@ -354,6 +362,44 @@ class TabManager {
           activeMatchOrdinal: result.activeMatchOrdinal,
           matches: result.matches,
         })
+      }
+    })
+
+    // Intercept keyboard shortcuts from tab webContents and forward to toolbar
+    wc.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return
+      const meta = input.meta || input.control  // Cmd on Mac, Ctrl on Win/Linux
+      const { shift, alt, key } = input
+
+      // F12 → DevTools
+      if (key === 'F12') {
+        event.preventDefault()
+        toolbarView?.webContents.send('menu-action', 'dev-tools')
+        return
+      }
+      // Cmd/Ctrl+Shift+I or Cmd+Option+I → DevTools
+      if ((meta && shift && key.toLowerCase() === 'i') || (input.meta && alt && key.toLowerCase() === 'i')) {
+        event.preventDefault()
+        toolbarView?.webContents.send('menu-action', 'dev-tools')
+        return
+      }
+      // F11 → Fullscreen
+      if (key === 'F11') {
+        event.preventDefault()
+        toolbarView?.webContents.send('menu-action', 'fullscreen')
+        return
+      }
+      // Cmd/Ctrl+F → Find
+      if (meta && !shift && key.toLowerCase() === 'f') {
+        event.preventDefault()
+        toolbarView?.webContents.send('menu-action', 'find')
+        return
+      }
+      // Cmd/Ctrl+L → Focus address bar
+      if (meta && !shift && key.toLowerCase() === 'l') {
+        event.preventDefault()
+        toolbarView?.webContents.executeJavaScript(`document.getElementById('address-bar')?.focus()`)
+        return
       }
     })
 
@@ -674,6 +720,42 @@ ipcMain.on('sidebar-toggled', (_e, open) => {
 ipcMain.on('bookmark-bar-toggled', (_e, visible) => {
   tabManager.setBookmarkBarVisible(visible)
 })
+
+// Native popup menu for the 3-dot button (avoids WebContentsView z-order issues)
+ipcMain.on('show-app-menu', (_e, { x, y, zoomPct }) => {
+  if (!mainWindow || !toolbarView) return
+  const template = [
+    { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => sendMenuAction('new-tab') },
+    { label: 'New Stealth Tab', accelerator: 'CmdOrCtrl+Shift+N', click: () => sendMenuAction('new-stealth') },
+    { type: 'separator' },
+    { label: 'History', accelerator: 'CmdOrCtrl+H', click: () => sendMenuAction('history') },
+    { label: 'Bookmarks', accelerator: 'CmdOrCtrl+Shift+O', click: () => sendMenuAction('bookmarks') },
+    { label: 'Downloads', click: () => sendMenuAction('downloads') },
+    { type: 'separator' },
+    { label: 'Find in Page', accelerator: 'CmdOrCtrl+F', click: () => sendMenuAction('find') },
+    { label: `Zoom (${zoomPct}%)`, enabled: false },
+    { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', click: () => sendMenuAction('zoom-in') },
+    { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => sendMenuAction('zoom-out') },
+    { type: 'separator' },
+    { label: 'Print', accelerator: 'CmdOrCtrl+P', click: () => sendMenuAction('print') },
+    { label: 'Save Page As', accelerator: 'CmdOrCtrl+S', click: () => sendMenuAction('save-page') },
+    { label: 'Copy URL', click: () => sendMenuAction('copy-url') },
+    { type: 'separator' },
+    { label: 'View Page Source', accelerator: 'CmdOrCtrl+U', click: () => sendMenuAction('view-source') },
+    { label: 'Developer Tools', accelerator: 'F12', click: () => sendMenuAction('dev-tools') },
+    { label: 'Fullscreen', accelerator: 'F11', click: () => sendMenuAction('fullscreen') },
+    { type: 'separator' },
+    { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: () => sendMenuAction('settings') },
+  ]
+  const menu = Menu.buildFromTemplate(template)
+  menu.popup({ window: mainWindow, x, y })
+})
+
+function sendMenuAction (action) {
+  if (toolbarView) {
+    toolbarView.webContents.send('menu-action', action)
+  }
+}
 
 // ── Custom URL protocol: yamil-browser:// ─────────────────────────────
 if (process.platform === 'win32') {

@@ -58,6 +58,8 @@ contextBridge.exposeInMainWorld('yamil', {
   // Layout notifications (toolbar → main)
   sidebarToggled:    (open)    => ipcRenderer.send('sidebar-toggled', open),
   bookmarkBarToggled: (visible) => ipcRenderer.send('bookmark-bar-toggled', visible),
+  showAppMenu:       (pos)     => ipcRenderer.send('show-app-menu', pos),
+  onMenuAction:      (cb)      => ipcRenderer.on('menu-action', (_e, action) => cb(action)),
 
   // Events from main → toolbar
   onTabEvent: (callback) => ipcRenderer.on('tab:event', (_e, data) => callback(data)),
