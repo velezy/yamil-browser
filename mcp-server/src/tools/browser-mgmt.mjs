@@ -18,13 +18,17 @@ export function registerBrowserMgmtTools(server, deps) {
     },
     async ({ startUrl, aiEndpoint }) => {
       if (await yamilPing()) {
-        return { content: [{ type: "text", text: "YAMIL Browser is already running on port 9300." }] };
+        return { content: [{ type: "text", text: `YAMIL Browser is already running on ${YAMIL_CTRL}.` }] };
       }
+      // Extract port from YAMIL_CTRL URL so Electron listens on the right port
+      const ctrlPort = new URL(YAMIL_CTRL).port || "9300";
       const env = {
         ...process.env,
-        AI_ENDPOINT: aiEndpoint || "http://localhost:9080/api/v1/builder-orchestra/browser-chat",
-        START_URL:   startUrl   || "https://yamil-ai.com",
-        APP_TITLE:   "YAMIL Browser",
+        AI_ENDPOINT:     aiEndpoint || "http://localhost:9080/api/v1/builder-orchestra/browser-chat",
+        START_URL:       startUrl   || "https://yamil-ai.com",
+        APP_TITLE:       "YAMIL Browser",
+        CTRL_PORT:       ctrlPort,
+        BROWSER_SERVICE: BROWSER_SVC_URL,
       };
       let cmd, args;
       if (process.platform === "win32") {
@@ -45,10 +49,10 @@ export function registerBrowserMgmtTools(server, deps) {
       for (let i = 0; i < 8; i++) {
         await new Promise(r => setTimeout(r, 1000));
         if (await yamilPing()) {
-          return { content: [{ type: "text", text: `YAMIL Browser started (PID ${proc.pid}). Port 9300 ready.` }] };
+          return { content: [{ type: "text", text: `YAMIL Browser started (PID ${proc.pid}). ${YAMIL_CTRL} ready.` }] };
         }
       }
-      return { content: [{ type: "text", text: "YAMIL Browser process spawned but port 9300 not yet responding — it may still be loading." }] };
+      return { content: [{ type: "text", text: `YAMIL Browser process spawned but ${YAMIL_CTRL} not yet responding — it may still be loading.` }] };
     }
   );
 
@@ -81,7 +85,7 @@ export function registerBrowserMgmtTools(server, deps) {
     async () => {
       const alive = await yamilPing();
       if (!alive) {
-        return { content: [{ type: "text", text: "YAMIL Browser: offline (port 9300 not responding)" }] };
+        return { content: [{ type: "text", text: `YAMIL Browser: offline (${YAMIL_CTRL} not responding)` }] };
       }
       try {
         const [urlRes, tabsRes, tabInfoRes] = await Promise.all([
@@ -97,7 +101,7 @@ export function registerBrowserMgmtTools(server, deps) {
           "YAMIL Browser: running (unified stealth + logged-in)",
           `Active tab: ${tabInfo.type || "yamil"} | URL: ${urlData.url || "unknown"}`,
           `Tabs: ${(tabsData.tabs || []).length} (${(tabsData.tabs || []).filter(t => t.type === "stealth").length} stealth, ${(tabsData.tabs || []).filter(t => t.type !== "stealth").length} yamil)`,
-          "Stealth: enabled (Playwright via browser-service:4000)",
+          `Stealth: enabled (Playwright via ${BROWSER_SVC_URL})`,
           llmStatus,
         ];
         return { content: [{ type: "text", text: lines.join("\n") }] };

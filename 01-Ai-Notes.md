@@ -1,5 +1,347 @@
 # AI Notes
 
+## 2026-03-17 — Multi-Instance YAMIL Browser Support
+
+### Task
+Enable two Claude Code sessions to use YAMIL Browser simultaneously via isolated instances that share AI/RAG backends.
+
+### Changes Made
+1. **`mcp-server/src/services/browser-client.mjs`** — `YAMIL_CTRL` now reads from `process.env.YAMIL_CTRL_URL` (defaults to `http://127.0.0.1:9300`)
+2. **`mcp-server/src/tools/browser-mgmt.mjs`** — Dynamic port in user-facing messages; passes `CTRL_PORT` and `BROWSER_SERVICE` env vars when spawning Electron
+3. **`mcp-server/src/tools/data.mjs`** — Replaced hardcoded `http://127.0.0.1:4000` with `BROWSER_SVC_URL` for session resize
+4. **`electron-app/preload.js`** — Exposes `CTRL_PORT` and `BROWSER_SERVICE` to renderer via `YAMIL_CONFIG`
+5. **`electron-app/renderer/renderer.js`** — All ~15 hardcoded `http://127.0.0.1:9300` and `http://127.0.0.1:4000` replaced with dynamic `CTRL_URL` / `BROWSER_SERVICE` constants
+6. **`electron-app/main.js`** — Injected credential auto-save script now interpolates `CTRL_PORT` (already had env var support for `CTRL_PORT` and `BROWSER_SVC`)
+7. **`docker-compose.yml`** — Added `browser-service-2` with `profiles: [multi-instance]`, port `4001:4000`
+8. **`start-instance-2.sh`** (new) — Launches instance 2 with `CTRL_PORT=9301`, `BROWSER_SERVICE=http://127.0.0.1:4001`, separate user-data-dir
+9. **`FlashCards/.mcp.json`** — Updated to use instance 2 ports (`4001`/`9301`)
+
+### Port Allocation
+| Component | Instance 1 | Instance 2 |
+|---|---|---|
+| Electron control | 9300 | 9301 |
+| browser-service | 4000 | 4001 |
+| chat/rag/db/redis/ollama | shared | shared |
+
+### Backward Compatibility
+All env vars default to current values — instance 1 works with zero config changes. Global `~/.claude/settings.json` keeps instance 1 defaults.
+
+### Verification Steps
+1. Start instance 1 normally (`start-with-ai.sh`) — confirm works as before
+2. Run `./start-instance-2.sh` — confirm Electron opens on 9301, browser-service on 4001
+3. Launch two Claude Code sessions with different `.mcp.json` configs
+4. Both navigate simultaneously without conflicting
+
+---
+
+## 2026-03-16 — IoT Zone Isolation, Network Architecture Diagram, Address Bar Search Fix
+
+### Tasks
+1. Created network-diagram.html — 5-tab architecture diagram for all devices on Route10 + TRENDnet
+2. Designed IoT security segmentation: Bitdefender BOX as inline IoT gateway on Route10 Port 4
+3. Configured Route10 IoT zone isolation via SSH/UCI
+4. Fixed YAMIL Browser address bar to support search queries (like Chrome/Edge)
+5. Updated 136-NetworkUpgrade-OmadaSDN.md with security architecture and phases 14-24
+
+### IoT Zone Configuration (SSH/UCI on Route10)
+**Method**: SSH to root@192.168.0.1 + UCI commands (OpenWrt has no REST API)
+
+**Changes applied:**
+1. Removed eth2 from br-lan bridge: `uci set network.@device[1].ports="eth1 eth0 eth5"`
+2. Created iot interface on eth2: 192.168.2.1/24 static
+3. Created iot firewall zone: input=ACCEPT, output=ACCEPT, forward=REJECT
+4. Added forwarding rules: iot→wan ACCEPT, lan→iot ACCEPT (iot→lan blocked by zone default)
+5. Enabled DHCP on iot interface: 192.168.2.10-250, 1hr lease
+
+**Port mapping after changes:**
+| Route10 Port | Interface | Bridge | Subnet | Device |
+|-------------|-----------|--------|--------|--------|
+| W1 | eth3 | — | WAN | CR1000A |
+| L1 (Port 2) | eth0 | br-lan | 192.168.0.0/24 | TRENDnet switch |
+| L2 (Port 3) | eth1 | br-lan | 192.168.0.0/24 | MacBook Air |
+| L3 (Port 4) | eth2 | **standalone** | **192.168.2.0/24** | Bitdefender BOX (IoT) |
+
+**Firewall result:**
+- IoT → Internet: ACCEPT
+- IoT → LAN: REJECT (isolated)
+- LAN → IoT: ACCEPT (can manage IoT from trusted side)
+
+### Address Bar Search Fix
+- **Problem**: Typing search queries like "weather" in address bar prepended "https://" instead of searching
+- **Fix**: Modified Enter key handler in renderer.js (~line 814) to detect search queries (has spaces or no dots) and call `navigateToSearch()` instead
+- Also fixed `resolveUrl()` helper to properly detect search vs URL input
+
+### Files Created/Modified
+- `network-diagram.html` (NEW) — 5-tab network architecture diagram
+- `136-NetworkUpgrade-OmadaSDN.md` — Updated security zones and phases 14-24
+- `electron-app/renderer/renderer.js` — Address bar search fix
+- Commit cc3b975 pushed to main
+
+### IoT Isolation Attempt — Reverted
+- Created IoT zone on eth2 (192.168.2.0/24), removed eth2 from br-lan
+- Plugged Bitdefender BOX into Route10 Port 4
+- **Problem:** CLOAK (Aruba switch) was on TRENDnet Port 8 AND connected to something on the Bitdefender/IoT side, creating a L2 bridge between TRENDnet and the IoT subnet
+- **Result:** All TRENDnet devices (Windows PC, QNAP, Kain, brainiac7) picked up 192.168.2.x instead of 192.168.0.x. TRENDnet management (192.168.0.200) became unreachable.
+- Also discovered eero mesh bridge issue: eero Pro 6E on TRENDnet meshing with IoT eero behind Bitdefender creates another L2 bridge loop
+- **Fix:** Reverted IoT isolation (eth2 back in br-lan), devices recovered to 192.168.0.x
+- Added static DHCP reservation for Windows PC (Dark-Knight) at 192.168.0.11
+
+### Lessons Learned
+1. **CLOAK cannot bridge two subnets** — if on TRENDnet, it cannot also connect to IoT side
+2. **eero mesh bridges L2** — two eeros on different subnets will bridge them together, defeating isolation
+3. **Test IoT isolation with minimal devices first** — before connecting the full chain
+4. **Bitdefender runs its own DHCP/NAT** on 192.168.7.x internally
+
+### Next Steps
+- Re-plan IoT physical topology: CLOAK on ONE side only, eeros not meshing across subnets
+- Phase 14: Install 10G SFP+ DAC cable (arriving Monday 2026-03-17)
+- Phase 15+: Move trusted devices to TRENDnet, connect eero Pro 6E to Port 7
+
+---
+
+## 2026-03-16 — Route10 Troubleshooting, Factory Reset, Full Configuration via SSH
+
+### Task
+Fix slow internet on Alta Labs Route10, identify root cause, factory reset to stable firmware, and fully configure via SSH/CLI (DHCP reservations, DNS, WireGuard VPN, firewall).
+
+### Problem
+After cloud re-adoption, Route10 speeds dropped to near-zero (~28 kb/s). Dashboard showed minimal traffic even with devices connected.
+
+### Root Cause
+1. **Subnet conflict**: Route10 LAN was 192.168.1.0/24, same as upstream CR1000A — Route10 couldn't distinguish WAN from LAN traffic
+2. **Cloud re-adoption**: manage.alta.inc pushed old site config (wrong subnet + phantom WAN2)
+3. **Firmware 1.4 bugs**: Hardware acceleration broken in 1.4 series (30-50% throughput drop, DPI regression, UDP disabled)
+
+### Solution
+1. Factory reset Route10 — reverted to firmware **1.3z** (stable, pre-bug)
+2. Selected "Setup Router" (local mode, NOT "Connect to Controller")
+3. Set LAN to **192.168.0.1/24** during initial setup wizard
+4. Connected to manage.alta.inc cloud AFTER local setup
+5. Immediately disabled automatic firmware updates (pin at 1.3z)
+6. Added Mac's SSH key via cloud dashboard
+7. Configured everything via SSH/UCI:
+
+### Configuration Applied (via SSH as root@192.168.0.1)
+
+**DHCP Reservations:**
+| Device | MAC | IP |
+|--------|-----|-----|
+| DARK-KNIGHT (Windows PC) | 04:d9:f5:81:10:74 | 192.168.0.11 |
+| MacBook Air | 00:e0:4c:b3:3d:fe | 192.168.0.10 |
+| FridayAI (QNAP) | 24:5e:be:00:e3:fb | 192.168.0.102 |
+| brainiac7 (Synology) | 00:11:32:2d:3c:3c | 192.168.0.103 |
+
+**DNS**: 1.1.1.1, 8.8.8.8 (via DHCP option)
+
+**WireGuard VPN:**
+- Interface: wg0, subnet 10.0.0.0/24, port 51820
+- Server: 10.0.0.1 (Route10)
+- Client peer: yamil-mobile (10.0.0.2)
+- Firewall zones: vpn→lan, vpn→wan, lan→vpn
+- UDP 51820 allowed from WAN
+
+**Firewall**: WAN DROP, LAN ACCEPT, NAT/Masquerade ON
+
+**Hostname**: Changed from "Memobytes" to "Route10"
+
+### Speed Test Results
+- Download: **1561.92 Mbps**
+- Upload: **2313.75 Mbps**
+- Through double NAT (CR1000A → Route10)
+
+### Health Check (All Passed)
+- Internet: 5.2ms ping to 1.1.1.1
+- DNS: resolving correctly
+- WAN: connected at 192.168.1.227
+- LAN: 192.168.0.1/24
+- WireGuard: listening on port 51820
+- Hardware acceleration: QCA NSS + ECM active
+- System load: 0.04
+
+### AWS Secrets Created
+- `yamil/homelab/route10-ssh` — SSH access details (root, ed25519 key, firmware 1.3z)
+- `yamil/homelab/route10-wireguard` — All WireGuard keys + config
+
+### Key Decisions
+- **Stay on 1.3z**: All 1.4 firmware versions have confirmed bugs. Auto-update OFF.
+- **SSH over cloud UI**: Cloud management caused subnet conflicts and phantom WANs. SSH/UCI is reliable.
+- **Zyxel removed**: XMG1915-10EP locked in Nebula cloud mode, web UI unreachable. Replaced by TRENDnet TEG-30284 (arriving Tuesday).
+- **Flat subnet for now**: Single 192.168.0.0/24 instead of multi-VLAN. VLANs can be added later via TRENDnet switch.
+
+### Completed This Session (Continued)
+
+**Port Forward**: Created UDP 51820 → 192.168.1.227 on CR1000A for external WireGuard VPN access.
+
+**AWS Secret Updated**: `yamil/homelab/windows-pc` host changed from 192.168.0.101 → 192.168.0.11.
+
+**WireGuard Mobile Config**: Added full mobile client config (Interface + Peer) to 136-NetworkUpgrade doc.
+
+**Device Port Identification (Route10)**:
+| Port | Interface | Device | Speed |
+|------|-----------|--------|-------|
+| W1 | eth3 | CR1000A (WAN) | 2500 Mb/s |
+| L1 | eth0 | Aruba CLOAK switch | 2500 Mb/s |
+| L2 | eth1 | DARK-KNIGHT / Windows PC | 2500 Mb/s |
+| L3 | eth2 | MacBook Air | 1000 Mb/s |
+| W2/SFP+ | eth4/5 | Empty | — |
+
+**Prometheus Fix**: All 14 logic-weaver-services targets + 2 blackbox targets had old IP 192.168.0.101. Updated to 192.168.0.11, SCP'd to QNAP, hot-reloaded. Result: 28/28 targets UP, alerts dropped from 17 → 0.
+
+**api.yamil-ai.com Fix**: Root cause chain: `logic-weaver-etcd-1` crashed (Exit 255) → `logic-weaver-apisix-1` couldn't connect to etcd → `envoy-external` had no upstream → 503. Fixed by starting etcd → APISIX → re-running init routes. All 5 external routes loaded. Blackbox probe now passing (`probe_success 1`).
+
+**SFP+ DAC Cable**: Ordered 10Gtek 0.5m SFP+ DAC ($9.99 Amazon) for Route10 ↔ TRENDnet 10G backbone.
+
+### Next Steps
+- [ ] TRENDnet TEG-30284 arrives Tuesday — connect to Route10 L1, 10G SFP+ DAC backbone
+- [ ] Move all devices to TRENDnet switch (QNAP, Synology, Windows PC, MacBook, Aruba)
+- [ ] Configure VLANs on TRENDnet if needed
+- [ ] CR1000A bridge mode (do last, after all devices migrated)
+- [ ] DDNS setup for stable WireGuard endpoint (public IP may change)
+- [ ] 7 monitoring connectors not yet created (prometheus, loki, alertmanager, blackbox, ntfy, uptime_kuma, grafana)
+- [ ] Investigate why etcd + APISIX crashed after 12 hours — may need restart policy
+
+---
+
+## 2026-03-16 — Alta Labs Route10 Firmware Bug Research: Slow LAN Throughput
+
+### Task
+Comprehensive web research on Alta Labs Route10 firmware bugs causing slow LAN throughput, specifically after cloud re-adoption pushing conflicting subnet config (192.168.1.0/24 matching upstream CR1000A).
+
+### Problem Statement
+After factory reset, Route10 works perfectly with fast speeds. After re-adopting to Alta Labs cloud (manage.alta.inc), speeds drop to near-zero. Cloud pushes LAN subnet to 192.168.1.0/24, conflicting with upstream CR1000A router on same subnet. Even after manually fixing subnet to 192.168.0.0/24 via cloud dashboard, traffic drops to 0.
+
+### Key Findings
+
+#### 1. Hardware Acceleration Bug (CONFIRMED)
+- With hardware acceleration enabled, download speeds DROP 30-50% (confirmed by multiple users)
+- CPU usage INCREASES from 32-33% to 52-53% when acceleration is on (opposite of expected)
+- UDP acceleration was intentionally disabled in firmware 1.4l because "BitTorrents waste too many flow slots"
+- Three modes: Enabled, Alternate, Disabled
+- CLI to re-enable UDP acceleration: `echo 4 >/cfg/alta_bits` then reboot
+- CLI to disable: `echo 0 >/cfg/alta_bits` then reboot
+- Flow control commands: `ssdk_sh flow status set 0` and `ssdk_sh port flowCtrl set [port] disable`
+- Port mapping: WAN1=port 4, WAN2=port 5, LAN ports 1-4
+- Disabling flow control on SFP+ WAN port resolved throughput bottleneck for one user
+
+#### 2. Cloud Re-Adoption Config Conflict (CONFIRMED)
+- After factory reset, cloud controller automatically restores previous configuration
+- Old WAN/subnet settings cause immediate connectivity loss
+- Device shows red light on Alta logo when old config conflicts with new network
+- WORKAROUND: Delete device entirely from cloud site before re-adopting. Also delete all WAN profiles. Alternatively, add to a NEW site (not existing site)
+- Subnet change from cloud UI doesn't always stick (reported by multiple users with mobile app)
+
+#### 3. Latest Firmware: 1.4v (March 6, 2026)
+- Only fixes firewall group stability regression from 1.4u
+- NO fix for NAT throughput, hardware acceleration, or cloud config push issues
+- Full recent history: 1.4v (Mar 6), 1.4u (Mar 5), 1.4t (Feb 24), 1.4s (Feb 4), 1.4r (Jan 29), 1.4q (Jan 28)
+- 1.4o added "NAT disabling option for WAN connections" - may be useful
+
+#### 4. Local Management Options
+- **Self-hosted controller (Docker)**: Free at manage.alta.inc/control. Run locally, no cloud needed. Requires Docker knowledge. Must `apt update && apt upgrade` inside container for Route10 support.
+- **SSH access**: Root via SSH key only (no password). Add key via Settings > System in controller. User is root.
+- **Underlying OS**: OpenWrt-derived, supports UCI (Unified Configuration Interface) commands
+- **post-cfg.sh**: Script at `/cfg/post-cfg.sh` runs AFTER cloud config pushes, survives reboots. Can override cloud-pushed settings. Must be LF line endings, `chmod +x`.
+- **No standalone mode**: Route10 REQUIRES a controller (cloud, local hardware, or self-hosted Docker) for initial provisioning. No true standalone/offline setup exists.
+- **No bridge mode**: Not planned as a feature. DMZ via port forwarding is the official workaround.
+
+#### 5. Workarounds for Subnet Conflict
+- Route10 has built-in conflict detection: if upstream is 192.168.1.x, it auto-switches to 192.168.0.1
+- Can set subnet via cloud UI: Network > Route10 > edit VLAN1
+- Via SSH/UCI: `uci set` commands for network config, `uci commit`, `/etc/init.d/network restart`
+- Via post-cfg.sh: Persistent config that re-applies after every cloud push
+- 1.3z firmware added LAN subnet selection to initial setup wizard
+
+#### 6. Preventing Cloud Config Override
+- `/cfg/post-cfg.sh` is the PRIMARY method - runs after every cloud config push
+- Can set network config, firewall rules, DHCP, DNS, WireGuard, QoS
+- Modular approach: `/cfg/post-cfg.d/` directory for subscripts
+- Example patterns: check current config before applying (`uci get` + conditional)
+- UCI commands persist via `uci commit`
+
+### Recommended Action Plan
+1. Factory reset Route10
+2. Delete device + all WAN profiles from manage.alta.inc cloud site
+3. Set up self-hosted Docker controller on QNAP or Mac
+4. Adopt Route10 to local controller (not cloud)
+5. Set LAN subnet to 192.168.0.0/24 during initial setup
+6. Disable hardware acceleration OR use `echo 4 >/cfg/alta_bits` for UDP fix
+7. Create `/cfg/post-cfg.sh` to persist subnet + acceleration settings after any config push
+8. If using cloud: create new site, adopt as new device (not re-adopt to existing site)
+
+### Alternative: Nuclear Option
+- Factory reset, do NOT re-adopt to any controller
+- SSH in, configure everything via UCI commands
+- Use post-cfg.sh to persist
+- Limitation: no web UI for management, CLI only
+
+---
+
+## 2026-03-15 — 136: Network Upgrade Phase 6 — Route10 Port VLAN Assignments
+
+### Task
+- Assign VLANs to Route10 ports via Alta Labs dashboard (manage.alta.inc)
+- Create connection profiles for Main (VLAN 10) and IoT (VLAN 20)
+- Configure per-port Native VLAN and Allowed VLANs
+
+### Steps Taken
+1. Created connection profiles in Settings > Networks > Profiles:
+   - **Main** profile: VLAN 10, Standard type
+   - **IoT** profile: VLAN 20, Standard type
+2. Navigated to Network page, opened Memobytes device panel (click device image)
+3. Opened L3 (Bitdefender port) per-port config by clicking `.ports-col:nth-child(4) .port-content`
+4. Set L3 Native VLAN to 20 (IoT) via Custom input — saved successfully
+5. Verified L3 shows "T" (Tagged) on VLAN 1 and "U" (Untagged) on VLAN 20
+6. Opened L1 (Zyxel switch uplink) per-port config — verified already correct:
+   - Native VLAN: Default (VLAN 1)
+   - Allowed VLANs: Default (All — 1, 10, 20 checked)
+7. Verified all three VLAN views show correct U/T tagging
+
+### Route10 Port Summary
+
+| Port | Device | Native VLAN | VLAN 1 | VLAN 10 | VLAN 20 |
+|------|--------|-------------|--------|---------|---------|
+| W1 | CR1000A (WAN) | 1 | U | T | T |
+| L1 | Zyxel switch | 1 (Mgmt) | U | T | T |
+| L2 | spare | 1 | - | - | - |
+| L3 | Bitdefender | 20 (IoT) | T | T | U |
+| L4 | spare | 1 | - | - | - |
+| W2 | SFP+ (empty) | 1 | - | - | - |
+
+### Key Learnings
+- Per-port config opens by clicking `.port-content` inside `.ports-col`
+- Native VLAN "Custom" input found via a11y_snapshot — NOT the search bar
+- Alta Labs has NO public REST API — all config through UI only
+- "Default" for Allowed VLANs = all VLANs allowed
+
+### Phase 9 — Firewall / VLAN Isolation
+- VLAN 20 (IoT) already had **Isolation** enabled from VLAN creation
+- IoT devices (e.g., Bitdefender at 192.168.20.10) can reach internet but NOT VLAN 1 or VLAN 10
+- No additional firewall rules needed for basic inter-VLAN isolation
+
+### Phase 7 — Zyxel XMG1915-10EP — BLOCKED
+- Switch visible on Alta Labs Devices page: **XMG1915** at 192.168.1.19, MAC 7049a26e82d4, Link L1
+- MacBook (192.168.1.17, en7) is on same 192.168.1.0/24 subnet but **cannot reach** the switch
+- ARP entry for 192.168.1.19 is "(incomplete)" — no L2 response
+- Ports 80, 443, 22 all unreachable (nc connection refused or timeout)
+- Possible causes: Nebula cloud mode (disables local web UI), management VLAN restriction, or L2 segmentation
+- **Zyxel Nebula portal** (nebula.zyxel.com) is available but needs Zyxel account credentials
+
+### VPN — Explored (Not Configured)
+- WireGuard Server available on Route10 VPN tab
+- DDNS hostname already assigned: `4h5jm0towhl.ddns...`
+- Needs: private key, VPN subnet (e.g., 192.168.5.0/24), DNS servers, client configs
+- IPsec Server also available as alternative
+
+### Next Steps
+- **Phase 7**: Need physical access to Zyxel switch or Nebula cloud credentials to configure VLANs
+  - Port 1 (Route10 uplink): trunk, all VLANs (1, 10, 20)
+  - Ports 2-8: access on VLAN 10 (Main)
+- **Phase 8**: Move devices to Zyxel switch (after Phase 7 is complete)
+- **Phase 10**: Set up WireGuard VPN — needs user decisions on subnet, clients, access policies
+- **Phase 13**: Put CR1000A in bridge mode — do this LAST after all devices migrated
+
+---
+
 ## 2026-03-15 — 141: Connect AI Sidebar to AssemblyLine Chat-Service
 
 ### Task

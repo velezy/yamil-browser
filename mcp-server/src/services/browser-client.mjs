@@ -5,7 +5,7 @@ const __dirname_mjs = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname_mjs, "..", "..");
 
 export const YAMIL_ELECTRON_DIR = join(PROJECT_ROOT, "electron-app");
-export const YAMIL_CTRL         = "http://127.0.0.1:9300";
+export const YAMIL_CTRL         = process.env.YAMIL_CTRL_URL || "http://127.0.0.1:9300";
 export const BROWSER_SVC_URL    = process.env.YAMIL_BROWSER_URL || "http://127.0.0.1:4000";
 
 export let yamilElectronProc = null;

@@ -2,16 +2,19 @@
 # Electron app runs natively on desktop, connects to these containers.
 #
 # Services:
-#   browser-service :4000  — Playwright headless (stealth tabs)
-#   chat-service    :8020  — AI sidebar (LLM routing, voice I/O)
-#   rag-service     :8022  — Agentic RAG (search, ingest, knowledge)
-#   ai-db           :5432  — Shared PostgreSQL + pgvector
-#   redis           :6379  — Caching, rate limiting
+#   browser-service   :4000  — Playwright headless (stealth tabs, instance 1)
+#   browser-service-2 :4001  — Playwright headless (stealth tabs, instance 2, opt-in)
+#   chat-service      :8020  — AI sidebar (LLM routing, voice I/O)
+#   rag-service       :8022  — Agentic RAG (search, ingest, knowledge)
+#   ai-db             :5432  — Shared PostgreSQL + pgvector
+#   redis             :6379  — Caching, rate limiting
 #
 # Usage:
-#   ./setup-all.sh                    # One-time: bundle assemblyline-common
-#   docker compose up -d              # Start all services
-#   cd electron-app && npm start      # Start desktop app
+#   ./setup-all.sh                                    # One-time: bundle assemblyline-common
+#   docker compose up -d                              # Start all services (instance 1)
+#   docker compose --profile multi-instance up -d     # Start with instance 2 too
+#   cd electron-app && npm start                      # Start desktop app (instance 1)
+#   ./start-instance-2.sh                             # Start desktop app (instance 2)
 
 services:
   # ── Browser Service (stealth tabs via Playwright) ──────────────────
@@ -22,6 +25,31 @@ services:
     container_name: yamil-browser-service
     ports:
       - "4000:4000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - PORT=4000
+      - SESSION_TIMEOUT_MS=900000
+      - DATABASE_URL=postgresql://yamil:yamil_secret@ai-db:5432/yamil_browser
+      - OLLAMA_URL=http://host.docker.internal:11434
+    depends_on:
+      ai-db:
+        condition: service_healthy
+    shm_size: "2gb"
+    restart: unless-stopped
+    networks:
+      - yamil-net
+
+  # ── Browser Service 2 (multi-instance, opt-in) ───────────────────
+  browser-service-2:
+    build:
+      context: browser-service
+      dockerfile: Dockerfile
+    container_name: yamil-browser-service-2
+    profiles:
+      - multi-instance
+    ports:
+      - "4001:4000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:

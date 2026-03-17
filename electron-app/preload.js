@@ -1,10 +1,12 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('YAMIL_CONFIG', {
-  AI_ENDPOINT: process.env.AI_ENDPOINT || 'http://localhost:8020/browser-chat',
-  APP_TITLE:   process.env.APP_TITLE   || 'YAMIL Browser',
-  START_URL:   process.env.START_URL   || 'https://yamil-ai.com',
-  PLATFORM:    process.platform,  // 'darwin', 'win32', 'linux'
+  AI_ENDPOINT:     process.env.AI_ENDPOINT     || 'http://localhost:8020/browser-chat',
+  APP_TITLE:       process.env.APP_TITLE       || 'YAMIL Browser',
+  START_URL:       process.env.START_URL       || 'https://yamil-ai.com',
+  PLATFORM:        process.platform,  // 'darwin', 'win32', 'linux'
+  CTRL_PORT:       process.env.CTRL_PORT       || '9300',
+  BROWSER_SERVICE: process.env.BROWSER_SERVICE || 'http://127.0.0.1:4000',
 })
 
 contextBridge.exposeInMainWorld('YAMIL_IPC', {

@@ -246,7 +246,7 @@ server.tool("yamil_browser_resize", "Resize the YAMIL Browser viewport.",
       const infoRes = await yamilGet("/active-tab-info");
       const info = await infoRes.json();
       if (info && info.type === "stealth" && info.sessionId) {
-        await fetch(`http://127.0.0.1:4000/sessions/${info.sessionId}/resize`, {
+        await fetch(`${BROWSER_SVC_URL}/sessions/${info.sessionId}/resize`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ width, height }),

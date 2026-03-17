@@ -118,8 +118,9 @@ function searchBookmarks (query) {
   )
 }
 
-// ── Browser-service config ────────────────────────────────────────────
-const BROWSER_SERVICE = 'http://127.0.0.1:4000'
+// ── Service URLs (configurable for multi-instance) ───────────────────
+const CTRL_URL        = `http://127.0.0.1:${window.YAMIL_CONFIG?.CTRL_PORT || '9300'}`
+const BROWSER_SERVICE = window.YAMIL_CONFIG?.BROWSER_SERVICE || 'http://127.0.0.1:4000'
 
 // ── Tab state ─────────────────────────────────────────────────────────
 // Tab types: 'yamil' (webview) | 'stealth' (canvas + browser-service)
@@ -273,7 +274,7 @@ async function initStealthTab (tab, url) {
 
 function connectScreencast (tab) {
   if (!tab.sessionId) return
-  const ws = new WebSocket(`ws://127.0.0.1:4000/sessions/${tab.sessionId}/screencast`)
+  const ws = new WebSocket(`${BROWSER_SERVICE.replace(/^http/, 'ws')}/sessions/${tab.sessionId}/screencast`)
   tab.ws = ws
 
   const canvas = tab.canvasEl
@@ -680,7 +681,7 @@ async function tryAutofillFromMain (tab, domain, pageUrl) {
   if (_afDismissed.has(domain)) return
   try {
     // Fetch credentials from browser-service
-    const credRes = await fetch(`http://127.0.0.1:4000/credentials?domain=${encodeURIComponent(domain)}`)
+    const credRes = await fetch(`${BROWSER_SERVICE}/credentials?domain=${encodeURIComponent(domain)}`)
     const credData = await credRes.json()
     if (!credData.credentials || !credData.credentials.length) return
 
@@ -688,7 +689,7 @@ async function tryAutofillFromMain (tab, domain, pageUrl) {
     if (!cred.password_encrypted) return
 
     // Decrypt password via Electron safeStorage
-    const decRes = await fetch('http://127.0.0.1:9300/credentials/decrypt', {
+    const decRes = await fetch(`${CTRL_URL}/credentials/decrypt`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ encrypted: cred.password_encrypted })
@@ -2370,7 +2371,7 @@ document.getElementById('btn-translate')?.addEventListener('click', translatePag
 
 async function refreshAdblockStats () {
   try {
-    const res = await fetch('http://127.0.0.1:9300/adblock/stats')
+    const res = await fetch(`${CTRL_URL}/adblock/stats`)
     const stats = await res.json()
     const countEl = document.getElementById('set-adblock-count')
     const toggleEl = document.getElementById('set-adblock-toggle')
@@ -2381,7 +2382,7 @@ async function refreshAdblockStats () {
 
 document.getElementById('set-adblock-toggle')?.addEventListener('click', async () => {
   try {
-    await fetch('http://127.0.0.1:9300/adblock/toggle', { method: 'POST' })
+    await fetch(`${CTRL_URL}/adblock/toggle`, { method: 'POST' })
     refreshAdblockStats()
   } catch (_) {}
 })
@@ -2391,7 +2392,7 @@ document.getElementById('set-adblock-whitelist')?.addEventListener('click', asyn
   if (!tab || !tab.url) return
   try {
     const domain = new URL(tab.url).hostname.replace(/^www\./, '')
-    await fetch('http://127.0.0.1:9300/adblock/whitelist', {
+    await fetch(`${CTRL_URL}/adblock/whitelist`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ domain })
@@ -2407,7 +2408,7 @@ const cookieBody = document.getElementById('cookie-body')
 
 async function refreshCookieCount () {
   try {
-    const res = await fetch('http://127.0.0.1:9300/cookies')
+    const res = await fetch(`${CTRL_URL}/cookies`)
     const data = await res.json()
     const el = document.getElementById('set-cookie-count')
     if (el) el.textContent = `${data.total} cookies`
@@ -2417,7 +2418,7 @@ async function refreshCookieCount () {
 async function openCookieManager () {
   cookiePanel.style.display = 'flex'
   try {
-    const res = await fetch('http://127.0.0.1:9300/cookies')
+    const res = await fetch(`${CTRL_URL}/cookies`)
     const data = await res.json()
     cookieBody.innerHTML = ''
     const domains = Object.keys(data.cookies).sort()
@@ -2440,7 +2441,7 @@ async function openCookieManager () {
       delBtn.textContent = 'Delete'
       delBtn.addEventListener('click', async (e) => {
         e.stopPropagation()
-        await fetch('http://127.0.0.1:9300/cookies', {
+        await fetch(`${CTRL_URL}/cookies`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ domain })
@@ -2464,10 +2465,10 @@ cookiePanel?.addEventListener('click', (e) => { if (e.target === cookiePanel) co
 
 document.getElementById('set-clear-cookies')?.addEventListener('click', async () => {
   try {
-    const res = await fetch('http://127.0.0.1:9300/cookies')
+    const res = await fetch(`${CTRL_URL}/cookies`)
     const data = await res.json()
     for (const domain of Object.keys(data.cookies)) {
-      await fetch('http://127.0.0.1:9300/cookies', {
+      await fetch(`${CTRL_URL}/cookies`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ domain })
@@ -2481,12 +2482,12 @@ document.getElementById('set-clear-cookies')?.addEventListener('click', async ()
 // Third-party cookie blocking
 const block3pCheckbox = document.getElementById('set-block-3p-cookies')
 if (block3pCheckbox) {
-  fetch('http://127.0.0.1:9300/cookies/block-third-party').then(r => r.json()).then(d => {
+  fetch(`${CTRL_URL}/cookies/block-third-party`).then(r => r.json()).then(d => {
     block3pCheckbox.checked = !!d.blocking
   }).catch(() => {})
   block3pCheckbox.addEventListener('change', async () => {
     try {
-      await fetch('http://127.0.0.1:9300/cookies/block-third-party', {
+      await fetch(`${CTRL_URL}/cookies/block-third-party`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: block3pCheckbox.checked })
@@ -3343,7 +3344,7 @@ async function captureTaskScreenshot () {
     } else if (tab.type === 'yamil') {
       // Screenshots are captured by main process via HTTP /screenshot endpoint
       try {
-        const r = await fetch('http://127.0.0.1:9300/screenshot?quality=35&maxBytes=350000')
+        const r = await fetch(`${CTRL_URL}/screenshot?quality=35&maxBytes=350000`)
         if (r.ok) {
           const buf = await r.arrayBuffer()
           return 'data:image/jpeg;base64,' + btoa(String.fromCharCode(...new Uint8Array(buf)))

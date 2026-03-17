@@ -549,7 +549,7 @@ class TabManager {
               passwordSelector: bestSelector(pw),
               submitSelector: submitBtn ? bestSelector(submitBtn) : null,
             };
-            fetch('http://127.0.0.1:9300/credentials/auto-save', {
+            fetch('http://127.0.0.1:${CTRL_PORT}/credentials/auto-save', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ domain, username, password, formUrl: location.href, formRecipe }),
