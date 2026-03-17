@@ -878,18 +878,20 @@ document.getElementById('btn-new-stealth-tab').addEventListener('click', () => {
 })
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────
-
+// Use mod = Cmd on Mac, Ctrl on Win/Linux
 document.addEventListener('keydown', (e) => {
-  // Ctrl+T → new yamil tab
-  if (e.ctrlKey && !e.shiftKey && e.key === 't') { e.preventDefault(); createTab(startUrl, true, 'yamil') }
-  // Ctrl+Shift+N → new stealth tab
-  if (e.ctrlKey && e.shiftKey && (e.key === 'N' || e.key === 'n')) { e.preventDefault(); createTab(null, true, 'stealth') }
-  // Ctrl+Shift+R → reader mode
-  if (e.ctrlKey && e.shiftKey && (e.key === 'R' || e.key === 'r')) { e.preventDefault(); toggleReaderMode() }
-  // Ctrl+W → close active tab
-  if (e.ctrlKey && !e.shiftKey && e.key === 'w') { e.preventDefault(); if (activeTabId) closeTab(activeTabId) }
-  // Ctrl+Shift+T → restore closed tab
-  if (e.ctrlKey && e.shiftKey && (e.key === 'T' || e.key === 't')) { e.preventDefault(); restoreClosedTab() }
+  const mod = e.metaKey || e.ctrlKey  // Cmd on Mac, Ctrl on Win/Linux
+  const k = e.key.toLowerCase()
+
+  // ── Tab management (Chrome-compatible) ──────────────────────────
+  // Mod+T → new tab
+  if (mod && !e.shiftKey && k === 't') { e.preventDefault(); createTab(startUrl, true, 'yamil') }
+  // Mod+Shift+N → new stealth tab (Chrome: new incognito window)
+  if (mod && e.shiftKey && k === 'n') { e.preventDefault(); createTab(null, true, 'stealth') }
+  // Mod+W → close active tab
+  if (mod && !e.shiftKey && k === 'w') { e.preventDefault(); if (activeTabId) closeTab(activeTabId) }
+  // Mod+Shift+T → reopen last closed tab
+  if (mod && e.shiftKey && k === 't') { e.preventDefault(); restoreClosedTab() }
   // Ctrl+Tab / Ctrl+Shift+Tab → cycle tabs
   if (e.ctrlKey && e.key === 'Tab') {
     e.preventDefault()
@@ -899,40 +901,84 @@ document.addEventListener('keydown', (e) => {
       : (idx + 1) % tabs.length
     switchTab(tabs[next].id)
   }
-  // Ctrl+D → toggle bookmark
-  if (e.ctrlKey && !e.shiftKey && (e.key === 'd' || e.key === 'D')) { e.preventDefault(); toggleBookmark() }
-  // Ctrl+Shift+B → toggle bookmark bar
-  if (e.ctrlKey && e.shiftKey && (e.key === 'B' || e.key === 'b')) { e.preventDefault(); setBookmarkBarVisible(bookmarkBar.style.display === 'none') }
-  // Ctrl+Shift+O → open bookmark manager
-  if (e.ctrlKey && e.shiftKey && (e.key === 'O' || e.key === 'o')) { e.preventDefault(); openBookmarkManager() }
-  // Ctrl+F → find in page
-  if (e.ctrlKey && !e.shiftKey && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); openFindBar() }
-  // Ctrl+H → history panel
-  if (e.ctrlKey && !e.shiftKey && (e.key === 'h' || e.key === 'H')) { e.preventDefault(); openHistoryPanel() }
-  // Ctrl+= → zoom in
-  if (e.ctrlKey && (e.key === '=' || e.key === '+')) { e.preventDefault(); zoomIn() }
-  // Ctrl+- → zoom out
-  if (e.ctrlKey && e.key === '-') { e.preventDefault(); zoomOut() }
-  // Ctrl+0 → zoom reset
-  if (e.ctrlKey && e.key === '0') { e.preventDefault(); zoomReset() }
-  // Ctrl+, → settings
-  if (e.ctrlKey && e.key === ',') { e.preventDefault(); openSettingsPanel() }
-  // Ctrl+J → downloads
-  if (e.ctrlKey && !e.shiftKey && (e.key === 'j' || e.key === 'J')) { e.preventDefault(); openDownloadsPanel() }
-  // Ctrl+P → print
-  if (e.ctrlKey && !e.shiftKey && (e.key === 'p' || e.key === 'P')) { e.preventDefault(); printPage() }
-  // Ctrl+S → save page
-  if (e.ctrlKey && !e.shiftKey && (e.key === 's' || e.key === 'S')) { e.preventDefault(); savePageAs() }
-  // Ctrl+U → view source
-  if (e.ctrlKey && !e.shiftKey && (e.key === 'u' || e.key === 'U')) { e.preventDefault(); viewPageSource() }
-  // Ctrl+Shift+I / Cmd+Option+I → developer tools
-  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'i' || e.key === 'I')) { e.preventDefault(); toggleDevTools() }
-  if (e.metaKey && e.altKey && (e.key === 'i' || e.key === 'I')) { e.preventDefault(); toggleDevTools() }
+  // Mod+1-8 → switch to tab N, Mod+9 → last tab
+  if (mod && !e.shiftKey && e.key >= '1' && e.key <= '9') {
+    e.preventDefault()
+    const n = parseInt(e.key)
+    if (n === 9) { if (tabs.length > 0) switchTab(tabs[tabs.length - 1].id) }
+    else if (n <= tabs.length) switchTab(tabs[n - 1].id)
+  }
+
+  // ── Navigation (Chrome-compatible) ──────────────────────────────
+  // Mod+R → reload
+  if (mod && !e.shiftKey && k === 'r') { e.preventDefault(); window.yamil.reload().catch(() => {}) }
+  // Mod+Shift+R → hard reload (bypass cache)
+  if (mod && e.shiftKey && k === 'r') { e.preventDefault(); window.yamil.hardReload().catch(() => {}) }
+  // Mod+L or F6 → focus address bar
+  if ((mod && !e.shiftKey && k === 'l') || e.key === 'F6') { e.preventDefault(); addrBar.focus(); addrBar.select() }
+  // Mod+[ → back (Mac Chrome)
+  if (mod && e.key === '[') { e.preventDefault(); window.yamil.goBack().catch(() => {}) }
+  // Mod+] → forward (Mac Chrome)
+  if (mod && e.key === ']') { e.preventDefault(); window.yamil.goForward().catch(() => {}) }
+  // Alt+Left → back
+  if (e.altKey && !mod && e.key === 'ArrowLeft') { e.preventDefault(); window.yamil.goBack().catch(() => {}) }
+  // Alt+Right → forward
+  if (e.altKey && !mod && e.key === 'ArrowRight') { e.preventDefault(); window.yamil.goForward().catch(() => {}) }
+
+  // ── Bookmarks (Chrome-compatible) ───────────────────────────────
+  // Mod+D → bookmark current page
+  if (mod && !e.shiftKey && k === 'd') { e.preventDefault(); toggleBookmark() }
+  // Mod+Shift+B → toggle bookmark bar
+  if (mod && e.shiftKey && k === 'b') { e.preventDefault(); setBookmarkBarVisible(bookmarkBar.style.display === 'none') }
+  // Mod+Shift+O → bookmark manager
+  if (mod && e.shiftKey && k === 'o') { e.preventDefault(); openBookmarkManager() }
+
+  // ── Page operations (Chrome-compatible) ─────────────────────────
+  // Mod+F → find in page
+  if (mod && !e.shiftKey && k === 'f') { e.preventDefault(); openFindBar() }
+  // Mod+G → find next, Mod+Shift+G → find previous
+  if (mod && !e.shiftKey && k === 'g') { e.preventDefault(); document.getElementById('find-next')?.click() }
+  if (mod && e.shiftKey && k === 'g') { e.preventDefault(); document.getElementById('find-prev')?.click() }
+  // Mod+H → history
+  if (mod && !e.shiftKey && k === 'h') { e.preventDefault(); openHistoryPanel() }
+  // Mod+J → downloads
+  if (mod && !e.shiftKey && k === 'j') { e.preventDefault(); openDownloadsPanel() }
+  // Mod+P → print
+  if (mod && !e.shiftKey && k === 'p') { e.preventDefault(); printPage() }
+  // Mod+S → save page
+  if (mod && !e.shiftKey && k === 's') { e.preventDefault(); savePageAs() }
+  // Mod+U → view source
+  if (mod && !e.shiftKey && k === 'u') { e.preventDefault(); viewPageSource() }
+
+  // ── Zoom (Chrome-compatible) ────────────────────────────────────
+  // Mod+= / Mod++ → zoom in
+  if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); zoomIn() }
+  // Mod+- → zoom out
+  if (mod && e.key === '-') { e.preventDefault(); zoomOut() }
+  // Mod+0 → zoom reset
+  if (mod && e.key === '0') { e.preventDefault(); zoomReset() }
+
+  // ── Settings ────────────────────────────────────────────────────
+  // Mod+, → settings
+  if (mod && e.key === ',') { e.preventDefault(); openSettingsPanel() }
+
+  // ── Developer tools (Chrome-compatible) ─────────────────────────
+  // Mod+Shift+I → developer tools
+  if (mod && e.shiftKey && k === 'i') { e.preventDefault(); toggleDevTools() }
+  // Cmd+Option+I → developer tools (Mac)
+  if (e.metaKey && e.altKey && k === 'i') { e.preventDefault(); toggleDevTools() }
+  // Mod+Shift+J → console (opens devtools)
+  if (mod && e.shiftKey && k === 'j') { e.preventDefault(); toggleDevTools() }
   // F12 → developer tools
   if (e.key === 'F12') { e.preventDefault(); toggleDevTools() }
   // F11 → fullscreen
   if (e.key === 'F11') { e.preventDefault(); toggleFullscreen() }
-  // Escape → close overlays
+  // F5 → reload
+  if (e.key === 'F5') { e.preventDefault(); window.yamil.reload().catch(() => {}) }
+  // Shift+F5 → hard reload
+  if (e.shiftKey && e.key === 'F5') { e.preventDefault(); window.yamil.hardReload().catch(() => {}) }
+
+  // ── Escape → close overlays ─────────────────────────────────────
   if (e.key === 'Escape') {
     const findBarVisible = document.getElementById('find-bar')?.style.display !== 'none'
     const histVisible = document.getElementById('history-panel')?.style.display !== 'none'
@@ -2001,15 +2047,30 @@ if (btnMenu) btnMenu.addEventListener('click', (e) => { e.stopPropagation(); sho
 
 // Handle menu action responses from native menu
 function handleMenuAction (action) {
+  // Handle tab switching: switch-tab-1 through switch-tab-9
+  if (action.startsWith('switch-tab-')) {
+    const n = parseInt(action.split('-')[2])
+    if (n === 9) { if (tabs.length > 0) switchTab(tabs[tabs.length - 1].id) }
+    else if (n <= tabs.length) switchTab(tabs[n - 1].id)
+    return
+  }
+
   switch (action) {
     case 'new-tab':    createTab(startUrl, true, 'yamil'); break
     case 'new-stealth': createTab(startUrl, true, 'stealth'); break
+    case 'close-tab':  if (activeTabId) closeTab(activeTabId); break
+    case 'restore-tab': restoreClosedTab(); break
     case 'history':    openHistoryPanel(); break
     case 'bookmarks':  openBookmarkManager(); break
+    case 'bookmark':   toggleBookmark(); break
+    case 'toggle-bookmark-bar': setBookmarkBarVisible(bookmarkBar.style.display === 'none'); break
     case 'downloads':  openDownloadsPanel(); break
     case 'find':       openFindBar(); break
+    case 'find-next':  document.getElementById('find-next')?.click(); break
+    case 'find-prev':  document.getElementById('find-prev')?.click(); break
     case 'zoom-in':    zoomIn(); break
     case 'zoom-out':   zoomOut(); break
+    case 'zoom-reset': zoomReset(); break
     case 'print':      printPage(); break
     case 'save-page':  savePageAs(); break
     case 'copy-url':   copyUrl(); break

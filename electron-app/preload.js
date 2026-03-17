@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('yamil', {
   goBack:      ()          => ipcRenderer.invoke('tab:goBack'),
   goForward:   ()          => ipcRenderer.invoke('tab:goForward'),
   reload:      ()          => ipcRenderer.invoke('tab:reload'),
+  hardReload:  ()          => ipcRenderer.invoke('tab:hardReload'),
 
   // Page interaction
   eval:        (script)    => ipcRenderer.invoke('tab:eval', script),

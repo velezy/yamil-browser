@@ -6,6 +6,10 @@ const fs    = require('fs')
 const { AdBlocker } = require('./adblocker')
 const adBlocker = new AdBlocker()
 
+// Suppress Electron CSP warnings for third-party web pages loaded in tabs
+// (our own toolbar renderer has a proper CSP via meta tag)
+process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true'
+
 const APP_TITLE    = process.env.APP_TITLE || 'YAMIL Browser'
 const CTRL_PORT    = parseInt(process.env.CTRL_PORT || '9300', 10)
 const BROWSER_SVC  = process.env.BROWSER_SERVICE || 'http://127.0.0.1:4000'
@@ -366,41 +370,69 @@ class TabManager {
     })
 
     // Intercept keyboard shortcuts from tab webContents and forward to toolbar
+    // Mirrors Chrome's shortcuts so they work even when a web page has focus
     wc.on('before-input-event', (event, input) => {
       if (input.type !== 'keyDown') return
       const meta = input.meta || input.control  // Cmd on Mac, Ctrl on Win/Linux
       const { shift, alt, key } = input
+      const k = key.toLowerCase()
 
-      // F12 → DevTools
-      if (key === 'F12') {
-        event.preventDefault()
-        toolbarView?.webContents.send('menu-action', 'dev-tools')
-        return
-      }
-      // Cmd/Ctrl+Shift+I or Cmd+Option+I → DevTools
-      if ((meta && shift && key.toLowerCase() === 'i') || (input.meta && alt && key.toLowerCase() === 'i')) {
-        event.preventDefault()
-        toolbarView?.webContents.send('menu-action', 'dev-tools')
-        return
-      }
-      // F11 → Fullscreen
-      if (key === 'F11') {
-        event.preventDefault()
-        toolbarView?.webContents.send('menu-action', 'fullscreen')
-        return
-      }
-      // Cmd/Ctrl+F → Find
-      if (meta && !shift && key.toLowerCase() === 'f') {
-        event.preventDefault()
-        toolbarView?.webContents.send('menu-action', 'find')
-        return
-      }
-      // Cmd/Ctrl+L → Focus address bar
-      if (meta && !shift && key.toLowerCase() === 'l') {
-        event.preventDefault()
-        toolbarView?.webContents.executeJavaScript(`document.getElementById('address-bar')?.focus()`)
-        return
-      }
+      // Helper: prevent default and send menu-action to toolbar
+      const send = (action) => { event.preventDefault(); toolbarView?.webContents.send('menu-action', action) }
+
+      // ── Tab management ──────────────────────────────────────────
+      if (meta && !shift && k === 't') { send('new-tab'); return }
+      if (meta && shift && k === 'n') { send('new-stealth'); return }
+      if (meta && !shift && k === 'w') { send('close-tab'); return }
+      if (meta && shift && k === 't') { send('restore-tab'); return }
+
+      // Mod+1-8 → switch to tab N, Mod+9 → last tab
+      if (meta && !shift && key >= '1' && key <= '9') { send(`switch-tab-${key}`); return }
+
+      // ── Navigation ──────────────────────────────────────────────
+      if (meta && !shift && k === 'r') { event.preventDefault(); wc.reload(); return }
+      if (meta && shift && k === 'r') { event.preventDefault(); wc.reloadIgnoringCache(); return }
+      if (key === 'F5' && !shift) { event.preventDefault(); wc.reload(); return }
+      if (key === 'F5' && shift) { event.preventDefault(); wc.reloadIgnoringCache(); return }
+      if (meta && !shift && k === 'l') { event.preventDefault(); toolbarView?.webContents.executeJavaScript(`document.getElementById('address-bar')?.focus(); document.getElementById('address-bar')?.select()`); return }
+      if (key === 'F6') { event.preventDefault(); toolbarView?.webContents.executeJavaScript(`document.getElementById('address-bar')?.focus(); document.getElementById('address-bar')?.select()`); return }
+      if (meta && key === '[') { event.preventDefault(); if (wc.canGoBack()) wc.goBack(); return }
+      if (meta && key === ']') { event.preventDefault(); if (wc.canGoForward()) wc.goForward(); return }
+      if (alt && key === 'ArrowLeft') { event.preventDefault(); if (wc.canGoBack()) wc.goBack(); return }
+      if (alt && key === 'ArrowRight') { event.preventDefault(); if (wc.canGoForward()) wc.goForward(); return }
+
+      // ── Page operations ─────────────────────────────────────────
+      if (meta && !shift && k === 'f') { send('find'); return }
+      if (meta && !shift && k === 'g') { send('find-next'); return }
+      if (meta && shift && k === 'g') { send('find-prev'); return }
+      if (meta && !shift && k === 'p') { send('print'); return }
+      if (meta && !shift && k === 's') { send('save-page'); return }
+      if (meta && !shift && k === 'u') { send('view-source'); return }
+
+      // ── Bookmarks ───────────────────────────────────────────────
+      if (meta && !shift && k === 'd') { send('bookmark'); return }
+      if (meta && shift && k === 'b') { send('toggle-bookmark-bar'); return }
+      if (meta && shift && k === 'o') { send('bookmarks'); return }
+
+      // ── History & Downloads ─────────────────────────────────────
+      if (meta && !shift && k === 'h') { send('history'); return }
+      if (meta && !shift && k === 'j') { send('downloads'); return }
+
+      // ── Zoom ────────────────────────────────────────────────────
+      if (meta && (key === '=' || key === '+')) { send('zoom-in'); return }
+      if (meta && key === '-') { send('zoom-out'); return }
+      if (meta && key === '0') { send('zoom-reset'); return }
+
+      // ── Developer tools ─────────────────────────────────────────
+      if (key === 'F12') { send('dev-tools'); return }
+      if ((meta && shift && k === 'i') || (input.meta && alt && k === 'i')) { send('dev-tools'); return }
+      if (meta && shift && k === 'j') { send('dev-tools'); return }
+
+      // ── Fullscreen ──────────────────────────────────────────────
+      if (key === 'F11') { send('fullscreen'); return }
+
+      // ── Settings ────────────────────────────────────────────────
+      if (meta && key === ',') { send('settings'); return }
     })
 
     // Console messages
@@ -627,6 +659,12 @@ ipcMain.handle('tab:goForward', () => {
 ipcMain.handle('tab:reload', () => {
   const view = tabManager.getActiveView()
   if (view) view.webContents.reload()
+  return { ok: true }
+})
+
+ipcMain.handle('tab:hardReload', () => {
+  const view = tabManager.getActiveView()
+  if (view) view.webContents.reloadIgnoringCache()
   return { ok: true }
 })
 
