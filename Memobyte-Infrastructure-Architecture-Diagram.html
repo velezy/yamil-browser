@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MemoByte — Infrastructure Monitoring</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --inset: #f0f1f4;
+    --border: #e4e7ec;
+    --border-strong: #d1d5db;
+    --aqua: #0891b2;
+    --aqua-light: #ecfeff;
+    --aqua-border: #a5f3fc;
+    --aqua-bg: rgba(8,145,178,0.06);
+    --red: #dc2626;
+    --red-bg: rgba(220,38,38,0.06);
+    --amber: #d97706;
+    --amber-bg: rgba(217,119,6,0.06);
+    --green: #059669;
+    --green-bg: rgba(5,150,105,0.06);
+    --slate: #334155;
+    --text: #111827;
+    --text-2: #374151;
+    --text-3: #6b7280;
+    --text-4: #9ca3af;
+    --radius: 8px;
+    --shadow: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  }
+
+  body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; font-size: 13px; }
+
+  /* ===== HEADER ===== */
+  .header { background: var(--aqua); padding: 0; }
+  .header-inner {
+    max-width: 1400px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 28px;
+  }
+  .header-left { display: flex; align-items: center; gap: 20px; }
+  .logo { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
+  .logo span { font-weight: 400; opacity: 0.8; margin-left: 8px; font-size: 13px; }
+  .header-nav { display: flex; gap: 4px; }
+  .header-nav a {
+    color: rgba(255,255,255,0.75); font-size: 12px; font-weight: 500;
+    padding: 5px 12px; border-radius: 5px; text-decoration: none; transition: all 0.15s;
+  }
+  .header-nav a:hover, .header-nav a.active { color: #fff; background: rgba(255,255,255,0.15); }
+  .header-right { display: flex; align-items: center; gap: 14px; }
+  .h-status {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.9);
+  }
+  .h-dot { width: 6px; height: 6px; border-radius: 50%; background: #a7f3d0; animation: blink 2.5s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.4} }
+  .h-time { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: rgba(255,255,255,0.65); }
+
+  /* ===== PIPELINE BAR ===== */
+  .pipeline-bar {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 10px 28px;
+  }
+  .pipeline-inner {
+    max-width: 1400px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: center; gap: 0;
+  }
+  .pl-node {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: 6px;
+    font-size: 11px; font-weight: 600; white-space: nowrap;
+  }
+  .pl-node.src { color: var(--text-3); background: var(--inset); border: 1px solid var(--border); }
+  .pl-node.gw { color: #fff; background: var(--slate); font-weight: 700; padding: 8px 18px; box-shadow: var(--shadow-md); }
+  .pl-node.kf { color: var(--amber); background: var(--amber-bg); border: 1px solid rgba(217,119,6,0.15); }
+  .pl-node.db { color: var(--green); background: var(--green-bg); border: 1px solid rgba(5,150,105,0.15); }
+  .pl-arr { padding: 0 8px; color: var(--text-4); font-size: 14px; }
+  .pl-arr span { display: inline-block; animation: arr 1.8s ease-in-out infinite; }
+  @keyframes arr { 0%{opacity:0.3;transform:translateX(-2px)}50%{opacity:0.8;transform:translateX(2px)}100%{opacity:0.3;transform:translateX(-2px)} }
+  .pl-sub { font-size: 9px; color: var(--text-4); font-family: 'JetBrains Mono', monospace; margin-top: 1px; }
+
+  /* ===== LAYOUT ===== */
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 16px 28px 32px; }
+  .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .g4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 12px; }
+
+  /* ===== CARD ===== */
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 18px; box-shadow: var(--shadow); transition: box-shadow 0.2s;
+  }
+  .card:hover { box-shadow: var(--shadow-md); }
+  .card-h {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+  }
+  .card-t { font-size: 11px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.5px; }
+  .card-badge {
+    font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 4px;
+    background: var(--inset); color: var(--text-3); border: 1px solid var(--border);
+  }
+  .card-badge.live { color: var(--green); background: var(--green-bg); border-color: rgba(5,150,105,0.15); }
+  .card-badge.live::before { content: ''; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--green); margin-right: 4px; animation: blink 2s ease-in-out infinite; }
+
+  /* ===== STAT ===== */
+  .stat {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 16px; box-shadow: var(--shadow);
+  }
+  .stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-4); margin-bottom: 4px; }
+  .stat-val { font-size: 26px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--text); line-height: 1.2; }
+  .stat-val em { font-style: normal; color: var(--aqua); }
+  .stat-sub { font-size: 11px; color: var(--text-4); margin-top: 2px; }
+
+  /* ===== HEALTH ===== */
+  .health-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+  .h-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; background: var(--inset); border: 1px solid var(--border);
+    border-radius: 6px; transition: border-color 0.15s;
+  }
+  .h-item:hover { border-color: var(--border-strong); }
+  .h-dot-s { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .h-dot-s.up { background: var(--green); }
+  .h-dot-s.dn { background: var(--red); }
+  .h-name { font-size: 11px; font-weight: 600; color: var(--text-2); }
+  .h-port { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-4); }
+
+  /* ===== ALERTS ===== */
+  .alert-list { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+  .al-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; background: var(--inset); border-radius: 6px;
+    border-left: 3px solid var(--border); font-size: 12px;
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+  .al-item.crit { border-left-color: var(--red); background: var(--red-bg); }
+  .al-item.warn { border-left-color: var(--amber); background: var(--amber-bg); }
+  .al-item.ok { border-left-color: var(--border); opacity: 0.5; }
+  .al-sev { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600; text-transform: uppercase; width: 52px; flex-shrink: 0; }
+  .al-item.crit .al-sev { color: var(--red); }
+  .al-item.warn .al-sev { color: var(--amber); }
+  .al-item.ok .al-sev { color: var(--text-4); }
+  .al-msg { color: var(--text-3); flex: 1; font-size: 11px; }
+  .al-time { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-4); white-space: nowrap; }
+
+  /* ===== LOG ===== */
+  .log-box {
+    background: var(--inset); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px; font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    line-height: 1.9; max-height: 240px; overflow-y: auto; color: var(--text-3);
+  }
+  .log-l { white-space: nowrap; animation: fadeIn 0.2s ease; }
+  .l-ts { color: var(--text-4); }
+  .l-info { color: var(--aqua); font-weight: 500; }
+  .l-warn { color: var(--amber); font-weight: 500; }
+  .l-err { color: var(--red); font-weight: 600; }
+  .l-src { color: var(--text-4); }
+
+  /* ===== NOTIF ===== */
+  .notif-list { display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; }
+  .n-item {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 8px 10px; background: var(--inset); border-radius: 6px;
+    font-size: 11px; transition: background 0.15s;
+  }
+  .n-item:hover { background: var(--aqua-bg); }
+  .n-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--aqua); flex-shrink: 0; margin-top: 5px; }
+  .n-text { color: var(--text-3); flex: 1; line-height: 1.4; }
+  .n-time { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-4); white-space: nowrap; }
+
+  /* ===== CHART ===== */
+  .ch { position: relative; width: 100%; }
+  .ch.h190 { height: 190px; }
+  .ch.h170 { height: 170px; }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width:1024px) { .g4{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:1fr 1fr} }
+  @media (max-width:768px) { .g2,.g3,.g4{grid-template-columns:1fr} .header-nav{display:none} .pipeline-inner{flex-wrap:wrap;gap:6px} .pl-arr{display:none} }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="header-left">
+      <div class="logo">MemoByte<span>Infrastructure</span></div>
+      <nav class="header-nav">
+        <a href="#" class="active">Overview</a>
+        <a href="#">Services</a>
+        <a href="#">Alerts</a>
+        <a href="#">Logs</a>
+        <a href="#">Settings</a>
+      </nav>
+    </div>
+    <div class="header-right">
+      <div class="h-status"><span class="h-dot"></span> Operational</div>
+      <div class="h-time" id="clock"></div>
+    </div>
+  </div>
+</div>
+
+<div class="pipeline-bar">
+  <div class="pipeline-inner">
+    <div class="pl-node src">
+      <div><div>QNAP Monitoring</div><div class="pl-sub">7 APIs &middot; 192.168.0.102</div></div>
+    </div>
+    <div class="pl-arr"><span>&rarr;</span></div>
+    <div class="pl-node gw">YAMIL Gateway</div>
+    <div class="pl-arr"><span>&rarr;</span></div>
+    <div class="pl-node kf">
+      <div><div>Kafka</div><div class="pl-sub">yamil.monitoring.*</div></div>
+    </div>
+    <div class="pl-arr"><span>&rarr;</span></div>
+    <div class="pl-node db">
+      <div><div>Dashboard</div><div class="pl-sub">Real-time</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="g4">
+    <div class="stat">
+      <div class="stat-label">Services</div>
+      <div class="stat-val" id="sS"><em>7</em> / 7</div>
+      <div class="stat-sub">All targets healthy</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Active Alerts</div>
+      <div class="stat-val" id="sA"><em>2</em></div>
+      <div class="stat-sub">1 critical, 1 warning</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Avg Latency</div>
+      <div class="stat-val" id="sL"><em>42</em>ms</div>
+      <div class="stat-sub">Across all probes</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Throughput</div>
+      <div class="stat-val" id="sK"><em>1.2</em>k msg/s</div>
+      <div class="stat-sub">9 Kafka topics</div>
+    </div>
+  </div>
+
+  <div class="g2">
+    <div class="card">
+      <div class="card-h"><div class="card-t">Service Health</div><span class="card-badge live">Live</span></div>
+      <div class="health-grid" id="hg"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="card-t">Active Alerts</div><span class="card-badge">Alertmanager</span></div>
+      <div class="alert-list" id="al"></div>
+    </div>
+  </div>
+
+  <div class="g3">
+    <div class="card">
+      <div class="card-h"><div class="card-t">CPU Usage</div><span class="card-badge live">Prometheus</span></div>
+      <div class="ch h190"><canvas id="cCpu"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="card-t">Memory Usage</div><span class="card-badge live">Prometheus</span></div>
+      <div class="ch h190"><canvas id="cMem"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="card-t">Probe Latency</div><span class="card-badge">Blackbox</span></div>
+      <div class="ch h190"><canvas id="cLat"></canvas></div>
+    </div>
+  </div>
+
+  <div class="g2">
+    <div class="card">
+      <div class="card-h"><div class="card-t">Uptime (24h)</div><span class="card-badge">Uptime Kuma</span></div>
+      <div class="ch h190"><canvas id="cUp"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="card-t">Kafka Message Rate</div><span class="card-badge live">Gateway</span></div>
+      <div class="ch h190"><canvas id="cKaf"></canvas></div>
+    </div>
+  </div>
+
+  <div class="g2">
+    <div class="card">
+      <div class="card-h"><div class="card-t">Live Logs</div><span class="card-badge live">Loki</span></div>
+      <div class="log-box" id="logs"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="card-t">Notifications</div><span class="card-badge">ntfy</span></div>
+      <div class="notif-list" id="notifs"></div>
+    </div>
+  </div>
+
+  <div class="g2">
+    <div class="card">
+      <div class="card-h"><div class="card-t">Disk Usage</div><span class="card-badge">Node Exporter</span></div>
+      <div class="ch h170"><canvas id="cDisk"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="card-t">Network I/O</div><span class="card-badge live">Prometheus</span></div>
+      <div class="ch h170"><canvas id="cNet"></canvas></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var AQUA = '#0891b2';
+  var AQUA_BG = 'rgba(8,145,178,0.08)';
+  var RED = '#dc2626';
+  var RED_BG = 'rgba(220,38,38,0.08)';
+  var AMBER = '#d97706';
+  var AMBER_BG = 'rgba(217,119,6,0.08)';
+  var GREEN = '#059669';
+  var GREEN_BG = 'rgba(5,150,105,0.08)';
+  var SLATE = '#475569';
+  var SLATE_BG = 'rgba(71,85,105,0.08)';
+  var GRID = 'rgba(0,0,0,0.05)';
+  var TICK = '#9ca3af';
+
+  // Clock
+  function clock(){
+    var d=new Date();
+    document.getElementById('clock').textContent=d.toLocaleTimeString('en-US',{hour12:false})+' UTC';
+  }
+  setInterval(clock,1000); clock();
+
+  // Chart defaults
+  Chart.defaults.color=TICK;
+  Chart.defaults.borderColor=GRID;
+  Chart.defaults.font.family="'Inter',sans-serif";
+  Chart.defaults.font.size=10;
+  Chart.defaults.plugins.legend.labels.boxWidth=8;
+  Chart.defaults.plugins.legend.labels.padding=10;
+  Chart.defaults.plugins.legend.labels.usePointStyle=true;
+  Chart.defaults.animation={duration:500,easing:'easeOutQuart'};
+
+  var N=30;
+  function tLabels(n){
+    var l=[],now=new Date();
+    for(var i=n-1;i>=0;i--){var t=new Date(now.getTime()-i*3000);l.push(t.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}));}
+    return l;
+  }
+  function gen(n,lo,hi){
+    var a=[],v=lo+(hi-lo)*(0.3+Math.random()*0.4);
+    for(var i=0;i<n;i++){v+=(Math.random()-0.5)*((hi-lo)*0.12);if(v<lo)v=lo+Math.random()*2;if(v>hi)v=hi-Math.random()*2;a.push(Math.round(v*10)/10);}
+    return a;
+  }
+  function nxt(a,lo,hi){
+    var v=a[a.length-1]+(Math.random()-0.5)*((hi-lo)*0.14);
+    if(v<lo)v=lo+Math.random()*2;if(v>hi)v=hi-Math.random()*2;
+    return Math.round(v*10)/10;
+  }
+
+  var labs=tLabels(N);
+  var lineOpt={
+    responsive:true,maintainAspectRatio:false,
+    interaction:{intersect:false,mode:'index'},
+    scales:{y:{beginAtZero:true,grid:{color:GRID},ticks:{padding:4}},x:{grid:{display:false},ticks:{maxTicksLimit:6,maxRotation:0}}},
+    plugins:{legend:{position:'top'}},
+    elements:{point:{radius:0,hoverRadius:3}}
+  };
+
+  // CPU
+  var cpuD={labels:labs.slice(),datasets:[
+    {label:'Dark-Knight',data:gen(N,20,60),borderColor:AQUA,backgroundColor:AQUA_BG,fill:true,tension:0.35,borderWidth:1.5},
+    {label:'GEEKOM',data:gen(N,5,22),borderColor:AMBER,backgroundColor:AMBER_BG,fill:true,tension:0.35,borderWidth:1.5},
+    {label:'QNAP',data:gen(N,12,45),borderColor:RED,backgroundColor:RED_BG,fill:true,tension:0.35,borderWidth:1.5}
+  ]};
+  var cpuC=new Chart(document.getElementById('cCpu'),{type:'line',data:cpuD,
+    options:Object.assign({},lineOpt,{scales:{y:{beginAtZero:true,max:100,grid:{color:GRID},ticks:{callback:function(v){return v+'%'},padding:4}},x:lineOpt.scales.x}})
+  });
+
+  // Memory
+  var memD={labels:labs.slice(),datasets:[
+    {label:'Dark-Knight (64GB)',data:gen(N,35,55),borderColor:AQUA,backgroundColor:AQUA_BG,fill:true,tension:0.35,borderWidth:1.5},
+    {label:'GEEKOM (32GB)',data:gen(N,12,28),borderColor:AMBER,backgroundColor:AMBER_BG,fill:true,tension:0.35,borderWidth:1.5},
+    {label:'QNAP (8GB)',data:gen(N,55,80),borderColor:RED,backgroundColor:RED_BG,fill:true,tension:0.35,borderWidth:1.5}
+  ]};
+  var memC=new Chart(document.getElementById('cMem'),{type:'line',data:memD,
+    options:Object.assign({},lineOpt,{scales:{y:{beginAtZero:true,max:100,grid:{color:GRID},ticks:{callback:function(v){return v+'%'},padding:4}},x:lineOpt.scales.x}})
+  });
+
+  // Latency
+  var latD=[42,38,12,25,18,31,8];
+  var latC=new Chart(document.getElementById('cLat'),{type:'bar',
+    data:{labels:['YAMIL','Grafana','Prometheus','Loki','ntfy','Uptime Kuma','Postgres'],
+      datasets:[{data:latD,backgroundColor:[AQUA_BG,AMBER_BG,RED_BG,GREEN_BG,AQUA_BG,AMBER_BG,RED_BG],borderColor:[AQUA,AMBER,RED,GREEN,AQUA,AMBER,RED],borderWidth:1,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{y:{beginAtZero:true,grid:{color:GRID},ticks:{callback:function(v){return v+'ms'}}},x:{grid:{display:false}}},
+      plugins:{legend:{display:false}}}
+  });
+
+  // Uptime
+  new Chart(document.getElementById('cUp'),{type:'bar',
+    data:{labels:['Prometheus','Grafana','Loki','Alertmgr','Blackbox','ntfy','Uptime Kuma','Postgres','Redis','Envoy'],
+      datasets:[{data:[100,99.98,100,100,99.95,100,99.99,100,100,99.97],
+        backgroundColor:[AQUA_BG,AMBER_BG,RED_BG,GREEN_BG,AQUA_BG,AMBER_BG,RED_BG,GREEN_BG,AQUA_BG,AMBER_BG],
+        borderColor:[AQUA,AMBER,RED,GREEN,AQUA,AMBER,RED,GREEN,AQUA,AMBER],borderWidth:1,borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      scales:{x:{min:99.5,max:100.05,grid:{color:GRID},ticks:{callback:function(v){return v+'%'}}},y:{grid:{display:false}}},
+      plugins:{legend:{display:false}}}
+  });
+
+  // Kafka
+  var kafD={labels:labs.slice(),datasets:[
+    {label:'msgs/sec',data:gen(N,800,1500),borderColor:AQUA,backgroundColor:AQUA_BG,fill:true,tension:0.35,borderWidth:1.5},
+    {label:'consumer lag',data:gen(N,0,60),borderColor:SLATE,backgroundColor:SLATE_BG,fill:true,tension:0.35,borderWidth:1,borderDash:[4,3]}
+  ]};
+  var kafC=new Chart(document.getElementById('cKaf'),{type:'line',data:kafD,options:lineOpt});
+
+  // Disk
+  new Chart(document.getElementById('cDisk'),{type:'doughnut',
+    data:{labels:['Used','Free','Used','Free'],datasets:[
+      {data:[62,38],backgroundColor:[AQUA,'rgba(8,145,178,0.08)'],borderWidth:0,circumference:180,rotation:270},
+      {data:[71,29],backgroundColor:[RED,'rgba(220,38,38,0.08)'],borderWidth:0,circumference:180,rotation:270}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+      plugins:{legend:{position:'bottom',labels:{color:'#6b7280',generateLabels:function(){
+        return [{text:'Dark-Knight 62%',fillStyle:AQUA,strokeStyle:'transparent'},{text:'QNAP NAS 71%',fillStyle:RED,strokeStyle:'transparent'}];
+      }}}}}
+  });
+
+  // Network
+  var netD={labels:labs.slice(),datasets:[
+    {label:'RX (Mbps)',data:gen(N,20,120),borderColor:AQUA,backgroundColor:AQUA_BG,fill:true,tension:0.35,borderWidth:1.5},
+    {label:'TX (Mbps)',data:gen(N,10,60),borderColor:AMBER,backgroundColor:AMBER_BG,fill:true,tension:0.35,borderWidth:1.5}
+  ]};
+  var netC=new Chart(document.getElementById('cNet'),{type:'line',data:netD,
+    options:Object.assign({},lineOpt,{scales:{y:{beginAtZero:true,grid:{color:GRID},ticks:{callback:function(v){return v+' Mbps'},padding:4}},x:lineOpt.scales.x}})
+  });
+
+  // ===== LIVE UPDATES =====
+  function push(chart,ds,ranges){
+    var now=new Date();
+    var l=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+    chart.data.labels.push(l);chart.data.labels.shift();
+    for(var i=0;i<ds.length;i++){ds[i].data.push(nxt(ds[i].data,ranges[i][0],ranges[i][1]));ds[i].data.shift();}
+    chart.update('none');
+  }
+  setInterval(function(){
+    push(cpuC,cpuD.datasets,[[20,60],[5,22],[12,45]]);
+    push(memC,memD.datasets,[[35,55],[12,28],[55,80]]);
+    push(kafC,kafD.datasets,[[800,1500],[0,60]]);
+    push(netC,netD.datasets,[[20,120],[10,60]]);
+  },3000);
+
+  // Latency wiggle
+  setInterval(function(){
+    var d=latC.data.datasets[0].data;
+    for(var i=0;i<d.length;i++)d[i]=Math.max(3,d[i]+Math.round((Math.random()-0.5)*6));
+    latC.update();
+    var avg=Math.round(d.reduce(function(a,b){return a+b},0)/d.length);
+    document.getElementById('sL').innerHTML='<em>'+avg+'</em>ms';
+  },5000);
+
+  // Kafka stat
+  setInterval(function(){
+    var v=kafD.datasets[0].data[kafD.datasets[0].data.length-1];
+    document.getElementById('sK').innerHTML='<em>'+(v/1000).toFixed(1)+'</em>k msg/s';
+  },3000);
+
+  // Health
+  var svcs=[
+    {n:'Prometheus',p:':9090'},{n:'Grafana',p:':3000'},{n:'Loki',p:':3100'},
+    {n:'Alertmanager',p:':9093'},{n:'Blackbox',p:':9115'},{n:'ntfy',p:':8090'},
+    {n:'Uptime Kuma',p:':3001'},{n:'Postgres',p:':5432'},{n:'Redis',p:':6379'},
+    {n:'Envoy',p:':9080'},{n:'Kafka',p:':9092'},{n:'Ollama',p:':11434'}
+  ];
+  var hh='';
+  svcs.forEach(function(s){hh+='<div class="h-item"><div class="h-dot-s up"></div><div><div class="h-name">'+s.n+'</div><div class="h-port">'+s.p+'</div></div></div>';});
+  document.getElementById('hg').innerHTML=hh;
+
+  // Alerts
+  var aPool=[
+    {s:'critical',c:'crit',m:'DiskUsageHigh on QNAP \u2014 /share at 71%'},
+    {s:'warning',c:'warn',m:'Grafana response > 500ms (avg 38ms)'},
+    {s:'warning',c:'warn',m:'Kafka consumer lag > 50 on monitoring.logs'},
+    {s:'critical',c:'crit',m:'OOM Kill on QNAP \u2014 loki container restarted'},
+    {s:'warning',c:'warn',m:'SSL cert expires in 14 days \u2014 yamil-ai.com'},
+    {s:'resolved',c:'ok',m:'SecondaryHostDown \u2014 GEEKOM reconnected'},
+    {s:'resolved',c:'ok',m:'BackupFailed \u2014 pg_dump retry succeeded'},
+    {s:'resolved',c:'ok',m:'VaultSealed \u2014 auto-unseal triggered'}
+  ];
+  var aList=aPool.slice(0,5);
+  function rAlerts(){
+    var h='';
+    aList.forEach(function(a,i){
+      var t=i===0?'now':(i*4)+'m';
+      h+='<div class="al-item '+a.c+'"><div class="al-sev">'+a.s+'</div><div class="al-msg">'+a.m+'</div><div class="al-time">'+t+'</div></div>';
+    });
+    document.getElementById('al').innerHTML=h;
+  }
+  rAlerts();
+  setInterval(function(){aList.unshift(aPool[Math.floor(Math.random()*aPool.length)]);if(aList.length>6)aList.pop();rAlerts();},12000);
+
+  // Logs
+  var lSrc=['prometheus','grafana','loki','envoy','postgres','kafka','gateway','blackbox'];
+  var lMsg=['Scrape target responded in 12ms','Dashboard query executed (3 panels)','Log entry pushed to stream',
+    'Upstream connection established','WAL checkpoint complete','Message produced to yamil.monitoring.metrics',
+    'Health check passed for all targets','Consumer group rebalanced (3 partitions)','Alert rule evaluation complete',
+    'Compaction finished (2 blocks merged)','Index refresh completed in 45ms','SSL certificate valid for 89 days',
+    'Connection pool: 12/20 active','Retention policy applied (30d)','Heartbeat received from Dark-Knight',
+    'Probe HTTP/200 in 23ms','Topic subscription renewed'];
+  function addLog(){
+    var el=document.getElementById('logs'),now=new Date();
+    var ts=now.toLocaleTimeString('en-US',{hour12:false})+'.'+String(now.getMilliseconds()).padStart(3,'0');
+    var src=lSrc[Math.floor(Math.random()*lSrc.length)];
+    var msg=lMsg[Math.floor(Math.random()*lMsg.length)];
+    var r=Math.random(),lvl=r>0.92?'err':(r>0.78?'warn':'info');
+    el.innerHTML+='<div class="log-l"><span class="l-ts">'+ts+'</span> <span class="l-'+lvl+'">'+lvl.toUpperCase().padEnd(4)+'</span> <span class="l-src">['+src+']</span> '+msg+'</div>';
+    el.scrollTop=el.scrollHeight;
+    var lines=el.querySelectorAll('.log-l');if(lines.length>50)lines[0].remove();
+  }
+  for(var i=0;i<14;i++)addLog();
+  setInterval(addLog,1800);
+
+  // Notifications
+  var nPool=['QNAP disk usage at 71% \u2014 approaching 80% threshold','Grafana alert: High API latency on /api/dashboards',
+    'GEEKOM came back online after 45s downtime','Database backup completed \u2014 message_weaver (142MB)',
+    'Vault auto-unseal triggered after container restart','Prometheus scrape targets: 18/18 healthy',
+    'Kafka topic compaction: yamil.monitoring.metrics','New SSL cert deployed for yamil-ai.com',
+    'Loki ingestion rate: 4.2k lines/sec','Alertmanager silenced: DiskUsageWarn for 2h'];
+  var nList=nPool.slice(0,7);
+  function rNotifs(){
+    var h='';
+    nList.forEach(function(n,i){
+      var t=i===0?'now':(i*6)+'m';
+      h+='<div class="n-item"><div class="n-dot"></div><div class="n-text">'+n+'</div><div class="n-time">'+t+'</div></div>';
+    });
+    document.getElementById('notifs').innerHTML=h;
+  }
+  rNotifs();
+  setInterval(function(){nList.unshift(nPool[Math.floor(Math.random()*nPool.length)]);if(nList.length>8)nList.pop();rNotifs();},15000);
+
+})();
+</script>
+</body>
+</html>

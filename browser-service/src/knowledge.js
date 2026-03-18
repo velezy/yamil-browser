@@ -13,6 +13,7 @@
 import pg from 'pg'
 import crypto from 'crypto'
 import { dispatch, dispatchSSE } from './webhooks.js'
+import { syncToMemoByte } from './memobyte-sync.js'
 
 const { Pool } = pg
 
@@ -24,6 +25,10 @@ const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://yamil_browser:yam
 
 const PASSIVE_IDLE_MS     = 20000  // 20s idle → auto distill
 const PASSIVE_MIN_ACTIONS = 3     // minimum actions before auto-distill
+
+// ── Learning control flags (DB-backed, persist across restarts) ──────
+let _learningEnabled = true
+let _syncEnabled = false
 
 // ── Database pool ────────────────────────────────────────────────────
 let pool = null
@@ -73,7 +78,49 @@ export async function probeOllama() {
 
 export async function initDb() {
   await getPool()
+  await loadLearningConfig()
 }
+
+// ── Learning config persistence ──────────────────────────────────────
+export async function loadLearningConfig() {
+  if (!dbReady) return
+  try {
+    const p = await getPool()
+    const { rows } = await p.query('SELECT key, value FROM learning_config')
+    for (const row of rows) {
+      if (row.key === 'learning_enabled') _learningEnabled = row.value === 'true'
+      if (row.key === 'sync_enabled') _syncEnabled = row.value === 'true'
+    }
+    console.log(`[KNOWLEDGE] Config loaded: learning=${_learningEnabled}, sync=${_syncEnabled}`)
+  } catch (e) {
+    console.log(`[KNOWLEDGE] Config table not ready (first run?): ${e.message}`)
+  }
+}
+
+export async function saveLearningConfig(key, value) {
+  if (!dbReady) return
+  const p = await getPool()
+  await p.query(
+    `INSERT INTO learning_config (key, value, updated_at) VALUES ($1, $2, now())
+     ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = now()`,
+    [key, String(value)]
+  )
+}
+
+export async function setLearningEnabled(enabled) {
+  _learningEnabled = enabled
+  await saveLearningConfig('learning_enabled', enabled)
+  console.log(`[KNOWLEDGE] Learning ${enabled ? 'STARTED' : 'STOPPED'}`)
+}
+
+export async function setSyncEnabled(enabled) {
+  _syncEnabled = enabled
+  await saveLearningConfig('sync_enabled', enabled)
+  console.log(`[KNOWLEDGE] MemoByte sync ${enabled ? 'ENABLED' : 'DISABLED'}`)
+}
+
+export function isLearningEnabled() { return _learningEnabled }
+export function isSyncEnabled() { return _syncEnabled }
 
 // ── Ollama helpers ───────────────────────────────────────────────────
 async function ollamaExtract(inputText, template) {
@@ -155,6 +202,7 @@ const DISTILLATION_TEMPLATE = {
 
 // ── Distill a session into knowledge ─────────────────────────────────
 export async function distillSession(session) {
+  if (!_learningEnabled) return null
   if (!_extractAvailable) return null
   if (!session?.steps?.length) return null
   if (!dbReady) { console.error('[KNOWLEDGE] DB not ready, skipping distillation'); return null }
@@ -222,6 +270,13 @@ export async function distillSession(session) {
     const eventPayload = { domain, count: savedCount, goal: session.goal, url: session.url, outcome: session.outcome }
     dispatch('knowledge.created', eventPayload)
     dispatchSSE('knowledge.created', eventPayload)
+
+    // Sync to MemoByte if enabled (fire-and-forget)
+    if (_syncEnabled) {
+      syncToMemoByte(extracted, session, domain, p).catch(e =>
+        console.error(`[KNOWLEDGE] MemoByte sync error: ${e.message}`)
+      )
+    }
 
     return savedCount
   } catch (e) {
@@ -311,6 +366,8 @@ function getTracker(sessionId) {
 
 /** Log an action — writes to DB + in-memory tracker for batch distillation */
 export async function logAction(sessionId, action, params = {}, pageUrl = '', result = 'ok') {
+  if (!_learningEnabled) return
+
   // Strip query params from URL before storing (privacy: removes tokens, session IDs, etc.)
   try { const u = new URL(pageUrl); pageUrl = u.origin + u.pathname } catch {}
 

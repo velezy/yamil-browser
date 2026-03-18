@@ -32,6 +32,7 @@ services:
       - SESSION_TIMEOUT_MS=900000
       - DATABASE_URL=postgresql://yamil:yamil_secret@ai-db:5432/yamil_browser
       - OLLAMA_URL=http://host.docker.internal:11434
+      - MEMOBYTE_ORCHESTRATOR_URL=http://host.docker.internal:8124
     depends_on:
       ai-db:
         condition: service_healthy
@@ -57,6 +58,7 @@ services:
       - SESSION_TIMEOUT_MS=900000
       - DATABASE_URL=postgresql://yamil:yamil_secret@ai-db:5432/yamil_browser
       - OLLAMA_URL=http://host.docker.internal:11434
+      - MEMOBYTE_ORCHESTRATOR_URL=http://host.docker.internal:8124
     depends_on:
       ai-db:
         condition: service_healthy
@@ -78,10 +80,11 @@ services:
     environment:
       PORT: 8020
       SERVICE_NAME: yamil-chat
-      DATABASE_URL: postgresql+asyncpg://yamil:yamil_secret@ai-db:5432/yamil_chat
+      DATABASE_URL: postgresql+asyncpg://yamil:yamil_secret@ai-db:5432/yamil_browser
       REDIS_URL: redis://redis:6379/0
       OLLAMA_URL: http://host.docker.internal:11434
       RAG_SERVICE_URL: http://rag-service:8022
+      BROWSER_SERVICE_URL: http://browser-service:4000
       SKIP_AUTH: "true"
       USE_SECRETS_MANAGER: "false"
       LLM_PREFER_LOCAL: "true"
@@ -113,7 +116,7 @@ services:
     environment:
       PORT: 8022
       SERVICE_NAME: yamil-rag
-      DATABASE_URL: postgresql+asyncpg://yamil:yamil_secret@ai-db:5432/yamil_rag
+      DATABASE_URL: postgresql+asyncpg://yamil:yamil_secret@ai-db:5432/yamil_browser
       REDIS_URL: redis://redis:6379/1
       OLLAMA_URL: http://host.docker.internal:11434
       EMBEDDING_MODEL: nomic-embed-text
@@ -146,10 +149,11 @@ services:
       POSTGRES_DB: yamil_browser
     volumes:
       - ai-db-data:/var/lib/postgresql/data
-      - ./browser-service/sql/init.sql:/docker-entrypoint-initdb.d/01-browser.sql:ro
-      - ./chat-service/migrations/V001__chat_schema.sql:/docker-entrypoint-initdb.d/02-chat.sql:ro
-      - ./rag-service/migrations/V001__rag_schema.sql:/docker-entrypoint-initdb.d/03-rag.sql:ro
       - ./init-databases.sql:/docker-entrypoint-initdb.d/00-init-databases.sql:ro
+      - ./browser-service/sql/init.sql:/docker-entrypoint-initdb.d/01-browser.sql:ro
+      - ./browser-service/sql/02-unified-tables.sql:/docker-entrypoint-initdb.d/02-unified.sql:ro
+      - ./chat-service/migrations/V001__chat_schema.sql:/docker-entrypoint-initdb.d/03-chat.sql:ro
+      - ./rag-service/migrations/V001__rag_schema.sql:/docker-entrypoint-initdb.d/04-rag.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U yamil"]
       interval: 5s

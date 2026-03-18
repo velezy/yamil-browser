@@ -49,6 +49,7 @@ import { registerAiVisionTools } from "./tools/ai-vision.mjs";
 import { registerKnowledgeTools } from "./tools/knowledge.mjs";
 import { registerCredentialTools } from "./tools/credentials.mjs";
 import { registerPdfTools } from "./tools/pdf.mjs";
+import { registerLearningTools } from "./tools/learning.mjs";
 
 console.error("[YAMIL MCP] Loaded from: C:/project/yamil-browser/mcp-server/src/index.mjs");
 
@@ -112,6 +113,7 @@ registerAiVisionTools(server, deps);
 registerKnowledgeTools(server, deps);
 registerCredentialTools(server, deps);
 registerPdfTools(server, deps);
+registerLearningTools(server, deps);
 
 // ── Start server ─────────────────────────────────────────────────────
 const transport = new StdioServerTransport();

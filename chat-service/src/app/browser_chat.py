@@ -8,12 +8,15 @@ Supports streaming (SSE) and non-streaming modes.
 import os
 import json
 import logging
+import httpx
 from typing import Optional
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+
+BROWSER_SERVICE_URL = os.getenv("BROWSER_SERVICE_URL", "http://browser-service:4000")
 
 router = APIRouter()
 
@@ -72,6 +75,24 @@ async def browser_chat(request: BrowserChatRequest):
         system += f"\n\nThe user is currently viewing: \"{title}\" ({url})"
         if text:
             system += f"\n\nPage content (first 3000 chars):\n{text[:3000]}"
+
+    # Inject browser knowledge context (learned from browsing history)
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(
+                f"{BROWSER_SERVICE_URL}/knowledge/search",
+                json={"query": request.message, "topK": 3},
+            )
+            if resp.status_code == 200:
+                entries = [e for e in resp.json().get("entries", []) if (e.get("score") or 0) > 0.3]
+                if entries:
+                    bk_lines = "\n".join(
+                        f"- [{e.get('category', '')}] {e.get('title', '')}: {json.dumps(e.get('content', ''))}"
+                        for e in entries[:3]
+                    )
+                    system += f"\n\n[Browser Knowledge — learned from past browsing]\n{bk_lines}"
+    except Exception:
+        pass  # Browser knowledge is best-effort
 
     # Build LLM request
     llm_request = LLMRequest(

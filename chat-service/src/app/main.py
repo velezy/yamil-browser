@@ -313,6 +313,24 @@ if OBSERVABILITY_AVAILABLE:
 ORCHESTRATOR_URL = os.getenv("ORCHESTRATOR_URL", getattr(config, "ORCHESTRATOR_URL", "http://localhost:8024"))
 RAG_SERVICE_URL = os.getenv("RAG_SERVICE_URL", getattr(config, "RAG_SERVICE_URL", "http://rag-service:8022"))
 AUDIT_SERVICE_URL = os.getenv("AUDIT_SERVICE_URL", getattr(config, "AUDIT_SERVICE_URL", ""))
+BROWSER_SERVICE_URL = os.getenv("BROWSER_SERVICE_URL", "http://browser-service:4000")
+
+
+async def fetch_browser_knowledge(query: str, top_k: int = 3) -> list:
+    """Query browser-service knowledge base for context matching the user's message."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(
+                f"{BROWSER_SERVICE_URL}/knowledge/search",
+                json={"query": query, "topK": top_k},
+            )
+            if resp.status_code == 200:
+                entries = resp.json().get("entries", [])
+                # Only return entries with meaningful similarity
+                return [e for e in entries if (e.get("score") or 0) > 0.3]
+    except Exception as e:
+        logger.debug(f"Browser knowledge lookup skipped: {e}")
+    return []
 
 
 # Schemas
@@ -590,6 +608,19 @@ async def send_message(request: ChatRequest, http_request: Request):
         except Exception as e:
             logger.warning(f"RAG service unavailable: {e}")
 
+    # Get browser knowledge context (learned from browsing)
+    browser_knowledge = await fetch_browser_knowledge(request.message)
+    if browser_knowledge:
+        bk_text = "\n".join(
+            f"- [{e.get('category', '')}] {e.get('title', '')}: {json.dumps(e.get('content', ''))}"
+            for e in browser_knowledge[:3]
+        )
+        context.append({
+            "content": f"[Browser Knowledge]\n{bk_text}",
+            "source": "yamil_browser_knowledge",
+            "score": max(e.get("score", 0) for e in browser_knowledge),
+        })
+
     # Get AI response from orchestrator
     ai_content = "I apologize, I'm having trouble processing your request right now."
     agent_used = None
@@ -775,6 +806,20 @@ async def send_message_stream(request: ChatRequest, http_request: Request):
         model_used = "unknown"
         sources = []  # RAG source documents
 
+        # Get browser knowledge context (learned from browsing)
+        browser_context = []
+        browser_knowledge = await fetch_browser_knowledge(request.message)
+        if browser_knowledge:
+            bk_text = "\n".join(
+                f"- [{e.get('category', '')}] {e.get('title', '')}: {json.dumps(e.get('content', ''))}"
+                for e in browser_knowledge[:3]
+            )
+            browser_context.append({
+                "content": f"[Browser Knowledge]\n{bk_text}",
+                "source": "yamil_browser_knowledge",
+                "score": max(e.get("score", 0) for e in browser_knowledge),
+            })
+
         try:
             # Use aiohttp for streaming connection to orchestrator
             async with aiohttp.ClientSession() as session:
@@ -784,7 +829,7 @@ async def send_message_stream(request: ChatRequest, http_request: Request):
 
                 payload = {
                     "query": request.message,
-                    "context": [],
+                    "context": browser_context,
                     "conversation_history": history,
                     "use_workflow": True,
                     "use_rag": request.use_rag,  # Pass RAG toggle to orchestrator

@@ -314,3 +314,65 @@
   - Password: whatever you set
   - Pre-Shared Key: whatever you entered
   - Type: L2TP/IPsec
+
+
+
+  From the research I already completed earlier, here are the key findings and potential fixes:                             
+                                                                                                                            
+  Workarounds that might save the Route10:                                                                                  
+                                                                                                                            
+  1. Disable Hardware Acceleration — This is the #1 fix. Multiple users confirmed it restores full speed. The bug causes    
+  30-50% throughput drop on downloads. CPU usage goes up but speeds return to normal.                                       
+  2. Run without cloud management — Users have requested standalone/local mode. The Route10 has a local admin page          
+  (192.168.0.1 after factory reset). If you DON'T re-adopt to manage.alta.inc, it worked perfectly. The problem is the cloud
+   pushing config.
+  3. SSH CLI fix for UDP acceleration — Run echo 4 > /cfg/alta_bits then reboot. This re-enables UDP acceleration that
+  firmware 1.4l intentionally disabled.
+  4. Factory reset + DON'T re-adopt to cloud — This is the simplest fix. After factory reset it was fast on 192.168.0.x.
+  Just configure it locally at 192.168.0.1 and never connect it to manage.alta.inc.
+  5. Firmware 1.4v is latest (March 6, 2026) — No newer fix available.
+
+  The real solution for you:
+  After factory reset, the Route10 worked great. The speed died when we re-adopted it to the cloud. If you factory reset
+  again and configure it locally WITHOUT the cloud, it should work. You'd manage it at 192.168.0.1 instead of
+  manage.alta.inc.
+
+
+
+
+
+
+  ⏺ Your public IP is 70.111.193.92. Here's what to do:                                                  
+                                                                                                                            
+  Steps         
+                                                                                                                            
+  1. Install WireGuard app on your phone (iOS App Store or Google Play)                                                     
+  2. Open the app → tap + → Create from scratch (or "Add tunnel" → "Create from QR code" if you prefer a QR)
+  3. Enter this config:                                                                                                     
+                                                                                                       
+  Interface:
+  - Name: Home
+  - Private Key: UJuTyKKv0ZrmOzn/iy1dx2PR69uKR9AWouYP3WjPYHU=
+  - Addresses: 10.0.0.2/32
+  - DNS: 1.1.1.1
+
+  Peer:
+  - Public Key: hbpLL0LCWuihaAR6sVrwVZLap48oREtRT/QPW52OqmE=
+  - Preshared Key: HWptoh64/rzlBJf38JAO9Y3c0NfMM00AvfGQN+d8TDs=
+  - Endpoint: 70.111.193.92:51820
+  - Allowed IPs: 192.168.0.0/24, 10.0.0.0/24 (access home LAN + VPN subnet)
+  - Persistent Keepalive: 25
+
+  4. Toggle it on — you should connect and be able to reach 192.168.0.1 (Route10), 192.168.0.11 (Windows PC), 192.168.0.102
+  (QNAP), etc.
+
+  Important notes
+
+  - Your public IP (70.111.193.92) may change if Verizon rotates it. If it does, you'll need to update the Endpoint in the
+  app.
+  - For a permanent solution, set up DDNS (DuckDNS, No-IP, or Cloudflare) so you have a hostname like yamil.duckdns.org that
+   always points to your current IP.
+  - Use Allowed IPs: 0.0.0.0/0 instead if you want ALL traffic routed through the VPN (full tunnel), not just home LAN
+  access.
+
+  Want me to generate a QR code you can scan from the app instead of typing it manually?

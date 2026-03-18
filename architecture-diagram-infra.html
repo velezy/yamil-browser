@@ -1,0 +1,1667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YAMIL Infrastructure — HA Architecture</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-primary: #0f1117;
+    --bg-secondary: #161822;
+    --bg-surface: #1c1f2e;
+    --bg-surface-hover: #242840;
+    --border-color: #2a2d3e;
+    --border-hover: #3d4160;
+    --text-primary: #e4e6f0;
+    --text-secondary: #8b8fa8;
+    --text-muted: #5e6278;
+    --purple-primary: #8b5cf6;
+    --purple-light: #a78bfa;
+    --purple-dark: #6d28d9;
+    --blue-primary: #3b82f6;
+    --blue-light: #60a5fa;
+    --green-primary: #10b981;
+    --green-light: #34d399;
+    --orange-primary: #f59e0b;
+    --orange-light: #fbbf24;
+    --cyan-primary: #06b6d4;
+    --cyan-light: #22d3ee;
+    --pink-primary: #ec4899;
+    --pink-light: #f472b6;
+    --red-primary: #ef4444;
+    --red-light: #f87171;
+    --teal-primary: #14b8a6;
+    --teal-light: #2dd4bf;
+    --gradient-header: linear-gradient(135deg, #0891b2 0%, #3b82f6 50%, #8b5cf6 100%);
+    --gradient-purple: linear-gradient(135deg, #6d28d9, #8b5cf6);
+    --gradient-blue: linear-gradient(135deg, #1d4ed8, #3b82f6);
+    --gradient-green: linear-gradient(135deg, #059669, #10b981);
+    --gradient-orange: linear-gradient(135deg, #d97706, #f59e0b);
+    --gradient-cyan: linear-gradient(135deg, #0891b2, #06b6d4);
+    --gradient-pink: linear-gradient(135deg, #db2777, #ec4899);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+    --shadow-glow-purple: 0 0 20px rgba(139,92,246,0.15);
+    --shadow-glow-blue: 0 0 20px rgba(59,130,246,0.15);
+    --shadow-glow-green: 0 0 20px rgba(16,185,129,0.15);
+    --shadow-glow-orange: 0 0 20px rgba(245,158,11,0.15);
+    --shadow-glow-cyan: 0 0 20px rgba(6,182,212,0.15);
+    --shadow-glow-pink: 0 0 20px rgba(236,72,153,0.15);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --transition: 0.2s ease;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ===== HEADER ===== */
+  .header {
+    background: var(--gradient-header);
+    padding: 32px 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(255,255,255,0.03) 60px, rgba(255,255,255,0.03) 61px),
+                repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(255,255,255,0.03) 60px, rgba(255,255,255,0.03) 61px);
+  }
+  .header-content {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .header h1 span { opacity: 0.85; font-weight: 400; }
+  .header-badge {
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    color: #fff;
+    font-weight: 500;
+  }
+  .header-subtitle {
+    font-size: 14px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 4px;
+  }
+
+  /* ===== TABS ===== */
+  .tab-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    padding: 16px 0 0;
+    border-bottom: 1px solid var(--border-color);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tab-bar::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    padding: 10px 20px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all var(--transition);
+    white-space: nowrap;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  }
+  .tab-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-surface);
+  }
+  .tab-btn.active {
+    color: var(--cyan-light);
+    border-bottom-color: var(--cyan-primary);
+    background: var(--bg-surface);
+  }
+
+  .tab-content {
+    display: none;
+    padding: 28px 0 40px;
+    animation: fadeIn 0.3s ease;
+  }
+  .tab-content.active { display: block; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ===== FLOW ARROWS ===== */
+  @keyframes flowPulse {
+    0% { stroke-dashoffset: 20; }
+    100% { stroke-dashoffset: 0; }
+  }
+  .flow-arrow {
+    fill: none;
+    stroke-width: 1.5;
+    stroke-dasharray: 6 4;
+    animation: flowPulse 1s linear infinite;
+    opacity: 0.6;
+  }
+  .flow-arrow:hover { opacity: 1; stroke-width: 2.5; }
+  .flow-arrow.purple { stroke: var(--purple-light); }
+  .flow-arrow.blue { stroke: var(--blue-light); }
+  .flow-arrow.green { stroke: var(--green-light); }
+  .flow-arrow.orange { stroke: var(--orange-light); }
+  .flow-arrow.cyan { stroke: var(--cyan-light); }
+  .flow-arrow.pink { stroke: var(--pink-light); }
+  .flow-arrow.red { stroke: var(--red-light); }
+
+  /* ===== NETWORK TOPOLOGY (Tab 1) ===== */
+  .topo-diagram {
+    position: relative;
+    width: 100%;
+    min-height: 700px;
+  }
+  .topo-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .layer {
+    position: relative;
+    border: 1.5px dashed var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 20px 20px 20px 48px;
+    margin-bottom: 20px;
+    background: rgba(22, 24, 34, 0.5);
+    z-index: 2;
+  }
+  .layer-label {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%) rotate(180deg);
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 12px 4px;
+    border-radius: var(--radius-sm);
+  }
+  .layer-label.network { color: var(--cyan-light); }
+  .layer-label.compute { color: var(--blue-light); }
+  .layer-label.coding { color: var(--purple-light); }
+  .layer-label.storage { color: var(--orange-light); }
+  .layer-label.monitor { color: var(--green-light); }
+
+  .layer-nodes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    justify-content: center;
+  }
+
+  .node {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 14px 18px;
+    min-width: 180px;
+    max-width: 240px;
+    cursor: default;
+    transition: all var(--transition);
+    position: relative;
+    z-index: 3;
+  }
+  .node:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+  }
+  .node.purple { border-left: 3px solid var(--purple-primary); }
+  .node.purple:hover { box-shadow: var(--shadow-glow-purple); }
+  .node.blue { border-left: 3px solid var(--blue-primary); }
+  .node.blue:hover { box-shadow: var(--shadow-glow-blue); }
+  .node.green { border-left: 3px solid var(--green-primary); }
+  .node.green:hover { box-shadow: var(--shadow-glow-green); }
+  .node.orange { border-left: 3px solid var(--orange-primary); }
+  .node.orange:hover { box-shadow: var(--shadow-glow-orange); }
+  .node.cyan { border-left: 3px solid var(--cyan-primary); }
+  .node.cyan:hover { box-shadow: var(--shadow-glow-cyan); }
+  .node.pink { border-left: 3px solid var(--pink-primary); }
+  .node.pink:hover { box-shadow: var(--shadow-glow-pink); }
+
+  .node-icon { font-size: 22px; margin-bottom: 6px; }
+  .node-name { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+  .node-port {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .node-tech {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--green-primary);
+    font-weight: 500;
+    margin-top: 2px;
+    opacity: 0.85;
+  }
+  .node-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* ===== TOOLTIP ===== */
+  .tooltip {
+    position: fixed;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-hover);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--text-primary);
+    max-width: 280px;
+    box-shadow: var(--shadow-lg);
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    line-height: 1.5;
+  }
+  .tooltip.visible { opacity: 1; }
+  .tooltip-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; color: var(--cyan-light); }
+  .tooltip-detail { color: var(--text-secondary); }
+
+  /* ===== CARDS ===== */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 18px;
+  }
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+    transition: all var(--transition);
+  }
+  .card:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+  }
+  .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .card-icon {
+    width: 40px; height: 40px; border-radius: var(--radius-md);
+    display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;
+  }
+  .card-icon.purple { background: rgba(139,92,246,0.15); }
+  .card-icon.blue { background: rgba(59,130,246,0.15); }
+  .card-icon.green { background: rgba(16,185,129,0.15); }
+  .card-icon.orange { background: rgba(245,158,11,0.15); }
+  .card-icon.cyan { background: rgba(6,182,212,0.15); }
+  .card-icon.pink { background: rgba(236,72,153,0.15); }
+  .card-title { font-size: 15px; font-weight: 600; }
+  .card-subtitle { font-size: 12px; color: var(--text-secondary); }
+  .card-body { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+  .card-body ul { list-style: none; padding: 0; }
+  .card-body li { padding: 4px 0; padding-left: 16px; position: relative; }
+  .card-body li::before {
+    content: ''; position: absolute; left: 0; top: 12px;
+    width: 6px; height: 6px; border-radius: 50%; background: var(--cyan-primary);
+  }
+
+  .service-tag {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 500; font-family: 'JetBrains Mono', monospace; margin: 2px 2px;
+  }
+  .service-tag.primary { background: rgba(59,130,246,0.15); color: var(--blue-light); }
+  .service-tag.secondary { background: rgba(245,158,11,0.15); color: var(--orange-light); }
+  .service-tag.monitor { background: rgba(16,185,129,0.15); color: var(--green-light); }
+  .service-tag.coding { background: rgba(139,92,246,0.15); color: var(--purple-light); }
+  .service-tag.arch-amd64 { background: rgba(59,130,246,0.15); color: var(--blue-light); }
+  .service-tag.arch-arm64 { background: rgba(236,72,153,0.15); color: var(--pink-light); }
+
+  /* ===== SPEC TABLE ===== */
+  .spec-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+  }
+  .spec-table td {
+    padding: 4px 0;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(42,45,62,0.3);
+  }
+  .spec-table td:first-child {
+    color: var(--text-muted);
+    font-weight: 500;
+    width: 90px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .spec-table td:last-child {
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+
+  /* ===== SECTION TITLES ===== */
+  .section-title {
+    font-size: 18px; font-weight: 600; margin-bottom: 20px; color: var(--text-primary);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border-color); }
+
+  /* ===== FAILOVER FLOW (Tab 3) ===== */
+  .failover-timeline {
+    position: relative;
+    padding-left: 40px;
+  }
+  .failover-timeline::before {
+    content: '';
+    position: absolute;
+    left: 16px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border-color);
+  }
+  .failover-step {
+    position: relative;
+    margin-bottom: 24px;
+    padding: 16px 20px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    transition: all var(--transition);
+    opacity: 0.5;
+  }
+  .failover-step.active {
+    opacity: 1;
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+  }
+  .failover-step.completed {
+    opacity: 1;
+    border-color: var(--green-primary);
+    box-shadow: 0 0 12px rgba(16,185,129,0.1);
+  }
+  .failover-step.failed {
+    opacity: 1;
+    border-color: var(--red-primary);
+    box-shadow: 0 0 12px rgba(239,68,68,0.1);
+  }
+  .failover-step::before {
+    content: '';
+    position: absolute;
+    left: -32px;
+    top: 20px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--border-color);
+    border: 2px solid var(--bg-primary);
+    z-index: 2;
+  }
+  .failover-step.active::before { background: var(--cyan-primary); box-shadow: 0 0 8px rgba(6,182,212,0.5); }
+  .failover-step.completed::before { background: var(--green-primary); }
+  .failover-step.failed::before { background: var(--red-primary); }
+
+  .failover-step-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .failover-step-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+  .failover-step-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .failover-step-cmd {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--cyan-light);
+    overflow-x: auto;
+  }
+
+  /* ===== FAILOVER CONTROLS ===== */
+  .failover-controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .fo-btn {
+    padding: 8px 20px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+  .fo-btn:hover { border-color: var(--cyan-primary); background: var(--bg-surface-hover); }
+  .fo-btn.active { border-color: var(--cyan-primary); color: var(--cyan-light); background: rgba(6,182,212,0.1); }
+
+  /* ===== MONITORING STACK (Tab 4) ===== */
+  .monitor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .monitor-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 18px;
+    transition: all var(--transition);
+  }
+  .monitor-card:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+  .monitor-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .monitor-card-icon {
+    font-size: 24px;
+  }
+  .monitor-card-name {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .monitor-card-port {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+  .monitor-card-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .scrape-targets {
+    margin-top: 28px;
+  }
+  .target-group {
+    margin-bottom: 16px;
+  }
+  .target-group-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .target-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .target-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    transition: all var(--transition);
+  }
+  .target-item:hover { border-color: var(--border-hover); background: var(--bg-surface-hover); }
+  .target-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .target-dot.green { background: var(--green-primary); }
+  .target-dot.orange { background: var(--orange-primary); }
+  .target-dot.blue { background: var(--blue-primary); }
+
+  /* ===== DATA FLOW (Tab 5) ===== */
+  .flow-section { margin-bottom: 32px; }
+  .flow-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+  .flow-title .flow-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .flow-steps {
+    display: flex; flex-wrap: wrap; gap: 0; align-items: center;
+    padding: 16px 20px; background: var(--bg-surface);
+    border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow-x: auto;
+  }
+  .flow-step {
+    background: var(--bg-secondary); border: 1px solid var(--border-color);
+    border-radius: var(--radius-md); padding: 10px 14px; font-size: 12px;
+    text-align: center; min-width: 100px; max-width: 160px; transition: all var(--transition);
+  }
+  .flow-step:hover { transform: translateY(-2px); border-color: var(--border-hover); box-shadow: var(--shadow-sm); }
+  .flow-step-icon { font-size: 18px; margin-bottom: 4px; }
+  .flow-step-label { font-weight: 500; color: var(--text-primary); font-size: 11px; }
+  .flow-step-detail { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+  .flow-arrow-sep { color: var(--text-muted); font-size: 18px; padding: 0 6px; flex-shrink: 0; }
+
+  /* ===== STATUS INDICATOR ===== */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .status-badge.active { background: rgba(16,185,129,0.15); color: var(--green-light); }
+  .status-badge.standby { background: rgba(245,158,11,0.15); color: var(--orange-light); }
+  .status-badge.coding { background: rgba(139,92,246,0.15); color: var(--purple-light); }
+  .status-badge.monitor { background: rgba(6,182,212,0.15); color: var(--cyan-light); }
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .status-badge.active .status-dot { background: var(--green-primary); animation: pulse 2s ease-in-out infinite; }
+  .status-badge.standby .status-dot { background: var(--orange-primary); }
+  .status-badge.coding .status-dot { background: var(--purple-primary); }
+  .status-badge.monitor .status-dot { background: var(--cyan-primary); animation: pulse 2s ease-in-out infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width: 768px) {
+    .header { padding: 20px 16px; }
+    .header h1 { font-size: 20px; }
+    .tab-container { padding: 0 12px; }
+    .tab-btn { padding: 8px 14px; font-size: 12px; }
+    .cards-grid { grid-template-columns: 1fr; }
+    .layer { padding: 16px 16px 16px 40px; }
+    .node { min-width: 140px; }
+    .flow-steps { flex-direction: column; align-items: stretch; }
+    .flow-arrow-sep { transform: rotate(90deg); text-align: center; }
+    .monitor-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== HEADER ===== -->
+<div class="header">
+  <div class="header-content">
+    <div>
+      <h1>YAMIL <span>Infrastructure HA</span></h1>
+      <div class="header-subtitle">Active-Standby Architecture &middot; 5 Machines &middot; 192.168.0.x LAN &middot; Omada SDN</div>
+    </div>
+    <div class="header-badge">High Availability &middot; Mar 2026</div>
+  </div>
+</div>
+
+<!-- ===== TABS ===== -->
+<div class="tab-container">
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('topology')">Network Topology</button>
+    <button class="tab-btn" onclick="switchTab('machines')">Machine Details</button>
+    <button class="tab-btn" onclick="switchTab('failover')">Failover Flow</button>
+    <button class="tab-btn" onclick="switchTab('monitoring')">Monitoring Stack</button>
+    <button class="tab-btn" onclick="switchTab('dataflow')">Data Flow</button>
+  </div>
+
+  <!-- ==================== TAB 1: NETWORK TOPOLOGY ==================== -->
+  <div id="tab-topology" class="tab-content active">
+    <div class="section-title">Network Topology &mdash; 192.168.0.0/24</div>
+
+    <div class="topo-diagram" id="topoDiagram">
+      <svg class="topo-svg" id="topoSvg"></svg>
+
+      <!-- Layer 1: NETWORK -->
+      <div class="layer" id="layer-network">
+        <div class="layer-label network">NETWORK</div>
+        <div class="layer-nodes">
+          <div class="node cyan" id="node-router" data-tooltip="TP-Link Omada SDN router. Manages DHCP reservations, VLANs, firewall rules, and inter-VLAN routing for the entire 192.168.0.x subnet.">
+            <div class="node-icon">&#x1F310;</div>
+            <div class="node-name">Omada SDN Router</div>
+            <div class="node-port">192.168.0.1</div>
+            <div class="node-desc">Gateway, DHCP, Firewall</div>
+          </div>
+          <div class="node cyan" id="node-switch" data-tooltip="Omada managed gigabit switch. All 5 machines are wired via Ethernet for maximum throughput and minimum latency.">
+            <div class="node-icon">&#x1F504;</div>
+            <div class="node-name">Omada Managed Switch</div>
+            <div class="node-port">Gigabit &middot; All Wired</div>
+            <div class="node-desc">L2 switching, VLAN support</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 2: PRIMARY COMPUTE -->
+      <div class="layer" id="layer-primary">
+        <div class="layer-label compute">COMPUTE</div>
+        <div class="layer-nodes">
+          <div class="node blue" id="node-windows" data-tooltip="Primary Docker host. Runs all 3 projects: Y.A.M.I.L (21 containers), DriveSentinel (9 containers), Memobytes (7 containers). Ryzen 9 3900x 12C/24T, 64GB DDR4, RTX 3070 Ti for Ollama GPU inference.">
+            <div class="node-icon">&#x1F5A5;&#xFE0F;</div>
+            <div class="node-name">Windows PC</div>
+            <div class="node-port">192.168.0.101</div>
+            <div class="node-tech">amd64 &middot; Ryzen 9 3900x &middot; 64GB</div>
+            <div class="node-desc">PRIMARY Docker Host</div>
+            <span class="status-badge active"><span class="status-dot"></span>Active</span>
+          </div>
+          <div class="node orange" id="node-geekom" data-tooltip="HA Secondary #1 (amd64). Same architecture and OS as primary Windows PC — can run identical Docker images without rebuild. Ryzen 9 8945HS 8C/16T, 32GB DDR5. Windows 11 Pro with Docker Desktop.">
+            <div class="node-icon">&#x1F4BB;</div>
+            <div class="node-name">GEEKOM A8 Max</div>
+            <div class="node-port">192.168.0.20</div>
+            <div class="node-tech">amd64 &middot; Ryzen 9 8945HS &middot; 32GB</div>
+            <div class="node-desc">HA Secondary #1</div>
+            <span class="status-badge standby"><span class="status-dot"></span>Standby</span>
+          </div>
+          <div class="node pink" id="node-macmini" data-tooltip="HA Secondary #2 (arm64). Fallback if both Windows and GEEKOM are down. Requires image rebuild (arm64). Apple M4 10-core, 16GB unified memory. Docker data on 1TB external SSD.">
+            <div class="node-icon">&#x1F5A5;&#xFE0F;</div>
+            <div class="node-name">Mac Mini M4</div>
+            <div class="node-port">192.168.0.30</div>
+            <div class="node-tech">arm64 &middot; Apple M4 &middot; 16GB</div>
+            <div class="node-desc">HA Secondary #2</div>
+            <span class="status-badge standby"><span class="status-dot"></span>Standby</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 3: DEVELOPMENT -->
+      <div class="layer" id="layer-dev">
+        <div class="layer-label coding">DEV</div>
+        <div class="layer-nodes">
+          <div class="node purple" id="node-macbook" data-tooltip="Coding-only machine. Runs Claude Code, SSH into Docker hosts. No containers run locally. Uses Docker contexts to manage remote Docker daemons.">
+            <div class="node-icon">&#x1F4BB;</div>
+            <div class="node-name">MacBook Air M5</div>
+            <div class="node-port">192.168.0.40</div>
+            <div class="node-tech">arm64 &middot; Apple M5 &middot; 24GB</div>
+            <div class="node-desc">Coding Only &middot; Claude Code</div>
+            <span class="status-badge coding"><span class="status-dot"></span>Coding</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 4: MONITORING & STORAGE -->
+      <div class="layer" id="layer-infra">
+        <div class="layer-label monitor">INFRA</div>
+        <div class="layer-nodes">
+          <div class="node green" id="node-qnap" data-tooltip="Always-on monitoring and backup hub. Runs Grafana, Prometheus, Loki, Blackbox Exporter, ntfy. Stores database backups (pg_dump every 6h), secrets, git mirrors. QTS with Container Station.">
+            <div class="node-icon">&#x1F4E6;</div>
+            <div class="node-name">QNAP NAS</div>
+            <div class="node-port">192.168.0.1012</div>
+            <div class="node-tech">amd64 &middot; 4 cores &middot; 7.66GB</div>
+            <div class="node-desc">Monitoring, Backups, Alerting</div>
+            <span class="status-badge monitor"><span class="status-dot"></span>Monitoring</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 2: MACHINE DETAILS ==================== -->
+  <div id="tab-machines" class="tab-content">
+    <div class="section-title">Machine Inventory</div>
+
+    <div class="cards-grid">
+      <!-- Windows PC -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon blue">&#x1F5A5;&#xFE0F;</div>
+          <div>
+            <div class="card-title">Windows PC</div>
+            <div class="card-subtitle">PRIMARY Docker Host &middot; 192.168.0.101</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <span class="service-tag primary">PRIMARY</span>
+          <span class="service-tag arch-amd64">amd64</span>
+          <table class="spec-table">
+            <tr><td>CPU</td><td>Ryzen 9 3900x (12C/24T)</td></tr>
+            <tr><td>RAM</td><td>64 GB DDR4</td></tr>
+            <tr><td>GPU</td><td>RTX 3070 Ti 8GB VRAM</td></tr>
+            <tr><td>Storage</td><td>NVMe SSD</td></tr>
+            <tr><td>OS</td><td>Windows 11</td></tr>
+          </table>
+          <div style="margin-top: 12px; font-size: 12px; color: var(--text-secondary);">
+            <strong style="color: var(--text-primary);">Containers:</strong><br>
+            Y.A.M.I.L (21) + DriveSentinel (9) + Memobytes (7) = <strong style="color: var(--cyan-light);">37 containers</strong>
+          </div>
+          <ul>
+            <li>Ollama with GPU acceleration (RTX 3070 Ti)</li>
+            <li>All 3 project databases (Postgres)</li>
+            <li>Vault, Redis, APISIX, Envoy</li>
+            <li>Cloudflare tunnel endpoint</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- GEEKOM -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon orange">&#x1F4BB;</div>
+          <div>
+            <div class="card-title">GEEKOM A8 Max</div>
+            <div class="card-subtitle">HA Secondary #1 &middot; 192.168.0.20</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <span class="service-tag secondary">HA #1</span>
+          <span class="service-tag arch-amd64">amd64</span>
+          <table class="spec-table">
+            <tr><td>CPU</td><td>Ryzen 9 8945HS (8C/16T)</td></tr>
+            <tr><td>RAM</td><td>32 GB DDR5</td></tr>
+            <tr><td>GPU</td><td>Radeon 780M iGPU</td></tr>
+            <tr><td>Storage</td><td>NVMe SSD</td></tr>
+            <tr><td>OS</td><td>Windows 11 Pro</td></tr>
+          </table>
+          <div style="margin-top: 12px; font-size: 12px; color: var(--text-secondary);">
+            <strong style="color: var(--text-primary);">Why #1 priority:</strong>
+          </div>
+          <ul>
+            <li>Same amd64 arch as Windows &mdash; no rebuild</li>
+            <li>32GB RAM handles all 3 projects</li>
+            <li>Ollama CPU inference (no GPU needed)</li>
+            <li>Needs: Docker Desktop + SSH setup</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Mac Mini -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon pink">&#x1F5A5;&#xFE0F;</div>
+          <div>
+            <div class="card-title">Mac Mini M4</div>
+            <div class="card-subtitle">HA Secondary #2 &middot; 192.168.0.30</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <span class="service-tag secondary">HA #2</span>
+          <span class="service-tag arch-arm64">arm64</span>
+          <table class="spec-table">
+            <tr><td>CPU</td><td>Apple M4 (10 cores)</td></tr>
+            <tr><td>RAM</td><td>16 GB unified</td></tr>
+            <tr><td>GPU</td><td>Apple GPU (10 cores)</td></tr>
+            <tr><td>Storage</td><td>256GB + 1TB ext SSD</td></tr>
+            <tr><td>OS</td><td>macOS Sequoia</td></tr>
+          </table>
+          <div style="margin-top: 12px; font-size: 12px; color: var(--text-secondary);">
+            <strong style="color: var(--text-primary);">Limitations:</strong>
+          </div>
+          <ul>
+            <li>arm64 requires full image rebuild</li>
+            <li>16GB tight for all 3 projects</li>
+            <li>Docker data on external SSD</li>
+            <li>Best for 1-2 projects at a time</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- MacBook Air -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon purple">&#x1F4BB;</div>
+          <div>
+            <div class="card-title">MacBook Air M5</div>
+            <div class="card-subtitle">Coding Only &middot; 192.168.0.40</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <span class="service-tag coding">CODING</span>
+          <span class="service-tag arch-arm64">arm64</span>
+          <table class="spec-table">
+            <tr><td>CPU</td><td>Apple M5</td></tr>
+            <tr><td>RAM</td><td>24 GB unified</td></tr>
+            <tr><td>Storage</td><td>1 TB SSD</td></tr>
+            <tr><td>OS</td><td>macOS Sequoia</td></tr>
+          </table>
+          <div style="margin-top: 12px; font-size: 12px; color: var(--text-secondary);">
+            <strong style="color: var(--text-primary);">Role:</strong>
+          </div>
+          <ul>
+            <li>Claude Code + IDE only</li>
+            <li>SSH into Docker hosts</li>
+            <li>Docker contexts for remote mgmt</li>
+            <li>No containers run locally</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- QNAP NAS -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon green">&#x1F4E6;</div>
+          <div>
+            <div class="card-title">QNAP NAS</div>
+            <div class="card-subtitle">Monitoring &amp; Backups &middot; 192.168.0.1012</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <span class="service-tag monitor">MONITOR</span>
+          <span class="service-tag arch-amd64">amd64</span>
+          <table class="spec-table">
+            <tr><td>CPU</td><td>4 logical cores</td></tr>
+            <tr><td>RAM</td><td>7.66 GB</td></tr>
+            <tr><td>Storage</td><td>RAID NAS volumes</td></tr>
+            <tr><td>OS</td><td>QTS 5.x + Container Station</td></tr>
+          </table>
+          <div style="margin-top: 12px; font-size: 12px; color: var(--text-secondary);">
+            <strong style="color: var(--text-primary);">Services (~1GB RAM):</strong>
+          </div>
+          <ul>
+            <li>Grafana (dashboards + alerts)</li>
+            <li>Prometheus (metrics, 30d retention)</li>
+            <li>Loki (log aggregation)</li>
+            <li>Blackbox Exporter (uptime probes)</li>
+            <li>ntfy (phone push notifications)</li>
+            <li>pg_dump backups every 6 hours</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 3: FAILOVER FLOW ==================== -->
+  <div id="tab-failover" class="tab-content">
+    <div class="section-title">Failover Flow &mdash; Windows Down &rarr; GEEKOM Takes Over</div>
+
+    <div class="failover-controls">
+      <button class="fo-btn active" onclick="startFailover()">&#x25B6; Simulate Failover</button>
+      <button class="fo-btn" onclick="resetFailover()">&#x21BA; Reset</button>
+      <button class="fo-btn" id="fo-status" style="cursor: default; border-color: var(--green-primary); color: var(--green-light);">Status: Normal Operation</button>
+    </div>
+
+    <div class="failover-timeline" id="failoverTimeline">
+      <div class="failover-step" id="fo-step-0" data-delay="0">
+        <div class="failover-step-num">Step 0 &mdash; Detection</div>
+        <div class="failover-step-title">&#x1F6A8; QNAP detects Windows PC is DOWN</div>
+        <div class="failover-step-desc">Prometheus blackbox probe fails for 192.168.0.101. After 2 minutes of continuous failure, Grafana fires <code>PrimaryDockerHostDown</code> alert. ntfy sends push notification to phone.</div>
+        <div class="failover-step-cmd">alert: PrimaryDockerHostDown (severity: critical)</div>
+      </div>
+
+      <div class="failover-step" id="fo-step-1" data-delay="800">
+        <div class="failover-step-num">Step 1 &mdash; Verify Standby</div>
+        <div class="failover-step-title">&#x2705; Verify GEEKOM is reachable</div>
+        <div class="failover-step-desc">SSH into GEEKOM to confirm it's online and Docker is running. If GEEKOM is also down, fall through to Mac Mini.</div>
+        <div class="failover-step-cmd">ssh geekom "docker ps" &amp;&amp; echo "GEEKOM is UP"</div>
+      </div>
+
+      <div class="failover-step" id="fo-step-2" data-delay="1600">
+        <div class="failover-step-num">Step 2 &mdash; Sync Code</div>
+        <div class="failover-step-title">&#x1F4E5; Pull latest code on GEEKOM</div>
+        <div class="failover-step-desc">Pull latest commits from all 3 project repos. Images were pre-built, so no rebuild needed (same amd64 architecture).</div>
+        <div class="failover-step-cmd">ssh geekom "cd ~/project/parser_lite &amp;&amp; git pull"</div>
+      </div>
+
+      <div class="failover-step" id="fo-step-3" data-delay="2400">
+        <div class="failover-step-num">Step 3 &mdash; Restore Secrets</div>
+        <div class="failover-step-title">&#x1F511; Copy latest secrets from QNAP</div>
+        <div class="failover-step-desc">SCP the .env, .env.secrets, and .env.prod files from QNAP NAS dev-transfer share to GEEKOM. These are synced hourly from the active host.</div>
+        <div class="failover-step-cmd">scp admin@192.168.0.1012:/share/dev-transfer/dot-env* ~/project/...</div>
+      </div>
+
+      <div class="failover-step" id="fo-step-4" data-delay="3200">
+        <div class="failover-step-num">Step 4 &mdash; Restore Database</div>
+        <div class="failover-step-title">&#x1F5C4;&#xFE0F; Restore latest pg_dump from QNAP</div>
+        <div class="failover-step-desc">The QNAP db-backup container creates dumps every 6 hours. Copy the most recent dump and restore into GEEKOM's Postgres. Maximum data loss: 6 hours.</div>
+        <div class="failover-step-cmd">pg_restore -U postgres -d message_weaver --clean --if-exists &lt; /tmp/latest.dump</div>
+      </div>
+
+      <div class="failover-step" id="fo-step-5" data-delay="4000">
+        <div class="failover-step-num">Step 5 &mdash; Start Services</div>
+        <div class="failover-step-title">&#x1F680; Start all Docker Compose stacks</div>
+        <div class="failover-step-desc">Start Y.A.M.I.L first (Vault + Postgres must initialize), then DriveSentinel, then Memobytes. Pre-built images mean no build step — just docker compose up.</div>
+        <div class="failover-step-cmd">docker compose up -d  (all 3 projects)</div>
+      </div>
+
+      <div class="failover-step" id="fo-step-6" data-delay="4800">
+        <div class="failover-step-num">Step 6 &mdash; Switch Context</div>
+        <div class="failover-step-title">&#x1F500; Switch MacBook Docker context to GEEKOM</div>
+        <div class="failover-step-desc">The MacBook Air's Docker CLI now points to GEEKOM. All docker commands from Claude Code go to the new active host.</div>
+        <div class="failover-step-cmd">docker context use geekom</div>
+      </div>
+
+      <div class="failover-step" id="fo-step-7" data-delay="5600">
+        <div class="failover-step-num">Step 7 &mdash; Update Monitoring</div>
+        <div class="failover-step-title">&#x1F4CA; Redirect QNAP backups to GEEKOM</div>
+        <div class="failover-step-desc">Update the ACTIVE_HOST variable in QNAP's db-backup container so future pg_dumps target GEEKOM (192.168.0.20) instead of Windows (192.168.0.101).</div>
+        <div class="failover-step-cmd">ACTIVE_HOST=192.168.0.20 &rarr; docker compose restart db-backup</div>
+      </div>
+
+      <div class="failover-step" id="fo-step-8" data-delay="6400">
+        <div class="failover-step-num">Step 8 &mdash; Verify</div>
+        <div class="failover-step-title">&#x2705; Confirm all services are healthy</div>
+        <div class="failover-step-desc">Run health checks on all endpoints. Verify Grafana shows GEEKOM containers as UP. Total failover time: ~3 minutes.</div>
+        <div class="failover-step-cmd">curl http://192.168.0.20:9080 &amp;&amp; echo "Failover complete!"</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 4: MONITORING STACK ==================== -->
+  <div id="tab-monitoring" class="tab-content">
+    <div class="section-title">QNAP Monitoring Stack (192.168.0.1012)</div>
+
+    <div class="monitor-grid">
+      <div class="monitor-card">
+        <div class="monitor-card-header">
+          <div class="monitor-card-icon">&#x1F4CA;</div>
+          <div class="monitor-card-name">Grafana</div>
+          <div class="monitor-card-port">:3000</div>
+        </div>
+        <div class="monitor-card-desc">
+          Dashboards and alerting. Connects to Prometheus (metrics) and Loki (logs). Displays service health, resource usage, API latency, database stats, and HA status across all Docker hosts. Fires alerts via ntfy and email.
+        </div>
+      </div>
+
+      <div class="monitor-card">
+        <div class="monitor-card-header">
+          <div class="monitor-card-icon">&#x1F4C8;</div>
+          <div class="monitor-card-name">Prometheus</div>
+          <div class="monitor-card-port">:9090</div>
+        </div>
+        <div class="monitor-card-desc">
+          Metrics collection engine. Scrapes all Docker hosts every 15 seconds. Stores 30 days of time-series data. Targets include Docker daemon metrics (:9323), node_exporter (:9100), and blackbox probes.
+        </div>
+      </div>
+
+      <div class="monitor-card">
+        <div class="monitor-card-header">
+          <div class="monitor-card-icon">&#x1F4DD;</div>
+          <div class="monitor-card-name">Loki</div>
+          <div class="monitor-card-port">:3100</div>
+        </div>
+        <div class="monitor-card-desc">
+          Log aggregation. Receives container logs from Promtail agents on each Docker host. Queryable through Grafana Explore. Persists logs even after container restarts.
+        </div>
+      </div>
+
+      <div class="monitor-card">
+        <div class="monitor-card-header">
+          <div class="monitor-card-icon">&#x1F50D;</div>
+          <div class="monitor-card-name">Blackbox Exporter</div>
+          <div class="monitor-card-port">:9115</div>
+        </div>
+        <div class="monitor-card-desc">
+          External uptime probes. HTTP probes test service endpoints, TCP probes test Postgres and Redis ports. Provides an outside perspective — if QNAP can't reach a service, it's truly down.
+        </div>
+      </div>
+
+      <div class="monitor-card">
+        <div class="monitor-card-header">
+          <div class="monitor-card-icon">&#x1F514;</div>
+          <div class="monitor-card-name">ntfy</div>
+          <div class="monitor-card-port">:9999</div>
+        </div>
+        <div class="monitor-card-desc">
+          Self-hosted push notification server. Grafana alerts POST to ntfy, which pushes notifications to your phone. Subscribe to the <code>yamil-alerts</code> topic in the ntfy app.
+        </div>
+      </div>
+
+      <div class="monitor-card">
+        <div class="monitor-card-header">
+          <div class="monitor-card-icon">&#x1F5C4;&#xFE0F;</div>
+          <div class="monitor-card-name">DB Backup</div>
+          <div class="monitor-card-port">cron / 6h</div>
+        </div>
+        <div class="monitor-card-desc">
+          Postgres container that runs pg_dump against the active Docker host every 6 hours. Stores dumps on NAS. Retains 7 daily + 4 weekly + 3 monthly. Alerts if backup is older than 12 hours.
+        </div>
+      </div>
+    </div>
+
+    <!-- Scrape Targets -->
+    <div class="scrape-targets">
+      <div class="section-title">Prometheus Scrape Targets</div>
+
+      <div class="target-group">
+        <div class="target-group-title">
+          <span style="color: var(--blue-light);">&#x1F5A5;&#xFE0F;</span>
+          Windows PC (Primary)
+        </div>
+        <div class="target-list">
+          <div class="target-item"><span class="target-dot green"></span>192.168.0.101:9323 <span style="color:var(--text-muted)">docker</span></div>
+          <div class="target-item"><span class="target-dot green"></span>192.168.0.101:9100 <span style="color:var(--text-muted)">node</span></div>
+          <div class="target-item"><span class="target-dot green"></span>192.168.0.101:9080 <span style="color:var(--text-muted)">http</span></div>
+          <div class="target-item"><span class="target-dot green"></span>192.168.0.101:4000 <span style="color:var(--text-muted)">browser</span></div>
+          <div class="target-item"><span class="target-dot green"></span>192.168.0.101:5432 <span style="color:var(--text-muted)">postgres</span></div>
+          <div class="target-item"><span class="target-dot green"></span>192.168.0.101:6379 <span style="color:var(--text-muted)">redis</span></div>
+        </div>
+      </div>
+
+      <div class="target-group">
+        <div class="target-group-title">
+          <span style="color: var(--orange-light);">&#x1F4BB;</span>
+          GEEKOM (HA Secondary #1)
+        </div>
+        <div class="target-list">
+          <div class="target-item"><span class="target-dot orange"></span>192.168.0.20:9323 <span style="color:var(--text-muted)">docker</span></div>
+          <div class="target-item"><span class="target-dot orange"></span>192.168.0.20:9100 <span style="color:var(--text-muted)">node</span></div>
+          <div class="target-item"><span class="target-dot orange"></span>192.168.0.20:22 <span style="color:var(--text-muted)">ssh</span></div>
+        </div>
+      </div>
+
+      <div class="target-group">
+        <div class="target-group-title">
+          <span style="color: var(--pink-light);">&#x1F5A5;&#xFE0F;</span>
+          Mac Mini (HA Secondary #2)
+        </div>
+        <div class="target-list">
+          <div class="target-item"><span class="target-dot blue"></span>192.168.0.30:9323 <span style="color:var(--text-muted)">docker</span></div>
+          <div class="target-item"><span class="target-dot blue"></span>192.168.0.30:9100 <span style="color:var(--text-muted)">node</span></div>
+          <div class="target-item"><span class="target-dot blue"></span>192.168.0.30:22 <span style="color:var(--text-muted)">ssh</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alert Rules -->
+    <div style="margin-top: 28px;">
+      <div class="section-title">Alert Rules</div>
+      <div class="cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
+        <div class="card" style="border-left: 3px solid var(--red-primary);">
+          <div class="card-header">
+            <div class="card-icon" style="background: rgba(239,68,68,0.15);">&#x1F6A8;</div>
+            <div>
+              <div class="card-title">PrimaryDockerHostDown</div>
+              <div class="card-subtitle">Critical &middot; ntfy + email</div>
+            </div>
+          </div>
+          <div class="card-body" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--red-light);">
+            up{job="windows-docker"} == 0 for 2m
+          </div>
+        </div>
+
+        <div class="card" style="border-left: 3px solid var(--orange-primary);">
+          <div class="card-header">
+            <div class="card-icon" style="background: rgba(245,158,11,0.15);">&#x26A0;&#xFE0F;</div>
+            <div>
+              <div class="card-title">SecondaryHostDown</div>
+              <div class="card-subtitle">Warning &middot; email</div>
+            </div>
+          </div>
+          <div class="card-body" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--orange-light);">
+            up{job=~"geekom|macmini"} == 0 for 5m
+          </div>
+        </div>
+
+        <div class="card" style="border-left: 3px solid var(--red-primary);">
+          <div class="card-header">
+            <div class="card-icon" style="background: rgba(239,68,68,0.15);">&#x1F525;</div>
+            <div>
+              <div class="card-title">AllDockerHostsDown</div>
+              <div class="card-subtitle">Critical &middot; ntfy + email</div>
+            </div>
+          </div>
+          <div class="card-body" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--red-light);">
+            count(up{job=~".*-docker"} == 1) == 0
+          </div>
+        </div>
+
+        <div class="card" style="border-left: 3px solid var(--red-primary);">
+          <div class="card-header">
+            <div class="card-icon" style="background: rgba(239,68,68,0.15);">&#x1F5C4;&#xFE0F;</div>
+            <div>
+              <div class="card-title">BackupFailed</div>
+              <div class="card-subtitle">Critical &middot; ntfy + email</div>
+            </div>
+          </div>
+          <div class="card-body" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--red-light);">
+            backup_age_hours &gt; 12
+          </div>
+        </div>
+
+        <div class="card" style="border-left: 3px solid var(--orange-primary);">
+          <div class="card-header">
+            <div class="card-icon" style="background: rgba(245,158,11,0.15);">&#x1F4BD;</div>
+            <div>
+              <div class="card-title">DiskUsageHigh</div>
+              <div class="card-subtitle">Warning &middot; email</div>
+            </div>
+          </div>
+          <div class="card-body" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--orange-light);">
+            disk_used_percent &gt; 80
+          </div>
+        </div>
+
+        <div class="card" style="border-left: 3px solid var(--red-primary);">
+          <div class="card-header">
+            <div class="card-icon" style="background: rgba(239,68,68,0.15);">&#x1F6E1;&#xFE0F;</div>
+            <div>
+              <div class="card-title">VaultSealed</div>
+              <div class="card-subtitle">Critical &middot; ntfy</div>
+            </div>
+          </div>
+          <div class="card-body" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--red-light);">
+            vault_core_unsealed == 0
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 5: DATA FLOW ==================== -->
+  <div id="tab-dataflow" class="tab-content">
+    <div class="section-title">Data Flow &mdash; Backup, Replication &amp; Secret Sync</div>
+
+    <!-- Flow 1: Database Backups -->
+    <div class="flow-section">
+      <div class="flow-title">
+        <div class="flow-num" style="background: rgba(6,182,212,0.15); color: var(--cyan-light);">1</div>
+        Database Backups (every 6 hours)
+      </div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F5A5;&#xFE0F;</div>
+          <div class="flow-step-label">Active Host</div>
+          <div class="flow-step-detail">Postgres :5432</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4E4;</div>
+          <div class="flow-step-label">pg_dump</div>
+          <div class="flow-step-detail">Custom format (-Fc)</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4E6;</div>
+          <div class="flow-step-label">QNAP NAS</div>
+          <div class="flow-step-detail">/share/backups/</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F5C2;&#xFE0F;</div>
+          <div class="flow-step-label">Retention</div>
+          <div class="flow-step-detail">7d + 4w + 3m</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flow 2: Secret Sync -->
+    <div class="flow-section">
+      <div class="flow-title">
+        <div class="flow-num" style="background: rgba(139,92,246,0.15); color: var(--purple-light);">2</div>
+        Secret Sync (every 1 hour)
+      </div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F511;</div>
+          <div class="flow-step-label">Active Host</div>
+          <div class="flow-step-detail">.env / .env.secrets</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4E4;</div>
+          <div class="flow-step-label">SCP / SMB</div>
+          <div class="flow-step-detail">Encrypted transfer</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4E6;</div>
+          <div class="flow-step-label">QNAP NAS</div>
+          <div class="flow-step-detail">/dev-transfer/</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F512;</div>
+          <div class="flow-step-label">Versioned</div>
+          <div class="flow-step-detail">Last 5 copies</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flow 3: Metrics Scraping -->
+    <div class="flow-section">
+      <div class="flow-title">
+        <div class="flow-num" style="background: rgba(16,185,129,0.15); color: var(--green-light);">3</div>
+        Metrics Collection (every 15 seconds)
+      </div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F5A5;&#xFE0F;</div>
+          <div class="flow-step-label">Docker Hosts</div>
+          <div class="flow-step-detail">:9323 / :9100</div>
+        </div>
+        <div class="flow-arrow-sep">&larr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4C8;</div>
+          <div class="flow-step-label">Prometheus</div>
+          <div class="flow-step-detail">Scrape targets</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4CA;</div>
+          <div class="flow-step-label">Grafana</div>
+          <div class="flow-step-detail">Dashboards</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F514;</div>
+          <div class="flow-step-label">ntfy</div>
+          <div class="flow-step-detail">Phone alerts</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flow 4: Log Aggregation -->
+    <div class="flow-section">
+      <div class="flow-title">
+        <div class="flow-num" style="background: rgba(245,158,11,0.15); color: var(--orange-light);">4</div>
+        Log Aggregation (continuous)
+      </div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4E6;</div>
+          <div class="flow-step-label">Containers</div>
+          <div class="flow-step-detail">stdout / stderr</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4E4;</div>
+          <div class="flow-step-label">Promtail</div>
+          <div class="flow-step-detail">Log shipper</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4DD;</div>
+          <div class="flow-step-label">Loki</div>
+          <div class="flow-step-detail">QNAP :3100</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F50D;</div>
+          <div class="flow-step-label">Grafana Explore</div>
+          <div class="flow-step-detail">Query logs</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flow 5: Failover Data -->
+    <div class="flow-section">
+      <div class="flow-title">
+        <div class="flow-num" style="background: rgba(236,72,153,0.15); color: var(--pink-light);">5</div>
+        Failover Data Restore
+      </div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4E6;</div>
+          <div class="flow-step-label">QNAP Backups</div>
+          <div class="flow-step-detail">DB dumps + secrets</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4E5;</div>
+          <div class="flow-step-label">SCP to Standby</div>
+          <div class="flow-step-detail">GEEKOM / Mac Mini</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F504;</div>
+          <div class="flow-step-label">pg_restore</div>
+          <div class="flow-step-detail">Restore into Postgres</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F680;</div>
+          <div class="flow-step-label">docker compose up</div>
+          <div class="flow-step-detail">Services start</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flow 6: Git Mirror -->
+    <div class="flow-section">
+      <div class="flow-title">
+        <div class="flow-num" style="background: rgba(59,130,246,0.15); color: var(--blue-light);">6</div>
+        Git Mirror (every 1 hour)
+      </div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4BB;</div>
+          <div class="flow-step-label">GitHub</div>
+          <div class="flow-step-detail">velezy/* repos</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F504;</div>
+          <div class="flow-step-label">git fetch --all</div>
+          <div class="flow-step-detail">Cron job</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F4E6;</div>
+          <div class="flow-step-label">QNAP NAS</div>
+          <div class="flow-step-detail">Bare clones</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TOOLTIP ===== -->
+<div class="tooltip" id="tooltip">
+  <div class="tooltip-title" id="tooltipTitle"></div>
+  <div class="tooltip-detail" id="tooltipDetail"></div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ===== TAB SWITCHING =====
+  var tabOrder = ['topology','machines','failover','monitoring','dataflow'];
+
+  window.switchTab = function(tabId) {
+    document.querySelectorAll('.tab-content').forEach(function(el) { el.classList.remove('active'); });
+    document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
+    document.getElementById('tab-' + tabId).classList.add('active');
+    var btns = document.querySelectorAll('.tab-btn');
+    var idx = tabOrder.indexOf(tabId);
+    if (idx >= 0 && btns[idx]) btns[idx].classList.add('active');
+
+    if (tabId === 'topology') {
+      requestAnimationFrame(function() { drawTopoLines(); });
+    }
+  };
+
+  // ===== TOOLTIP =====
+  var tooltip = document.getElementById('tooltip');
+  var tooltipTitle = document.getElementById('tooltipTitle');
+  var tooltipDetail = document.getElementById('tooltipDetail');
+
+  document.querySelectorAll('.node[data-tooltip]').forEach(function(node) {
+    node.addEventListener('mouseenter', function(e) {
+      tooltipTitle.textContent = this.querySelector('.node-name').textContent;
+      tooltipDetail.textContent = this.getAttribute('data-tooltip');
+      tooltip.classList.add('visible');
+    });
+    node.addEventListener('mousemove', function(e) {
+      var x = e.clientX + 16;
+      var y = e.clientY + 16;
+      var rect = tooltip.getBoundingClientRect();
+      if (x + rect.width > window.innerWidth - 20) x = e.clientX - rect.width - 16;
+      if (y + rect.height > window.innerHeight - 20) y = e.clientY - rect.height - 16;
+      tooltip.style.left = x + 'px';
+      tooltip.style.top = y + 'px';
+    });
+    node.addEventListener('mouseleave', function() {
+      tooltip.classList.remove('visible');
+    });
+  });
+
+  // ===== SVG TOPOLOGY LINES =====
+  function getNodeCenter(id) {
+    var el = document.getElementById(id);
+    if (!el) return null;
+    var rect = el.getBoundingClientRect();
+    var svgRect = document.getElementById('topoSvg').getBoundingClientRect();
+    return {
+      x: rect.left + rect.width / 2 - svgRect.left,
+      y: rect.top + rect.height / 2 - svgRect.top,
+      top: rect.top - svgRect.top,
+      bottom: rect.bottom - svgRect.top,
+      left: rect.left - svgRect.left,
+      right: rect.right - svgRect.left,
+      width: rect.width,
+      height: rect.height
+    };
+  }
+
+  function createLine(from, to, color, curveOffset) {
+    if (!from || !to) return '';
+    var startX = from.x;
+    var startY = from.bottom;
+    var endX = to.x;
+    var endY = to.top;
+    var midY = (startY + endY) / 2;
+    var cx = curveOffset || 0;
+
+    return '<path class="flow-arrow ' + color + '"' +
+      ' d="M ' + startX + ' ' + startY +
+      ' C ' + (startX + cx) + ' ' + midY + ', ' + (endX - cx) + ' ' + midY + ', ' + endX + ' ' + endY + '"' +
+      ' marker-end="url(#arrowhead-' + color + ')" />';
+  }
+
+  function drawTopoLines() {
+    var svg = document.getElementById('topoSvg');
+    var diagram = document.getElementById('topoDiagram');
+    if (!svg || !diagram) return;
+
+    var diagramRect = diagram.getBoundingClientRect();
+    svg.setAttribute('width', diagramRect.width);
+    svg.setAttribute('height', diagramRect.height);
+    svg.style.width = diagramRect.width + 'px';
+    svg.style.height = diagramRect.height + 'px';
+
+    var colors = ['purple','blue','green','orange','cyan','pink','red'];
+    var colorMap = {
+      purple: '#a78bfa', blue: '#60a5fa', green: '#34d399',
+      orange: '#fbbf24', cyan: '#22d3ee', pink: '#f472b6', red: '#f87171'
+    };
+
+    var defs = '<defs>';
+    colors.forEach(function(c) {
+      defs += '<marker id="arrowhead-' + c + '" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">' +
+        '<polygon points="0 0, 8 3, 0 6" fill="' + colorMap[c] + '" opacity="0.7"/>' +
+        '</marker>';
+    });
+    defs += '</defs>';
+
+    var paths = '';
+
+    // Router -> Switch
+    var router = getNodeCenter('node-router');
+    var sw = getNodeCenter('node-switch');
+    paths += createLine(router, sw, 'cyan', 0);
+
+    // Switch -> Compute nodes
+    var windows = getNodeCenter('node-windows');
+    var geekom = getNodeCenter('node-geekom');
+    var macmini = getNodeCenter('node-macmini');
+
+    paths += createLine(sw, windows, 'blue', -40);
+    paths += createLine(sw, geekom, 'orange', 0);
+    paths += createLine(sw, macmini, 'pink', 40);
+
+    // Switch -> MacBook (via dev layer)
+    var macbook = getNodeCenter('node-macbook');
+    if (sw && macbook) {
+      var sx = sw.x - 80;
+      var sy = sw.bottom;
+      var ex = macbook.x;
+      var ey = macbook.top;
+      var my = (sy + ey) / 2;
+      paths += '<path class="flow-arrow purple"' +
+        ' d="M ' + sx + ' ' + sy + ' C ' + (sx - 60) + ' ' + my + ', ' + (ex - 30) + ' ' + my + ', ' + ex + ' ' + ey + '"' +
+        ' marker-end="url(#arrowhead-purple)" />';
+    }
+
+    // Switch -> QNAP
+    var qnap = getNodeCenter('node-qnap');
+    if (sw && qnap) {
+      var sx2 = sw.x + 80;
+      var sy2 = sw.bottom;
+      var ex2 = qnap.x;
+      var ey2 = qnap.top;
+      var my2 = (sy2 + ey2) / 2;
+      paths += '<path class="flow-arrow green"' +
+        ' d="M ' + sx2 + ' ' + sy2 + ' C ' + (sx2 + 60) + ' ' + my2 + ', ' + (ex2 + 30) + ' ' + my2 + ', ' + ex2 + ' ' + ey2 + '"' +
+        ' marker-end="url(#arrowhead-green)" />';
+    }
+
+    // MacBook -> Windows (SSH/Docker context)
+    if (macbook && windows) {
+      var sx3 = macbook.right - 10;
+      var sy3 = macbook.y - 5;
+      var ex3 = windows.left + 10;
+      var ey3 = windows.bottom;
+      var my3 = (sy3 + ey3) / 2 + 40;
+      paths += '<path class="flow-arrow purple" style="stroke-dasharray: 3 3; opacity: 0.4;"' +
+        ' d="M ' + sx3 + ' ' + sy3 + ' C ' + (sx3 + 50) + ' ' + my3 + ', ' + (ex3 - 50) + ' ' + my3 + ', ' + ex3 + ' ' + ey3 + '"' +
+        ' marker-end="url(#arrowhead-purple)" />';
+    }
+
+    // QNAP -> Windows (monitoring scrape)
+    if (qnap && windows) {
+      var sx4 = qnap.left + 10;
+      var sy4 = qnap.y - 5;
+      var ex4 = windows.right - 10;
+      var ey4 = windows.bottom;
+      var my4 = (sy4 + ey4) / 2 + 40;
+      paths += '<path class="flow-arrow green" style="stroke-dasharray: 3 3; opacity: 0.4;"' +
+        ' d="M ' + sx4 + ' ' + sy4 + ' C ' + (sx4 - 50) + ' ' + my4 + ', ' + (ex4 + 50) + ' ' + my4 + ', ' + ex4 + ' ' + ey4 + '"' +
+        ' marker-end="url(#arrowhead-green)" />';
+    }
+
+    svg.innerHTML = defs + paths;
+  }
+
+  // ===== FAILOVER SIMULATION =====
+  var failoverRunning = false;
+  var failoverTimeout = null;
+
+  window.startFailover = function() {
+    if (failoverRunning) return;
+    failoverRunning = true;
+
+    var steps = document.querySelectorAll('.failover-step');
+    var statusEl = document.getElementById('fo-status');
+
+    // Reset all
+    steps.forEach(function(s) {
+      s.classList.remove('active', 'completed', 'failed');
+    });
+
+    statusEl.textContent = 'Status: Failover in progress...';
+    statusEl.style.borderColor = 'var(--orange-primary)';
+    statusEl.style.color = 'var(--orange-light)';
+
+    // First step: failure detection
+    var delay = 0;
+    steps.forEach(function(step, i) {
+      var stepDelay = parseInt(step.getAttribute('data-delay')) || (i * 800);
+
+      setTimeout(function() {
+        // Mark previous as completed
+        if (i > 0) {
+          if (i === 1) {
+            steps[0].classList.remove('active');
+            steps[0].classList.add('failed');
+          } else {
+            steps[i - 1].classList.remove('active');
+            steps[i - 1].classList.add('completed');
+          }
+        }
+        step.classList.add('active');
+
+        // Scroll into view
+        step.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, stepDelay);
+    });
+
+    // Final completion
+    var lastDelay = parseInt(steps[steps.length - 1].getAttribute('data-delay')) + 1200;
+    failoverTimeout = setTimeout(function() {
+      steps[steps.length - 1].classList.remove('active');
+      steps[steps.length - 1].classList.add('completed');
+
+      statusEl.textContent = 'Status: GEEKOM Active (failover complete)';
+      statusEl.style.borderColor = 'var(--green-primary)';
+      statusEl.style.color = 'var(--green-light)';
+
+      failoverRunning = false;
+    }, lastDelay);
+  };
+
+  window.resetFailover = function() {
+    failoverRunning = false;
+    if (failoverTimeout) clearTimeout(failoverTimeout);
+
+    document.querySelectorAll('.failover-step').forEach(function(s) {
+      s.classList.remove('active', 'completed', 'failed');
+    });
+
+    var statusEl = document.getElementById('fo-status');
+    statusEl.textContent = 'Status: Normal Operation';
+    statusEl.style.borderColor = 'var(--green-primary)';
+    statusEl.style.color = 'var(--green-light)';
+  };
+
+  // ===== DRAW ON LOAD =====
+  window.addEventListener('load', function() {
+    setTimeout(drawTopoLines, 100);
+  });
+  window.addEventListener('resize', drawTopoLines);
+})();
+</script>
+</body>
+</html>

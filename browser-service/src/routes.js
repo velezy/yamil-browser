@@ -1,5 +1,5 @@
 import { createSession, getSession, listSessions, closeSession, touch } from './sessions.js'
-import { logAction, cleanupSession, searchKnowledge, getKnowledgeStats, distillSession, flushSession, exportKnowledge, importKnowledge } from './knowledge.js'
+import { logAction, cleanupSession, searchKnowledge, getKnowledgeStats, distillSession, flushSession, exportKnowledge, importKnowledge, setLearningEnabled, setSyncEnabled, isLearningEnabled, isSyncEnabled } from './knowledge.js'
 import { runTask, isVisionAvailable } from './vision.js'
 import { saveCredential, getCredentials, listCredentials, deleteCredential } from './credentials.js'
 import { listWebhooks, createWebhook, deleteWebhook, updateWebhook, addSSEClient } from './webhooks.js'
@@ -840,6 +840,32 @@ export async function registerRoutes(app) {
     addSSEClient(reply, domain || null, category || null)
     // Prevent Fastify from closing the response
     reply.hijack()
+  })
+
+  // ── Learning control (start/stop/status) ─────────────────────────
+
+  app.post('/learning/start', async () => {
+    await setLearningEnabled(true)
+    return { ok: true, learning: true }
+  })
+
+  app.post('/learning/stop', async () => {
+    await setLearningEnabled(false)
+    return { ok: true, learning: false }
+  })
+
+  app.get('/learning/status', async () => {
+    return { learning: isLearningEnabled(), sync: isSyncEnabled() }
+  })
+
+  app.post('/learning/memobyte-sync', async (req) => {
+    const { enabled } = req.body || {}
+    await setSyncEnabled(!!enabled)
+    return { ok: true, sync: !!enabled }
+  })
+
+  app.get('/learning/memobyte-sync/status', async () => {
+    return { sync: isSyncEnabled() }
   })
 
   // ── API key management ────────────────────────────────────────────

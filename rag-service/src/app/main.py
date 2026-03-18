@@ -53,7 +53,7 @@ except ImportError as e:
 # but NOT required for core vector store operations
 try:
     from assemblyline_common.database import DocumentRepository, DocumentStatus
-except ImportError:
+except (ImportError, TypeError):
     DocumentRepository = None
     DocumentStatus = None
 

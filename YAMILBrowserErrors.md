@@ -872,3 +872,227 @@ Detection failures logged automatically for review and improvement.
 
 ---
 
+### 2026-03-16T00:20:59.841Z — `yamil_browser_click`
+- **Page**: https://192.168.1.1/#/adv/home
+- **Params**: `{"selector":".sidebar-menu-item:nth-child(4)"}`
+- **Error**: Element not found after 3 attempts: .sidebar-menu-item:nth-child(4)
+
+---
+
+### 2026-03-16T00:35:47.557Z — `yamil_browser_click`
+- **Page**: https://192.168.1.1/#/adv/wifi/primary
+- **Params**: `{"selector":"div:has(> span:contains('2.4 GHz')) + div [role='switch'], .toggle-switch:nth-of-type(3)"}`
+- **Error**: Element not found after 3 attempts: div:has(> span:contains('2.4 GHz')) + div [role='switch'], .toggle-switch:nth-of-type(3)
+
+---
+
+### 2026-03-16T00:47:24.009Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/dashboard/Home+Base
+- **Params**: `{"selector":"[class*=\"nav\"] button:nth-child(3), a[href*=\"devices\"]"}`
+- **Error**: Element not found after 3 attempts: [class*="nav"] button:nth-child(3), a[href*="devices"]
+
+---
+
+### 2026-03-16T00:53:33.146Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/site/Home+Base
+- **Params**: `{"selector":"td img[src*='update'], td svg[class*='update'], td [class*='version'] + *"}`
+- **Error**: Element not found after 3 attempts: td img[src*='update'], td svg[class*='update'], td [class*='version'] + *
+
+---
+
+### 2026-03-16T01:38:27.282Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/dashboard/Home+Base
+- **Params**: `{"selector":"button:has-text(\"Devices\")"}`
+- **Error**: Element not found after 3 attempts: button:has-text("Devices")
+
+---
+
+### 2026-03-16T01:50:38.226Z — `yamil_browser_click`
+- **Page**: unknown
+- **Params**: `{"text":"Network"}`
+- **Error**: Element not found after 3 attempts: Network
+
+---
+
+### 2026-03-16T02:10:19.609Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/settings/networks
+- **Params**: `{"selector":"button:has-text(\"Add\")","near":"IGMP"}`
+- **Error**: Element not found after 3 attempts: button:has-text("Add") near "IGMP"
+
+---
+
+### 2026-03-16T02:10:40.025Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/settings/networks
+- **Params**: `{"selector":"button:has-text('×'), [class*=close]"}`
+- **Error**: Element not found after 3 attempts: button:has-text('×'), [class*=close]
+
+---
+
+### 2026-03-16T03:02:18.276Z — `yamil_browser_click`
+- **Page**: http://192.168.1.19/
+- **Params**: `{"text":"Devices"}`
+- **Error**: Element not found after 3 attempts: Devices
+
+---
+
+### 2026-03-16T03:23:03.695Z — `yamil_browser_click`
+- **Page**: http://192.168.1.19/login.html
+- **Params**: `{"text":"Login"}`
+- **Error**: Element not found after 3 attempts: Login
+
+---
+
+### 2026-03-16T03:26:29.710Z — `yamil_browser_eval`
+- **Page**: http://192.168.1.19/login.html
+- **Params**: `{"script":"document.querySelector('input[value=\"Login\"]').click()"}`
+- **Error**: Page threw: Cannot read properties of null (reading 'click')
+
+---
+
+### 2026-03-16T03:27:54.099Z — `yamil_browser_network_idle`
+- **Page**: http://192.168.1.19/Forms/login_1
+- **Params**: `{"timeout":5000}`
+- **Error**: Network idle timeout
+
+---
+
+### 2026-03-16T03:43:30.126Z — `yamil_browser_fill`
+- **Page**: https://account.zyxel.com/oauth2/authorize?client_id=0bed28835cd3c0b9a11b9622989dda40268dd52a4279cf8d8c817c0b8039b7aa&redirect_uri=https%3A%2F%2Fportal.myzyxel.com%2Fusers%2Fauth%2Fmyzyxel%2Fcallback&response_type=code&state=4921983909bd2d11855adf4b125647f4ce3695bf4ecea23c
+- **Params**: `{"selector":"input[placeholder=\"User Name\"]","value":"admin"}`
+- **Error**: Input not found: input[placeholder="User Name"]
+
+---
+
+### 2026-03-16T04:19:10.853Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/site/Home+Base
+- **Params**: `{"selector":"[class*=\"Devices\"], div:has(> span:contains('24'))"}`
+- **Error**: Element not found after 3 attempts: [class*="Devices"], div:has(> span:contains('24'))
+
+---
+
+### 2026-03-16T05:18:34.328Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/settings/networks
+- **Params**: `{"text":"Yes"}`
+- **Error**: Element not found after 3 attempts: Yes
+
+---
+
+### 2026-03-16T05:18:40.143Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/settings/networks
+- **Params**: `{"selector":"button.yes, button.confirm, .modal button:first-child"}`
+- **Error**: Element not found after 3 attempts: button.yes, button.confirm, .modal button:first-child
+
+---
+
+### 2026-03-16T05:47:44.291Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/clients/Home+Base
+- **Params**: `{"selector":"tr:has(td:contains(\"192.168.1.16\")) td:first-child"}`
+- **Error**: Element not found after 3 attempts: tr:has(td:contains("192.168.1.16")) td:first-child
+
+---
+
+### 2026-03-16T05:57:55.615Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/dashboard/Home+Base
+- **Params**: `{"selector":"div:has(> div:contains(\"DOH\")) input[type=\"checkbox\"], div:has(> div:contains(\"DOH\")) [role=\"switch\"]"}`
+- **Error**: Element not found after 3 attempts: div:has(> div:contains("DOH")) input[type="checkbox"], div:has(> div:contains("DOH")) [role="switch"]
+
+---
+
+### 2026-03-16T06:05:18.510Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/site/Home+Base
+- **Params**: `{"text":"Reboot"}`
+- **Error**: Element not found after 3 attempts: Reboot
+
+---
+
+### 2026-03-16T06:06:25.275Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/site/Home+Base
+- **Params**: `{"selector":"button.yes, .modal button:first-of-type, [class*='confirm'] button:first-of-type"}`
+- **Error**: Element not found after 3 attempts: button.yes, .modal button:first-of-type, [class*='confirm'] button:first-of-type
+
+---
+
+### 2026-03-16T06:45:13.669Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/site/Home+Base
+- **Params**: `{"selector":"tr:nth-child(1) td svg[data-testid]"}`
+- **Error**: Element not found after 3 attempts: tr:nth-child(1) td svg[data-testid]
+
+---
+
+### 2026-03-16T06:47:16.459Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/settings/networks
+- **Params**: `{"selector":"span.badge"}`
+- **Error**: Element not found after 3 attempts: span.badge
+
+---
+
+### 2026-03-16T06:53:45.988Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/dashboard/Home+Base
+- **Params**: `{"selector":"button.speed-test-btn, .speed-test-button"}`
+- **Error**: Element not found after 3 attempts: button.speed-test-btn, .speed-test-button
+
+---
+
+### 2026-03-16T14:43:56.692Z — `yamil_browser_fill`
+- **Page**: https://192.168.1.1/#/login/
+- **Params**: `{"selector":"input[type=\"password\"]","value":"SZWBR77LK"}`
+- **Error**: Input not found: input[type="password"]
+
+---
+
+### 2026-03-17T01:45:44.962Z — `yamil_browser_click`
+- **Page**: https://192.168.1.1/#/adv/home
+- **Params**: `{"selector":".left-menu-item:nth-child(4)"}`
+- **Error**: Element not found after 3 attempts: .left-menu-item:nth-child(4)
+
+---
+
+### 2026-03-17T03:20:49.590Z — `yamil_browser_fill`
+- **Page**: http://localhost:8888/gui/system/systemSettings
+- **Params**: `{"selector":"input[name*=\"addr\" i], input[name*=\"ip\" i]","value":"192.168.0.200"}`
+- **Error**: Input not found: input[name*="addr" i], input[name*="ip" i]
+
+---
+
+### 2026-03-17T03:22:51.623Z — `yamil_browser_eval`
+- **Page**: http://localhost:8888/
+- **Params**: `{"script":"window.location.href"}`
+- **Error**: Complete eval failure: The operation was aborted due to timeout
+
+---
+
+### 2026-03-17T03:28:12.537Z — `yamil_browser_click`
+- **Page**: http://localhost:8888/gui/tools/firmware
+- **Params**: `{"text":"IP Settings"}`
+- **Error**: Element not found after 3 attempts: IP Settings
+
+---
+
+### 2026-03-17T03:37:52.036Z — `yamil_browser_click`
+- **Page**: http://localhost:8888/gui/system/dashboard
+- **Params**: `{"text":"IP Settings","near":"System Information"}`
+- **Error**: Element not found after 3 attempts: IP Settings near "System Information"
+
+---
+
+### 2026-03-17T04:18:03.329Z — `yamil_browser_click`
+- **Page**: https://portal.instant-on.hpe.com/forgot-password
+- **Params**: `{"text":"Next"}`
+- **Error**: Element not found after 3 attempts: Next
+
+---
+
+### 2026-03-17T04:28:27.602Z — `yamil_browser_eval`
+- **Page**: http://192.168.0.200/gui/system/dashboard
+- **Params**: `{"script":"\nconst token = JSON.parse(sessionStorage.getItem('auth')).token;\nconst [macRes, portRes] = await Promise.all([\n  fetch('/api/macaddr', {headers: {'Authorization': 'Bearer ' + token}}).then(r => r.json"}`
+- **Error**: Eval failed after all retries
+
+---
+
+### 2026-03-17T05:29:25.492Z — `yamil_browser_fill`
+- **Page**: https://bitdefender%20central/
+- **Params**: `{"selector":"#address-bar","value":"what is a VLAN"}`
+- **Error**: Input not found: #address-bar
+
+---
+
