@@ -1,5 +1,109 @@
 # AI Notes
 
+## 2026-03-19 — Browser Knowledge + AI Orchestrator Integration & TTS Auto-Play
+
+### Task
+1. Bridge YAMIL Browser's learned knowledge (action recipes, page schemas, field maps, navigation maps) into the MemoByte AI orchestrator so the browser agent uses learned patterns instead of starting from scratch.
+2. Enable AI to speak back responses automatically (TTS auto-play without requiring voice conversation mode).
+
+### Steps Taken
+
+**Phase 1: Knowledge Client (`browser_knowledge_client.py` — NEW)**
+- Created async HTTP client wrapping browser-service knowledge API
+- Methods: `search()` (vector similarity via pgvector), `stats()`, `contribute()` (feedback loop)
+- `format_recipes_as_context()` — formats entries into structured LLM prompt text
+- 5-second timeout with graceful degradation (returns `[]` if browser-service is down)
+
+**Phase 2: Tool Agent Integration (`tool_agent.py` — MODIFIED)**
+- Added import for `BrowserKnowledgeClient` and `format_recipes_as_context`
+- Knowledge lookup runs before `_execute_browser_workflow()` — searches by goal text
+- Knowledge context included in output_parts (visible in chat) and data dict
+- Extended `BROWSER_WORKFLOW_KEYWORDS` with navigation/study terms: "start a study session", "navigate to the", "go to the page", "open the dashboard", "browse to", etc.
+
+**Phase 3: Browser Agent Enhancement (`browser_agent.py` — MODIFIED)**
+- `OllamaBrowserAgent` accepts `knowledge_context` parameter
+- Learned knowledge injected into system prompt before available tools section
+- Instructions updated: "follow learned recipes first, use exact selectors from field_maps"
+- Step tracking added (`_executed_steps`) for knowledge feedback loop
+- `run_browser_task()` now contributes successful workflows back via `kb_client.contribute()`
+- Password scrubbing on step records
+
+**Phase 4: TTS Auto-Play (`StudyAssistant.tsx` — MODIFIED)**
+- Removed `voiceConversationMode` gate from `shouldAutoRead` — now `autoPlayResponses` alone triggers TTS
+- Changed default from `false` to `true` (new users get spoken responses by default)
+- Added speaker toggle button (fa-volume-up / fa-volume-mute) next to microphone in chat input bar
+- Blue when active, slate when muted — user can toggle anytime
+
+### Key Decisions
+- Knowledge lookup is fire-and-forget with 5s timeout — never blocks the main workflow
+- Feedback loop only fires on successful workflows to avoid polluting knowledge with failures
+- TTS decoupled from voice conversation mode so text-based chat users also get spoken responses
+
+### Files Changed
+| File | Action | Location |
+|------|--------|----------|
+| `agents/browser_knowledge_client.py` | Created | ai-orchestrator-service |
+| `agents/tool_agent.py` | Modified | ai-orchestrator-service |
+| `agents/browser_agent.py` | Modified | ai-orchestrator-service |
+| `StudyAssistant.tsx` | Modified | react-frontend |
+
+### Next Steps
+- Test knowledge search with browser-service running (needs Docker + PostgreSQL + Ollama)
+- Verify TTS auto-play works by loading MemoByte at 127.0.0.1:3003 and sending a message
+- Consider adding a "knowledge used" indicator in the chat UI when recipes are found
+- Phase 2 (full): Add knowledge stats display in browser sidebar
+
+---
+
+## 2026-03-18 — IoT Firewall Isolation (Successful)
+
+### Task
+Isolate IoT devices behind Bitdefender BOX on a separate subnet (192.168.2.0/24) with firewall rules preventing lateral movement to the trusted LAN (192.168.0.0/24).
+
+### Discovery: Bitdefender on eth0, NOT eth1
+- Plan assumed Bitdefender was on eth1 (link flapping suggested it), or eth2 (user said "Port 4")
+- **Actual finding**: MAC OUI lookup confirmed `e8:44:7e:04:ed:f8` = **Bitdefender SRL** on **eth0** (bridge port 2, 1Gbps)
+- eth1 had MacBook Air (00:e0:4c:b3:3d:fe), eth2 was DOWN (empty)
+- Used `brctl showmacs br-lan` to map bridge port numbers to eth interfaces
+
+### UCI Changes Applied (SSH root@192.168.0.1)
+1. **Removed eth0 from br-lan**: `uci set network.@device[1].ports='eth1 eth5 eth2'`
+2. **Created IoT interface**: `network.iot` on eth0, 192.168.2.1/24 static
+3. **Created IoT DHCP pool**: start=10, limit=200, 24hr lease, DNS 1.1.1.1/8.8.8.8
+4. **Created IoT firewall zone**: input=REJECT, output=ACCEPT, forward=REJECT, masq=1
+5. **Forwarding rules**: iot→wan (internet), lan→iot (management)
+6. **Firewall rules**: Allow-IoT-DHCP (UDP 67-68), Allow-IoT-DNS (TCP/UDP 53)
+7. **Fixed dnsmasq**: Added eth0 to `dhcp.@dnsmasq[0].interface` list (was only listening on br-lan)
+
+### Fix: dnsmasq Not Serving DHCP on IoT
+- After initial apply, Bitdefender was sending DHCP discovers but getting no response
+- Root cause: `dhcp.@dnsmasq[0].interface=' br-lan'` meant dnsmasq only listened on br-lan
+- Fix: `uci add_list dhcp.@dnsmasq[0].interface='eth0'` + restart dnsmasq
+- Bitdefender immediately got 192.168.2.10 and started communicating with cloud services
+
+### Verification Results
+| Test | Result |
+|------|--------|
+| Bitdefender DHCP lease | 192.168.2.10 on eth0 |
+| IoT → Internet | Working (AWS cloud services active) |
+| IoT → LAN (QNAP .102, etc.) | **BLOCKED** (iptables REJECT counter active) |
+| LAN → IoT (ping 192.168.2.10) | Working (0.4ms, for management) |
+| QNAP, Synology, Windows PC | All reachable on 192.168.0.x (unchanged) |
+| NAT/Masquerade | Active on IoT zone |
+| Internet from LAN | Working (8.8.8.8, 4.5ms) |
+
+### Files Updated
+- `136-NetworkUpgrade-OmadaSDN.md` — port map, device IPs, firewall section, security architecture, Phase 19.5
+- `01-Ai-Notes.md` — this entry
+
+### Previous Failed Attempt (2026-03-16)
+The earlier attempt used eth2 and was reverted due to CLOAK switch and eero mesh bridging L2 across subnets. This attempt succeeds because:
+1. Correct interface identified (eth0, not eth2)
+2. No switch bridging issue (Bitdefender directly on eth0)
+3. Proper firewall zone with masquerade for NAT
+
+---
+
 ## 2026-03-17 — Multi-Instance YAMIL Browser Support
 
 ### Task
@@ -898,3 +1002,72 @@ Implement the full migration from `<webview>` to `WebContentsView` as planned in
 - Self-signed cert handling (QNAP at 192.168.0.102)
 - Autofill on a login page
 - Find-in-page UI (Cmd+F from toolbar)
+
+---
+
+## 2026-03-19 — AI Study Assistant Redesign (Match UX Mockup)
+
+### Task
+Restyle `StudyAssistant.tsx` to match the UX mockup in `docs/130-ux-overhaul-mockup.html` (lines 2413-2928). The page was ~85% matching already; this addresses the remaining styling differences.
+
+### Changes Made
+1. **Mode tabs** — Changed from separate rounded buttons (`gap-2`, `bg-blue-500` active) to a segmented pill control: shared `bg-slate-100` container with `p-0.5`, active tab is white with `shadow-sm`
+2. **Chat input bar** — Changed from transparent bg (`bg-transparent outline-none`) to bordered pill input with `rounded-full`, `border border-slate-200`, focus ring (`focus:ring-2 focus:ring-blue-100`). Send button also rounded-full.
+3. **Quiz Config card** — New sidebar card above Live Score in quiz mode with: Source Material dropdown (from collections), Difficulty pills (Easy/Medium/Hard), Question Types chips (MC, T/F, Short Answer, Fill in Blank), Question count slider (5-30), and New Quiz button
+4. **Live Score card** — Replaced "Skipped" stat with "Avg Time" (shows em-dash placeholder since TutorQuizMode doesn't expose avg time yet)
+5. **Quiz Info card** — Removed standalone card (info now covered by Quiz Config's source dropdown and Live Score stats)
+
+### State Additions
+- `quizDifficulty` — 'easy' | 'medium' | 'hard' (default: 'medium')
+- `quizTypes` — Set<string> (default: ['mc', 'tf'])
+- `quizCount` — number (default: 10)
+- `quizSourceCollection` — string (default: 'all')
+
+### Key Decisions
+- Quiz Config controls are UI-only for now — they don't wire into TutorQuizMode props. Full wiring is a future ticket.
+- Question type toggle requires at least 1 type to stay selected (can't deselect all)
+- Used existing `collections` from `useCollections()` hook to populate the Source Material dropdown
+
+---
+
+## 2026-03-19 — Enterprise Scale Verification (doc 135)
+
+### Task
+Verify all 7 items in the verification checklist from `docs/135-EnterpriseScaleAndCardCreation.md`.
+
+### Results — All 7 Passed
+1. **Docker rebuild** — flashcard container rebuilt and restarted, healthy in 10s
+2. **Collections endpoint** — returns `{ items, total, limit, offset }` (verified via JWT inside container, secret = `change-me-in-production-use-strong-secret`)
+3. **ManageCards virtualization** — `CardItem` extracted (lines 38-203), `FixedSizeList` from react-window at >50 cards threshold
+4. **CollectionBrowser lazy loading** — `LazyTopicCard` uses `IntersectionObserver` with 200px rootMargin, topic cache prevents duplicates
+5. **Card creation chip selector** — preset pills (10/25/50/100/200) + Custom chip, visually confirmed
+6. **Custom amount input** — reveals number input with min=1 max=500, entered 150 successfully
+7. **Dynamic time estimates** — 150 cards shows "Est. ~15 seconds" + batch info text
+
+### Notes
+- Auth service uses **argon2** hashing (not bcrypt) — had to reset admin password with correct hash
+- JWT secret in flashcard container: uses Settings default `change-me-in-production-use-strong-secret` (env vars `JWT_SECRET` and `MEMOBYTE_JWT_SECRET` don't map to `JWT_SECRET_KEY` field)
+- ManageCards `/manage/:collectionId` route expects collection IDs from the flashcard API (not raw DB UUIDs from `flashcards.collections`) — fixed (see below)
+
+## 2026-03-19 — Fix Collection Routing & Card Display (UUID Support)
+
+### Task
+Fix clicking collections in the Library page — was showing "Collection Not Found" or ugly error pages.
+
+### Root Causes Found & Fixed
+1. **Wrong route in CollectionsManage.tsx** — navigated to `/study/${name}` but no such route exists. Fixed 3 occurrences to use `/manage/${collection.id}`.
+2. **parseInt on UUID strings in ManageCards.tsx** — `parseInt('422ecbd9-...')` returns NaN, failing the `id > 0` check. Replaced with simple string validation `!!collectionId && collectionId.length > 0`.
+3. **Wrong flashcard fetch endpoint** — `getFlashcards(uuid)` called `/v1/collections/${uuid}/flashcards` which doesn't exist on the backend. Backend uses `GET /flashcards?collection={name}`. Switched to `useFlashcardsByName(collection?.name)` which calls the correct endpoint.
+4. **Ugly UUID card titles** — "Card #5bfef495-e67d-..." replaced with the actual question text as the card title.
+5. **Ugly error pages** — Restyled "Invalid Collection" and "Collection Not Found" pages to match the app's slate/blue design language with proper icons and "Back to Library" buttons.
+
+### Files Modified
+- `react-frontend/src/pages/CollectionsManage.tsx` — navigation from `/study/${name}` to `/manage/${id}`
+- `react-frontend/src/pages/CollectionBrowser.tsx` — `handleStudyCollection` uses ID instead of name
+- `react-frontend/src/pages/ManageCards.tsx` — UUID validation, `useFlashcardsByName`, card title display, error page styling
+
+### Key Learnings
+- Backend `flashcards.collections` uses UUID primary keys, not integers
+- Backend endpoint is `GET /collections/{collection_name}` (by **name**, not UUID)
+- Flashcards endpoint: `GET /flashcards?collection={name}` — use `useFlashcardsByName`, not `useFlashcards`
+- `getCollection(id)` fetches all collections and compares with `String(c.id) === String(id)` — works with UUIDs at runtime despite `number` type
