@@ -5,6 +5,20 @@
  * This file wires together all modules and registers 45 yamil_browser_* tools.
  */
 
+// ── Global crash protection ─────────────────────────────────────────
+// Prevent unhandled errors from killing the MCP server process,
+// which would crash Claude Code entirely.
+process.on("uncaughtException", (err) => {
+  const msg = err?.message || String(err);
+  console.error("[YAMIL MCP] Uncaught exception (caught by global handler):", msg);
+  try { logToolError("__uncaughtException__", {}, msg, ""); } catch (_) {}
+});
+process.on("unhandledRejection", (reason) => {
+  const msg = reason?.message || String(reason);
+  console.error("[YAMIL MCP] Unhandled rejection (caught by global handler):", msg);
+  try { logToolError("__unhandledRejection__", {}, msg, ""); } catch (_) {}
+});
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { readFileSync } from "fs";

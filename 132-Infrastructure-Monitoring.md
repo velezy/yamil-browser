@@ -16,20 +16,20 @@
     yamil-local tunnel    yamil-qnap tunnel
          |                      |
    Windows Server          QNAP NAS
-   192.168.1.190           192.168.0.102
+   192.168.0.101           192.168.0.102
    (LW + YAMIL App)       (Storage + Monitoring)
 ```
 
 | Host | IP | Role | Always On |
 |------|-----|------|-----------|
-| Windows Server (Logic Weaver) | 192.168.1.190 | YAMIL app, all LW microservices, Grafana, Loki | Yes |
+| Windows Server (Logic Weaver) | 192.168.0.101 | YAMIL app, all LW microservices, Grafana, Loki | Yes |
 | QNAP NAS (FridayAI / TS-251+) | 192.168.0.102 | Storage, Uptime Kuma, ntfy, cloudflared | Yes |
 
 ---
 
 ## 2. Cloudflare Tunnels
 
-### yamil-local (Windows Server — 192.168.1.190)
+### yamil-local (Windows Server — 192.168.0.101)
 
 | Hostname | Service | Purpose |
 |----------|---------|---------|
@@ -91,7 +91,7 @@
 ## 4. QNAP Docker Stack (yamil-monitor)
 
 **Path**: `/share/CACHEDEV1_DATA/Container/yamil-monitor/docker-compose.yml`
-**Docker binary**: `/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker`
+**Docker binary**: `/share/CACHEDEV1_DATA/.qpkg/container-station/usr/bin/.libs/docker`
 
 ```
 ┌─────────────┬───────┬────────────────────────────┐
@@ -113,7 +113,7 @@
 
 ---
 
-## 5. Windows Server Services (192.168.1.190)
+## 5. Windows Server Services (192.168.0.101)
 
 | Service | Port | Purpose |
 |---------|------|---------|

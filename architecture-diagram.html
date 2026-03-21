@@ -5,36 +5,34 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>YAMIL Infrastructure — Self-Hosted Architecture</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg-primary: #0f1117;
-    --bg-secondary: #161822;
-    --bg-surface: #1c1f2e;
-    --bg-surface-hover: #242840;
-    --border-color: #2a2d3e;
-    --border-hover: #3d4160;
-    --text-primary: #e4e6f0;
-    --text-secondary: #8b8fa8;
-    --text-muted: #5e6278;
-    --purple: #8b5cf6; --purple-light: #a78bfa; --purple-bg: rgba(139,92,246,0.12);
-    --blue: #3b82f6; --blue-light: #60a5fa; --blue-bg: rgba(59,130,246,0.12);
-    --green: #10b981; --green-light: #34d399; --green-bg: rgba(16,185,129,0.12);
-    --orange: #f59e0b; --orange-light: #fbbf24; --orange-bg: rgba(245,158,11,0.12);
-    --cyan: #06b6d4; --cyan-light: #22d3ee; --cyan-bg: rgba(6,182,212,0.12);
-    --pink: #ec4899; --pink-light: #f472b6; --pink-bg: rgba(236,72,153,0.12);
-    --red: #ef4444; --red-light: #f87171; --red-bg: rgba(239,68,68,0.12);
-    --teal: #14b8a6; --teal-light: #2dd4bf;
-    --radius-sm: 6px; --radius-md: 10px; --radius-lg: 16px;
-    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-    --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+    --bg-primary: #f0f7ff;
+    --bg-secondary: #e3f0fc;
+    --bg-surface: #fff;
+    --bg-surface-hover: #f8fbff;
+    --border-color: #d0e4f7;
+    --border-hover: #90c2f0;
+    --text-primary: #1a2a3a;
+    --text-secondary: #6b8299;
+    --text-muted: #90b4d4;
+    --purple: #7c3aed; --purple-light: #6d28d9; --purple-bg: #f3e5f5;
+    --blue: #1e88e5; --blue-light: #1565c0; --blue-bg: #e3f2fd;
+    --green: #43a047; --green-light: #2e7d32; --green-bg: #e8f5e9;
+    --orange: #ef6c00; --orange-light: #e65100; --orange-bg: #fff3e0;
+    --cyan: #0097a7; --cyan-light: #00838f; --cyan-bg: #e0f7fa;
+    --pink: #d81b60; --pink-light: #ad1457; --pink-bg: #fce4ec;
+    --red: #e53935; --red-light: #c62828; --red-bg: #ffebee;
+    --teal: #00897b; --teal-light: #00695c;
+    --radius-sm: 6px; --radius-md: 10px; --radius-lg: 12px;
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
     --transition: 0.2s ease;
   }
 
   body {
-    font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     background: var(--bg-primary);
     color: var(--text-primary);
     line-height: 1.6;
@@ -43,27 +41,22 @@
 
   /* HEADER */
   .header {
-    background: linear-gradient(135deg, #0891b2 0%, #3b82f6 50%, #8b5cf6 100%);
+    background: linear-gradient(135deg, #1e88e5, #42a5f5);
     padding: 28px 40px;
     position: relative;
     overflow: hidden;
   }
-  .header::before {
-    content: '';
-    position: absolute; inset: 0;
-    background: repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(255,255,255,0.03) 60px, rgba(255,255,255,0.03) 61px),
-                repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(255,255,255,0.03) 60px, rgba(255,255,255,0.03) 61px);
-  }
+  .header::before { display: none; }
   .header-content {
     position: relative; z-index: 1; max-width: 1500px; margin: 0 auto;
     display: flex; align-items: center; justify-content: space-between;
   }
-  .header h1 { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
-  .header h1 span { opacity: 0.85; font-weight: 400; }
-  .header-sub { font-size: 13px; color: rgba(255,255,255,0.7); margin-top: 4px; }
+  .header h1 { font-size: 26px; font-weight: 700; color: #fff; }
+  .header h1 span { opacity: 0.9; font-weight: 400; }
+  .header-sub { font-size: 13px; color: rgba(255,255,255,0.85); margin-top: 4px; }
   .header-badge {
-    background: rgba(255,255,255,0.15); backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
     padding: 6px 16px; border-radius: 20px; font-size: 13px; color: #fff; font-weight: 500;
   }
 
@@ -81,14 +74,14 @@
     white-space: nowrap; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   }
   .tab-btn:hover { color: var(--text-primary); background: var(--bg-surface); }
-  .tab-btn.active { color: var(--cyan-light); border-bottom-color: var(--cyan); background: var(--bg-surface); }
+  .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); background: var(--bg-surface); }
   .tab-content { display: none; padding: 28px 0 40px; animation: fadeIn 0.3s ease; }
   .tab-content.active { display: block; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
 
   /* SECTION TITLE */
   .section-title {
-    font-size: 17px; font-weight: 600; margin-bottom: 20px;
+    font-size: 17px; font-weight: 600; margin-bottom: 20px; color: var(--blue);
     display: flex; align-items: center; gap: 10px;
   }
   .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border-color); }
@@ -99,7 +92,7 @@
     border: 1.5px dashed var(--border-color);
     border-radius: var(--radius-lg);
     padding: 18px 20px 18px 54px;
-    background: rgba(22,24,34,0.5);
+    background: rgba(227,240,252,0.4);
     position: relative;
   }
   .flow-layer-label {
@@ -109,12 +102,12 @@
     font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
     padding: 10px 4px;
   }
-  .flow-layer-label.internet { color: var(--cyan-light); }
-  .flow-layer-label.network { color: var(--orange-light); }
-  .flow-layer-label.gateway { color: var(--blue-light); }
-  .flow-layer-label.apps { color: var(--purple-light); }
-  .flow-layer-label.infra { color: var(--green-light); }
-  .flow-layer-label.monitor { color: var(--teal-light); }
+  .flow-layer-label.internet { color: var(--cyan); }
+  .flow-layer-label.network { color: var(--orange); }
+  .flow-layer-label.gateway { color: var(--blue); }
+  .flow-layer-label.apps { color: var(--purple); }
+  .flow-layer-label.infra { color: var(--green); }
+  .flow-layer-label.monitor { color: var(--teal); }
 
   .flow-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
   .flow-box {
@@ -132,7 +125,7 @@
   .flow-box.red { border-left: 3px solid var(--red); }
   .flow-box .name { font-size: 13px; font-weight: 600; }
   .flow-box .port {
-    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted);
+    font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; color: var(--text-muted);
   }
   .flow-box .desc { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
   .flow-arrow {
@@ -162,7 +155,7 @@
   .app-card:hover { border-color: var(--border-hover); box-shadow: var(--shadow-md); }
   .app-card-header {
     padding: 16px 18px; display: flex; align-items: center; gap: 12px;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color); background: linear-gradient(135deg, #e3f2fd, #bbdefb);
   }
   .app-card-icon {
     width: 38px; height: 38px; border-radius: var(--radius-md);
@@ -186,12 +179,12 @@
   .svc-dot.exited { background: var(--orange); }
   .svc-name { font-weight: 500; color: var(--text-primary); }
   .svc-port {
-    margin-left: auto; font-family: 'JetBrains Mono', monospace;
+    margin-left: auto; font-family: 'SF Mono', 'Fira Code', monospace;
     font-size: 10px; color: var(--text-muted);
   }
   .svc-tag {
     display: inline-block; padding: 1px 6px; border-radius: 4px;
-    font-size: 9px; font-weight: 600; font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 600; font-family: 'SF Mono', 'Fira Code', monospace;
   }
   .svc-tag.gateway { background: var(--blue-bg); color: var(--blue-light); }
   .svc-tag.service { background: var(--purple-bg); color: var(--purple-light); }
@@ -200,7 +193,7 @@
 
   .svc-group-label {
     font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
-    color: var(--text-muted); padding: 8px 0 4px; border-top: 1px solid rgba(42,45,62,0.5);
+    color: var(--text-muted); padding: 8px 0 4px; border-top: 1px solid #e8f0f8;
     margin-top: 6px;
   }
   .svc-group-label:first-child { border-top: none; margin-top: 0; }
@@ -217,10 +210,10 @@
   .status-card .label { font-size: 11px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
   .status-card .value { font-size: 28px; font-weight: 700; margin: 4px 0; }
   .status-card .detail { font-size: 12px; color: var(--text-secondary); }
-  .status-card.green .value { color: var(--green-light); }
-  .status-card.red .value { color: var(--red-light); }
-  .status-card.orange .value { color: var(--orange-light); }
-  .status-card.blue .value { color: var(--blue-light); }
+  .status-card.green .value { color: var(--green); }
+  .status-card.red .value { color: var(--red); }
+  .status-card.orange .value { color: var(--orange); }
+  .status-card.blue .value { color: var(--blue); }
 
   /* NETWORK DEVICE */
   .net-device {
@@ -229,15 +222,15 @@
   }
   .net-device:hover { border-color: var(--border-hover); box-shadow: var(--shadow-md); transform: translateY(-2px); }
   .net-device .name { font-size: 13px; font-weight: 600; }
-  .net-device .ip { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
+  .net-device .ip { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; color: var(--text-muted); }
   .net-device .info { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
 
   .port-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
   .port-table td {
-    padding: 3px 8px; font-size: 11px; border-bottom: 1px solid rgba(42,45,62,0.3);
+    padding: 3px 8px; font-size: 11px; border-bottom: 1px solid #e8f0f8;
   }
   .port-table td:first-child {
-    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px;
     color: var(--text-muted); font-weight: 600; width: 60px;
   }
 
@@ -264,16 +257,17 @@
   .envoy-detail-header {
     padding: 14px 18px; border-bottom: 1px solid var(--border-color);
     font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px;
+    background: linear-gradient(135deg, #e3f2fd, #bbdefb);
   }
   .envoy-detail-body { padding: 14px 18px; }
   .envoy-route {
     display: flex; align-items: center; gap: 10px; padding: 6px 0;
-    border-bottom: 1px solid rgba(42,45,62,0.3); font-size: 12px;
+    border-bottom: 1px solid #e8f0f8; font-size: 12px;
   }
   .envoy-route:last-child { border-bottom: none; }
   .envoy-route .path {
-    font-family: 'JetBrains Mono', monospace; font-size: 11px;
-    color: var(--cyan-light); min-width: 200px;
+    font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px;
+    color: var(--blue); min-width: 200px;
   }
   .envoy-route .target { color: var(--text-secondary); }
   .envoy-route .arrow { color: var(--text-muted); }
@@ -296,7 +290,7 @@
   <div class="header-content">
     <div>
       <h1>YAMIL <span>Self-Hosted Infrastructure</span></h1>
-      <div class="header-sub">Windows PC + QNAP NAS &middot; Cloudflare Tunnel &middot; Dual Envoy Gateway &middot; 192.168.0.0/24</div>
+      <div class="header-sub">Windows PC + QNAP NAS + HA Secondaries &middot; Cloudflare Tunnel &middot; Dual Envoy Gateway &middot; Consul HA &middot; 192.168.0.0/24</div>
     </div>
     <div class="header-badge">Self-Hosted &middot; Mar 2026</div>
   </div>
@@ -355,7 +349,8 @@
             <table class="port-table">
               <tr><td>yamil-ai.com</td><td>&rarr; localhost:9080 (envoy-internal)</td></tr>
               <tr><td>api.yamil-ai.com</td><td>&rarr; localhost:9082 (envoy-external)</td></tr>
-              <tr><td>ntfy.yamil-ai.com</td><td>&rarr; 192.168.0.102:8090 (QNAP ntfy)</td></tr>
+              <tr><td>grafana.yamil-ai.com</td><td>&rarr; QNAP grafana:3000 (QNAP tunnel)</td></tr>
+              <tr><td>ntfy.yamil-ai.com</td><td>&rarr; QNAP ntfy:80 (QNAP tunnel)</td></tr>
               <tr><td>catch-all</td><td>&rarr; 404</td></tr>
             </table>
           </div>
@@ -492,7 +487,7 @@
           <div class="flow-box" style="border-left: 3px solid var(--teal);">
             <div class="name">QNAP NAS (FridayAI)</div>
             <div class="port">192.168.0.102</div>
-            <div class="desc">Monitoring &amp; backup hub &mdash; always on</div>
+            <div class="desc">Monitoring, backup &amp; HA hub &mdash; 13 containers, always on</div>
           </div>
           <div class="flow-arrow">&rarr;</div>
           <div class="flow-box" style="border-left: 3px solid var(--teal);">
@@ -513,6 +508,15 @@
           <div class="flow-box" style="border-left: 3px solid var(--teal);">
             <div class="name">ntfy</div><div class="port">:8090</div>
           </div>
+          <div class="flow-box" style="border-left: 3px solid var(--teal);">
+            <div class="name">Uptime Kuma</div><div class="port">:3001</div>
+          </div>
+          <div class="flow-box" style="border-left: 3px solid var(--teal);">
+            <div class="name">Consul Server</div><div class="port">:8500</div>
+          </div>
+          <div class="flow-box" style="border-left: 3px solid var(--teal);">
+            <div class="name">Git Mirror</div><div class="port">hourly</div>
+          </div>
         </div>
       </div>
 
@@ -521,7 +525,7 @@
 
   <!-- ==================== TAB 2: CONTAINER INVENTORY ==================== -->
   <div id="tab-containers" class="tab-content">
-    <div class="section-title">Container Inventory &mdash; Windows PC (192.168.0.11)</div>
+    <div class="section-title">Container Inventory &mdash; Windows PC (192.168.0.101)</div>
 
     <div class="container-grid">
 
@@ -687,7 +691,7 @@
             <div class="app-card-title">QNAP Monitoring Stack</div>
             <div class="app-card-sub">FridayAI &middot; 192.168.0.102</div>
           </div>
-          <div class="app-card-count" style="background: var(--green-bg); color: var(--green-light);">10</div>
+          <div class="app-card-count" style="background: var(--green-bg); color: var(--green-light);">13</div>
         </div>
         <div class="app-card-body">
           <div class="svc-row"><span class="svc-dot up"></span><span class="svc-name">prometheus</span><span class="svc-tag infra">METRIC</span><span class="svc-port">:9090</span></div>
@@ -700,6 +704,9 @@
           <div class="svc-row"><span class="svc-dot up"></span><span class="svc-name">cloudflared</span><span class="svc-tag infra">TUNNEL</span><span class="svc-port">&mdash;</span></div>
           <div class="svc-row"><span class="svc-dot up"></span><span class="svc-name">db-backup</span><span class="svc-tag infra">CRON</span><span class="svc-port">every 6h</span></div>
           <div class="svc-row"><span class="svc-dot up"></span><span class="svc-name">watchtower</span><span class="svc-tag infra">UPDATE</span><span class="svc-port">&mdash;</span></div>
+          <div class="svc-row"><span class="svc-dot up"></span><span class="svc-name">consul-server</span><span class="svc-tag infra">HA</span><span class="svc-port">:8500</span></div>
+          <div class="svc-row"><span class="svc-dot up"></span><span class="svc-name">git-mirror</span><span class="svc-tag infra">CRON</span><span class="svc-port">every 1h</span></div>
+          <div class="svc-row"><span class="svc-dot up"></span><span class="svc-name">cadvisor</span><span class="svc-tag infra">METRIC</span><span class="svc-port">:8080</span></div>
         </div>
       </div>
 
@@ -737,11 +744,11 @@
             <table class="port-table" style="margin-top: 10px;">
               <tr style="font-weight: 600; color: var(--text-secondary);"><td>PORT</td><td>IFACE</td><td>DEVICE</td><td>SPEED</td></tr>
               <tr><td style="color: var(--orange-light);">W1</td><td>eth3</td><td>CR1000A (WAN uplink)</td><td>2500 Mb/s</td></tr>
-              <tr><td style="color: var(--blue-light);">L1</td><td>eth0</td><td>Aruba CLOAK switch (temporary)</td><td>2500 Mb/s</td></tr>
+              <tr><td style="color: var(--blue-light);">L1</td><td>eth0</td><td>TRENDnet TEG-30284 (core switch)</td><td>2500 Mb/s</td></tr>
               <tr><td style="color: var(--blue-light);">L2</td><td>eth1</td><td>DARK-KNIGHT / Windows PC</td><td>2500 Mb/s</td></tr>
               <tr><td style="color: var(--blue-light);">L3</td><td>eth2</td><td>MacBook Air</td><td>1000 Mb/s</td></tr>
               <tr><td style="color: var(--text-muted);">L4</td><td>&mdash;</td><td>spare</td><td>&mdash;</td></tr>
-              <tr><td style="color: var(--pink-light);">SFP+</td><td>eth4/5</td><td>empty (10Gtek DAC arriving)</td><td>10G</td></tr>
+              <tr><td style="color: var(--pink-light);">SFP+</td><td>eth4/5</td><td>10Gtek DAC &rarr; TRENDnet SFP+</td><td>10G</td></tr>
             </table>
           </div>
         </div>
@@ -752,14 +759,14 @@
         <div class="flow-row" style="flex-wrap: wrap;">
           <div class="net-device" style="border-left: 3px solid var(--blue);">
             <div class="name">DARK-KNIGHT</div>
-            <div class="ip">192.168.0.11</div>
-            <div class="info">Windows PC &middot; Docker host &middot; Ryzen 9 &middot; 64GB</div>
+            <div class="ip">192.168.0.101</div>
+            <div class="info">Windows PC &middot; Docker host &middot; Ryzen 9 &middot; 64GB &middot; RTX 3070 Ti</div>
             <span class="badge up" style="margin-top: 6px;"><span class="badge-dot"></span>Primary Host</span>
           </div>
           <div class="net-device" style="border-left: 3px solid var(--purple);">
             <div class="name">MacBook Air</div>
-            <div class="ip">192.168.0.10</div>
-            <div class="info">Coding only &middot; Claude Code + SSH</div>
+            <div class="ip">192.168.0.120</div>
+            <div class="info">Dev machine &middot; Claude Code + SSH &middot; Consul client</div>
           </div>
           <div class="net-device" style="border-left: 3px solid var(--green);">
             <div class="name">FridayAI / QNAP</div>
@@ -772,23 +779,30 @@
             <div class="ip">192.168.0.103</div>
             <div class="info">NAS &middot; Storage</div>
           </div>
+          <div class="net-device" style="border-left: 3px solid var(--orange);">
+            <div class="name">GEEKOM A8 Max</div>
+            <div class="ip">192.168.0.113</div>
+            <div class="info">HA Secondary #1 &middot; Docker Desktop &middot; Ollama &middot; Consul client</div>
+            <span class="badge up" style="margin-top: 6px;"><span class="badge-dot"></span>HA Ready</span>
+          </div>
+          <div class="net-device" style="border-left: 3px solid var(--teal);">
+            <div class="name">Kain / Mac Mini M4</div>
+            <div class="ip">192.168.0.119</div>
+            <div class="info">HA Secondary #2 &middot; Docker Desktop &middot; Ollama &middot; Consul client</div>
+            <span class="badge up" style="margin-top: 6px;"><span class="badge-dot"></span>HA Ready</span>
+          </div>
         </div>
       </div>
 
-      <div class="flow-layer" style="border-color: var(--orange); border-style: dashed;">
-        <div class="flow-layer-label" style="color: var(--orange-light);">FUTURE</div>
+      <div class="flow-layer">
+        <div class="flow-layer-label" style="color: var(--blue-light);">SWITCH</div>
         <div class="flow-row">
-          <div class="net-device" style="border-left: 3px solid var(--orange); opacity: 0.7;">
+          <div class="net-device" style="border-left: 3px solid var(--blue);">
             <div class="name">TRENDnet TEG-30284</div>
-            <div class="info">24x 2.5G + 4x 10G SFP+ &middot; Arriving Tuesday</div>
-            <div class="info" style="margin-top: 4px;">Will replace Aruba CLOAK as core switch</div>
+            <div class="ip">192.168.0.200</div>
+            <div class="info">Core switch &middot; 24x 2.5G + 4x 10G SFP+ &middot; Replaced Aruba CLOAK</div>
             <div class="info">10G SFP+ DAC uplink to Route10</div>
-          </div>
-          <div class="flow-arrow">&rarr;</div>
-          <div class="net-device" style="border-left: 3px solid var(--orange); opacity: 0.7;">
-            <div class="name">10Gtek SFP+ DAC 0.5m</div>
-            <div class="info">10G backbone: Route10 SFP+ &harr; TRENDnet SFP+</div>
-            <div class="ip">$9.99 Amazon &middot; Ordered</div>
+            <span class="badge up" style="margin-top: 6px;"><span class="badge-dot"></span>Active</span>
           </div>
         </div>
       </div>
@@ -814,13 +828,13 @@
 
   <!-- ==================== TAB 4: STATUS DASHBOARD ==================== -->
   <div id="tab-status" class="tab-content">
-    <div class="section-title">Status Dashboard &mdash; Snapshot 2026-03-16</div>
+    <div class="section-title">Status Dashboard &mdash; Snapshot 2026-03-20</div>
 
     <div class="status-grid">
       <div class="status-card green">
         <div class="label">Total Containers</div>
         <div class="value">88</div>
-        <div class="detail">Across Windows PC + QNAP</div>
+        <div class="detail">Windows PC + QNAP + HA machines</div>
       </div>
       <div class="status-card green">
         <div class="label">Running (Healthy)</div>
@@ -839,8 +853,8 @@
       </div>
       <div class="status-card green">
         <div class="label">Prometheus Targets</div>
-        <div class="value">28/28</div>
-        <div class="detail">All targets UP</div>
+        <div class="value">34/34</div>
+        <div class="detail">14 YAMIL + 4 HA machines + 11 Blackbox + 5 infra</div>
       </div>
       <div class="status-card green">
         <div class="label">Active Alerts</div>

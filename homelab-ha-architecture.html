@@ -5,61 +5,51 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>YAMIL Infrastructure — HA Architecture</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg-primary: #0f1117;
-    --bg-secondary: #161822;
-    --bg-surface: #1c1f2e;
-    --bg-surface-hover: #242840;
-    --border-color: #2a2d3e;
-    --border-hover: #3d4160;
-    --text-primary: #e4e6f0;
-    --text-secondary: #8b8fa8;
-    --text-muted: #5e6278;
-    --purple-primary: #8b5cf6;
-    --purple-light: #a78bfa;
-    --purple-dark: #6d28d9;
-    --blue-primary: #3b82f6;
-    --blue-light: #60a5fa;
-    --green-primary: #10b981;
-    --green-light: #34d399;
-    --orange-primary: #f59e0b;
-    --orange-light: #fbbf24;
-    --cyan-primary: #06b6d4;
-    --cyan-light: #22d3ee;
-    --pink-primary: #ec4899;
-    --pink-light: #f472b6;
-    --red-primary: #ef4444;
-    --red-light: #f87171;
-    --teal-primary: #14b8a6;
-    --teal-light: #2dd4bf;
-    --gradient-header: linear-gradient(135deg, #0891b2 0%, #3b82f6 50%, #8b5cf6 100%);
-    --gradient-purple: linear-gradient(135deg, #6d28d9, #8b5cf6);
-    --gradient-blue: linear-gradient(135deg, #1d4ed8, #3b82f6);
-    --gradient-green: linear-gradient(135deg, #059669, #10b981);
-    --gradient-orange: linear-gradient(135deg, #d97706, #f59e0b);
-    --gradient-cyan: linear-gradient(135deg, #0891b2, #06b6d4);
-    --gradient-pink: linear-gradient(135deg, #db2777, #ec4899);
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
-    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-    --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
-    --shadow-glow-purple: 0 0 20px rgba(139,92,246,0.15);
-    --shadow-glow-blue: 0 0 20px rgba(59,130,246,0.15);
-    --shadow-glow-green: 0 0 20px rgba(16,185,129,0.15);
-    --shadow-glow-orange: 0 0 20px rgba(245,158,11,0.15);
-    --shadow-glow-cyan: 0 0 20px rgba(6,182,212,0.15);
-    --shadow-glow-pink: 0 0 20px rgba(236,72,153,0.15);
+    --bg-primary: #f0f7ff;
+    --bg-secondary: #e3f0fc;
+    --bg-surface: #fff;
+    --bg-surface-hover: #f8fbff;
+    --border-color: #d0e4f7;
+    --border-hover: #90c2f0;
+    --text-primary: #1a2a3a;
+    --text-secondary: #6b8299;
+    --text-muted: #90b4d4;
+    --purple-primary: #7c3aed;
+    --purple-light: #6d28d9;
+    --blue-primary: #1e88e5;
+    --blue-light: #1565c0;
+    --green-primary: #43a047;
+    --green-light: #2e7d32;
+    --orange-primary: #ef6c00;
+    --orange-light: #e65100;
+    --cyan-primary: #0097a7;
+    --cyan-light: #00838f;
+    --pink-primary: #d81b60;
+    --pink-light: #ad1457;
+    --red-primary: #e53935;
+    --red-light: #c62828;
+    --teal-primary: #00897b;
+    --teal-light: #00695c;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+    --shadow-glow-purple: 0 4px 16px rgba(124,58,237,0.12);
+    --shadow-glow-blue: 0 4px 16px rgba(30,136,229,0.12);
+    --shadow-glow-green: 0 4px 16px rgba(67,160,71,0.12);
+    --shadow-glow-orange: 0 4px 16px rgba(239,108,0,0.12);
+    --shadow-glow-cyan: 0 4px 16px rgba(0,151,167,0.12);
+    --shadow-glow-pink: 0 4px 16px rgba(216,27,96,0.12);
     --radius-sm: 6px;
     --radius-md: 10px;
-    --radius-lg: 16px;
+    --radius-lg: 12px;
     --transition: 0.2s ease;
   }
 
   body {
-    font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     background: var(--bg-primary);
     color: var(--text-primary);
     line-height: 1.6;
@@ -69,18 +59,12 @@
 
   /* ===== HEADER ===== */
   .header {
-    background: var(--gradient-header);
+    background: linear-gradient(135deg, #1e88e5, #42a5f5);
     padding: 32px 40px;
     position: relative;
     overflow: hidden;
   }
-  .header::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(255,255,255,0.03) 60px, rgba(255,255,255,0.03) 61px),
-                repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(255,255,255,0.03) 60px, rgba(255,255,255,0.03) 61px);
-  }
+  .header::before { display: none; }
   .header-content {
     position: relative;
     z-index: 1;
@@ -93,15 +77,12 @@
   .header h1 {
     font-size: 28px;
     font-weight: 700;
-    letter-spacing: -0.5px;
     color: #fff;
-    text-shadow: 0 2px 8px rgba(0,0,0,0.3);
   }
-  .header h1 span { opacity: 0.85; font-weight: 400; }
+  .header h1 span { opacity: 0.9; font-weight: 400; }
   .header-badge {
-    background: rgba(255,255,255,0.15);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
     padding: 6px 16px;
     border-radius: 20px;
     font-size: 13px;
@@ -110,7 +91,7 @@
   }
   .header-subtitle {
     font-size: 14px;
-    color: rgba(255,255,255,0.7);
+    color: rgba(255,255,255,0.85);
     margin-top: 4px;
   }
 
@@ -148,8 +129,8 @@
     background: var(--bg-surface);
   }
   .tab-btn.active {
-    color: var(--cyan-light);
-    border-bottom-color: var(--cyan-primary);
+    color: var(--blue-primary);
+    border-bottom-color: var(--blue-primary);
     background: var(--bg-surface);
   }
 
@@ -175,16 +156,16 @@
     stroke-width: 1.5;
     stroke-dasharray: 6 4;
     animation: flowPulse 1s linear infinite;
-    opacity: 0.6;
+    opacity: 0.5;
   }
   .flow-arrow:hover { opacity: 1; stroke-width: 2.5; }
-  .flow-arrow.purple { stroke: var(--purple-light); }
-  .flow-arrow.blue { stroke: var(--blue-light); }
-  .flow-arrow.green { stroke: var(--green-light); }
-  .flow-arrow.orange { stroke: var(--orange-light); }
-  .flow-arrow.cyan { stroke: var(--cyan-light); }
-  .flow-arrow.pink { stroke: var(--pink-light); }
-  .flow-arrow.red { stroke: var(--red-light); }
+  .flow-arrow.purple { stroke: var(--purple-primary); }
+  .flow-arrow.blue { stroke: var(--blue-primary); }
+  .flow-arrow.green { stroke: var(--green-primary); }
+  .flow-arrow.orange { stroke: var(--orange-primary); }
+  .flow-arrow.cyan { stroke: var(--cyan-primary); }
+  .flow-arrow.pink { stroke: var(--pink-primary); }
+  .flow-arrow.red { stroke: var(--red-primary); }
 
   /* ===== NETWORK TOPOLOGY (Tab 1) ===== */
   .topo-diagram {
@@ -208,7 +189,7 @@
     border-radius: var(--radius-lg);
     padding: 20px 20px 20px 48px;
     margin-bottom: 20px;
-    background: rgba(22, 24, 34, 0.5);
+    background: rgba(227, 240, 252, 0.4);
     z-index: 2;
   }
   .layer-label {
@@ -225,11 +206,11 @@
     padding: 12px 4px;
     border-radius: var(--radius-sm);
   }
-  .layer-label.network { color: var(--cyan-light); }
-  .layer-label.compute { color: var(--blue-light); }
-  .layer-label.coding { color: var(--purple-light); }
-  .layer-label.storage { color: var(--orange-light); }
-  .layer-label.monitor { color: var(--green-light); }
+  .layer-label.network { color: var(--cyan-primary); }
+  .layer-label.compute { color: var(--blue-primary); }
+  .layer-label.coding { color: var(--purple-primary); }
+  .layer-label.storage { color: var(--orange-primary); }
+  .layer-label.monitor { color: var(--green-primary); }
 
   .layer-nodes {
     display: flex;
@@ -271,13 +252,13 @@
   .node-icon { font-size: 22px; margin-bottom: 6px; }
   .node-name { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
   .node-port {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'SF Mono', 'Fira Code', monospace;
     font-size: 11px;
     color: var(--text-muted);
     font-weight: 500;
   }
   .node-tech {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'SF Mono', 'Fira Code', monospace;
     font-size: 9px;
     color: var(--green-primary);
     font-weight: 500;
@@ -309,7 +290,7 @@
     line-height: 1.5;
   }
   .tooltip.visible { opacity: 1; }
-  .tooltip-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; color: var(--cyan-light); }
+  .tooltip-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; color: var(--blue-primary); }
   .tooltip-detail { color: var(--text-secondary); }
 
   /* ===== CARDS ===== */
@@ -335,12 +316,12 @@
     width: 40px; height: 40px; border-radius: var(--radius-md);
     display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;
   }
-  .card-icon.purple { background: rgba(139,92,246,0.15); }
-  .card-icon.blue { background: rgba(59,130,246,0.15); }
-  .card-icon.green { background: rgba(16,185,129,0.15); }
-  .card-icon.orange { background: rgba(245,158,11,0.15); }
-  .card-icon.cyan { background: rgba(6,182,212,0.15); }
-  .card-icon.pink { background: rgba(236,72,153,0.15); }
+  .card-icon.purple { background: #f3e5f5; }
+  .card-icon.blue { background: #e3f2fd; }
+  .card-icon.green { background: #e8f5e9; }
+  .card-icon.orange { background: #fff3e0; }
+  .card-icon.cyan { background: #e0f7fa; }
+  .card-icon.pink { background: #fce4ec; }
   .card-title { font-size: 15px; font-weight: 600; }
   .card-subtitle { font-size: 12px; color: var(--text-secondary); }
   .card-body { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
@@ -348,19 +329,19 @@
   .card-body li { padding: 4px 0; padding-left: 16px; position: relative; }
   .card-body li::before {
     content: ''; position: absolute; left: 0; top: 12px;
-    width: 6px; height: 6px; border-radius: 50%; background: var(--cyan-primary);
+    width: 6px; height: 6px; border-radius: 50%; background: var(--blue-primary);
   }
 
   .service-tag {
     display: inline-block; padding: 2px 8px; border-radius: 4px;
-    font-size: 11px; font-weight: 500; font-family: 'JetBrains Mono', monospace; margin: 2px 2px;
+    font-size: 11px; font-weight: 500; font-family: 'SF Mono', 'Fira Code', monospace; margin: 2px 2px;
   }
-  .service-tag.primary { background: rgba(59,130,246,0.15); color: var(--blue-light); }
-  .service-tag.secondary { background: rgba(245,158,11,0.15); color: var(--orange-light); }
-  .service-tag.monitor { background: rgba(16,185,129,0.15); color: var(--green-light); }
-  .service-tag.coding { background: rgba(139,92,246,0.15); color: var(--purple-light); }
-  .service-tag.arch-amd64 { background: rgba(59,130,246,0.15); color: var(--blue-light); }
-  .service-tag.arch-arm64 { background: rgba(236,72,153,0.15); color: var(--pink-light); }
+  .service-tag.primary { background: #e3f2fd; color: var(--blue-light); }
+  .service-tag.secondary { background: #fff3e0; color: var(--orange-light); }
+  .service-tag.monitor { background: #e8f5e9; color: var(--green-light); }
+  .service-tag.coding { background: #f3e5f5; color: var(--purple-light); }
+  .service-tag.arch-amd64 { background: #e3f2fd; color: var(--blue-light); }
+  .service-tag.arch-arm64 { background: #fce4ec; color: var(--pink-light); }
 
   /* ===== SPEC TABLE ===== */
   .spec-table {
@@ -371,26 +352,26 @@
   .spec-table td {
     padding: 4px 0;
     font-size: 12px;
-    border-bottom: 1px solid rgba(42,45,62,0.3);
+    border-bottom: 1px solid #e8f0f8;
   }
   .spec-table td:first-child {
     color: var(--text-muted);
     font-weight: 500;
     width: 90px;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'SF Mono', 'Fira Code', monospace;
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
   .spec-table td:last-child {
     color: var(--text-primary);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'SF Mono', 'Fira Code', monospace;
     font-size: 11px;
   }
 
   /* ===== SECTION TITLES ===== */
   .section-title {
-    font-size: 18px; font-weight: 600; margin-bottom: 20px; color: var(--text-primary);
+    font-size: 18px; font-weight: 600; margin-bottom: 20px; color: var(--blue-primary);
     display: flex; align-items: center; gap: 10px;
   }
   .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border-color); }
@@ -427,12 +408,12 @@
   .failover-step.completed {
     opacity: 1;
     border-color: var(--green-primary);
-    box-shadow: 0 0 12px rgba(16,185,129,0.1);
+    box-shadow: 0 0 12px rgba(67,160,71,0.1);
   }
   .failover-step.failed {
     opacity: 1;
     border-color: var(--red-primary);
-    box-shadow: 0 0 12px rgba(239,68,68,0.1);
+    box-shadow: 0 0 12px rgba(229,57,53,0.1);
   }
   .failover-step::before {
     content: '';
@@ -446,12 +427,12 @@
     border: 2px solid var(--bg-primary);
     z-index: 2;
   }
-  .failover-step.active::before { background: var(--cyan-primary); box-shadow: 0 0 8px rgba(6,182,212,0.5); }
+  .failover-step.active::before { background: var(--blue-primary); box-shadow: 0 0 8px rgba(30,136,229,0.4); }
   .failover-step.completed::before { background: var(--green-primary); }
   .failover-step.failed::before { background: var(--red-primary); }
 
   .failover-step-num {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'SF Mono', 'Fira Code', monospace;
     font-size: 10px;
     font-weight: 600;
     color: var(--text-muted);
@@ -473,11 +454,12 @@
   .failover-step-cmd {
     margin-top: 8px;
     padding: 8px 12px;
-    background: var(--bg-secondary);
+    background: #f0f7ff;
+    border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'SF Mono', 'Fira Code', monospace;
     font-size: 11px;
-    color: var(--cyan-light);
+    color: var(--blue-light);
     overflow-x: auto;
   }
 
@@ -500,8 +482,8 @@
     cursor: pointer;
     transition: all var(--transition);
   }
-  .fo-btn:hover { border-color: var(--cyan-primary); background: var(--bg-surface-hover); }
-  .fo-btn.active { border-color: var(--cyan-primary); color: var(--cyan-light); background: rgba(6,182,212,0.1); }
+  .fo-btn:hover { border-color: var(--blue-primary); background: var(--bg-surface-hover); }
+  .fo-btn.active { border-color: var(--blue-primary); color: var(--blue-primary); background: #e3f2fd; }
 
   /* ===== MONITORING STACK (Tab 4) ===== */
   .monitor-grid {
@@ -536,7 +518,7 @@
     font-weight: 600;
   }
   .monitor-card-port {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'SF Mono', 'Fira Code', monospace;
     font-size: 11px;
     color: var(--text-muted);
     margin-left: auto;
@@ -575,7 +557,7 @@
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'SF Mono', 'Fira Code', monospace;
     font-size: 11px;
     transition: all var(--transition);
   }
@@ -603,7 +585,7 @@
     border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow-x: auto;
   }
   .flow-step {
-    background: var(--bg-secondary); border: 1px solid var(--border-color);
+    background: #f0f7ff; border: 1px solid var(--border-color);
     border-radius: var(--radius-md); padding: 10px 14px; font-size: 12px;
     text-align: center; min-width: 100px; max-width: 160px; transition: all var(--transition);
   }
@@ -623,10 +605,10 @@
     font-size: 11px;
     font-weight: 600;
   }
-  .status-badge.active { background: rgba(16,185,129,0.15); color: var(--green-light); }
-  .status-badge.standby { background: rgba(245,158,11,0.15); color: var(--orange-light); }
-  .status-badge.coding { background: rgba(139,92,246,0.15); color: var(--purple-light); }
-  .status-badge.monitor { background: rgba(6,182,212,0.15); color: var(--cyan-light); }
+  .status-badge.active { background: #e8f5e9; color: var(--green-light); }
+  .status-badge.standby { background: #fff3e0; color: var(--orange-light); }
+  .status-badge.coding { background: #f3e5f5; color: var(--purple-light); }
+  .status-badge.monitor { background: #e0f7fa; color: var(--cyan-light); }
   .status-dot {
     width: 6px;
     height: 6px;
@@ -664,7 +646,7 @@
   <div class="header-content">
     <div>
       <h1>YAMIL <span>Infrastructure HA</span></h1>
-      <div class="header-subtitle">Active-Standby Architecture &middot; 5 Machines &middot; 192.168.0.x LAN &middot; Omada SDN</div>
+      <div class="header-subtitle">Active-Standby Architecture &middot; 5 Machines &middot; Consul HA Cluster &middot; LAN 192.168.0.x + IoT 192.168.2.x</div>
     </div>
     <div class="header-badge">High Availability &middot; Mar 2026</div>
   </div>
@@ -678,11 +660,12 @@
     <button class="tab-btn" onclick="switchTab('failover')">Failover Flow</button>
     <button class="tab-btn" onclick="switchTab('monitoring')">Monitoring Stack</button>
     <button class="tab-btn" onclick="switchTab('dataflow')">Data Flow</button>
+    <button class="tab-btn" onclick="switchTab('consul')">Consul Cluster</button>
   </div>
 
   <!-- ==================== TAB 1: NETWORK TOPOLOGY ==================== -->
   <div id="tab-topology" class="tab-content active">
-    <div class="section-title">Network Topology &mdash; 192.168.0.0/24</div>
+    <div class="section-title">Network Topology &mdash; LAN 192.168.0.0/24 &middot; IoT 192.168.2.0/24</div>
 
     <div class="topo-diagram" id="topoDiagram">
       <svg class="topo-svg" id="topoSvg"></svg>
@@ -691,17 +674,23 @@
       <div class="layer" id="layer-network">
         <div class="layer-label network">NETWORK</div>
         <div class="layer-nodes">
-          <div class="node cyan" id="node-router" data-tooltip="TP-Link Omada SDN router. Manages DHCP reservations, VLANs, firewall rules, and inter-VLAN routing for the entire 192.168.0.x subnet.">
+          <div class="node cyan" id="node-router" data-tooltip="Alta Labs Route10 router (OpenWrt 21.02.1, firmware 1.3z). Manages DHCP reservations, firewall rules, WireGuard VPN, and QCA NSS hardware acceleration. LAN zone: 192.168.0.0/24 (trusted). IoT zone: 192.168.2.0/24 (firewall-isolated, Bitdefender BOX on eth0). VPN zone: 10.0.0.0/24 (WireGuard). 2x 10G SFP+ + 4x 2.5G RJ45.">
             <div class="node-icon">&#x1F310;</div>
-            <div class="node-name">Omada SDN Router</div>
+            <div class="node-name">Alta Labs Route10</div>
             <div class="node-port">192.168.0.1</div>
-            <div class="node-desc">Gateway, DHCP, Firewall</div>
+            <div class="node-desc">Gateway, DHCP, Firewall, VPN</div>
           </div>
-          <div class="node cyan" id="node-switch" data-tooltip="Omada managed gigabit switch. All 5 machines are wired via Ethernet for maximum throughput and minimum latency.">
+          <div class="node cyan" id="node-switch" data-tooltip="TRENDnet TEG-3102WS core switch. 8x 2.5G RJ45 + 2x 10G SFP+. Connected to Route10 via 10G SFP+ DAC. All machines wired for maximum throughput.">
             <div class="node-icon">&#x1F504;</div>
-            <div class="node-name">Omada Managed Switch</div>
-            <div class="node-port">Gigabit &middot; All Wired</div>
-            <div class="node-desc">L2 switching, VLAN support</div>
+            <div class="node-name">TRENDnet TEG-3102WS</div>
+            <div class="node-port">10G SFP+ backbone &middot; 2.5G ports</div>
+            <div class="node-desc">Core switch, 192.168.0.1130</div>
+          </div>
+          <div class="node orange" id="node-bitdefender" data-tooltip="Bitdefender BOX IoT security gateway. Isolated on Route10 L1 (eth0) in its own firewall zone (192.168.2.0/24). Scans all IoT traffic for malware, botnet activity, and vulnerabilities. IoT devices behind it get internet only — cannot reach LAN (192.168.0.x). LAN can reach IoT for management.">
+            <div class="node-icon">&#x1F6E1;&#xFE0F;</div>
+            <div class="node-name">Bitdefender BOX</div>
+            <div class="node-port">192.168.2.10 (IoT zone)</div>
+            <div class="node-desc">IoT gateway, firewall-isolated</div>
           </div>
         </div>
       </div>
@@ -721,7 +710,7 @@
           <div class="node orange" id="node-geekom" data-tooltip="HA Secondary #1 (amd64). Same architecture and OS as primary Windows PC — can run identical Docker images without rebuild. Ryzen 9 8945HS 8C/16T, 32GB DDR5. Windows 11 Pro with Docker Desktop.">
             <div class="node-icon">&#x1F4BB;</div>
             <div class="node-name">GEEKOM A8 Max</div>
-            <div class="node-port">192.168.0.20</div>
+            <div class="node-port">192.168.0.113</div>
             <div class="node-tech">amd64 &middot; Ryzen 9 8945HS &middot; 32GB</div>
             <div class="node-desc">HA Secondary #1</div>
             <span class="status-badge standby"><span class="status-dot"></span>Standby</span>
@@ -729,7 +718,7 @@
           <div class="node pink" id="node-macmini" data-tooltip="HA Secondary #2 (arm64). Fallback if both Windows and GEEKOM are down. Requires image rebuild (arm64). Apple M4 10-core, 16GB unified memory. Docker data on 1TB external SSD.">
             <div class="node-icon">&#x1F5A5;&#xFE0F;</div>
             <div class="node-name">Mac Mini M4</div>
-            <div class="node-port">192.168.0.30</div>
+            <div class="node-port">192.168.0.119</div>
             <div class="node-tech">arm64 &middot; Apple M4 &middot; 16GB</div>
             <div class="node-desc">HA Secondary #2</div>
             <span class="status-badge standby"><span class="status-dot"></span>Standby</span>
@@ -744,7 +733,7 @@
           <div class="node purple" id="node-macbook" data-tooltip="Coding-only machine. Runs Claude Code, SSH into Docker hosts. No containers run locally. Uses Docker contexts to manage remote Docker daemons.">
             <div class="node-icon">&#x1F4BB;</div>
             <div class="node-name">MacBook Air M5</div>
-            <div class="node-port">192.168.0.40</div>
+            <div class="node-port">192.168.0.120</div>
             <div class="node-tech">arm64 &middot; Apple M5 &middot; 24GB</div>
             <div class="node-desc">Coding Only &middot; Claude Code</div>
             <span class="status-badge coding"><span class="status-dot"></span>Coding</span>
@@ -759,7 +748,7 @@
           <div class="node green" id="node-qnap" data-tooltip="Always-on monitoring and backup hub. Runs Grafana, Prometheus, Loki, Blackbox Exporter, ntfy. Stores database backups (pg_dump every 6h), secrets, git mirrors. QTS with Container Station.">
             <div class="node-icon">&#x1F4E6;</div>
             <div class="node-name">QNAP NAS</div>
-            <div class="node-port">192.168.0.1012</div>
+            <div class="node-port">192.168.0.102</div>
             <div class="node-tech">amd64 &middot; 4 cores &middot; 7.66GB</div>
             <div class="node-desc">Monitoring, Backups, Alerting</div>
             <span class="status-badge monitor"><span class="status-dot"></span>Monitoring</span>
@@ -802,6 +791,7 @@
             <li>All 3 project databases (Postgres)</li>
             <li>Vault, Redis, APISIX, Envoy</li>
             <li>Cloudflare tunnel endpoint</li>
+            <li>Consul client (frontend, docker, ollama, pg, redis)</li>
           </ul>
         </div>
       </div>
@@ -812,7 +802,7 @@
           <div class="card-icon orange">&#x1F4BB;</div>
           <div>
             <div class="card-title">GEEKOM A8 Max</div>
-            <div class="card-subtitle">HA Secondary #1 &middot; 192.168.0.20</div>
+            <div class="card-subtitle">HA Secondary #1 &middot; 192.168.0.113</div>
           </div>
         </div>
         <div class="card-body">
@@ -826,13 +816,15 @@
             <tr><td>OS</td><td>Windows 11 Pro</td></tr>
           </table>
           <div style="margin-top: 12px; font-size: 12px; color: var(--text-secondary);">
-            <strong style="color: var(--text-primary);">Why #1 priority:</strong>
+            <strong style="color: var(--green-light);">HA READY:</strong>
           </div>
           <ul>
-            <li>Same amd64 arch as Windows &mdash; no rebuild</li>
-            <li>32GB RAM handles all 3 projects</li>
-            <li>Ollama CPU inference (no GPU needed)</li>
-            <li>Needs: Docker Desktop + SSH setup</li>
+            <li>Same amd64 arch &mdash; no image rebuild</li>
+            <li>Docker Desktop v29.2.1, auto-start</li>
+            <li>All 3 project images pre-built</li>
+            <li>Ollama v0.18.2 (4 models)</li>
+            <li>Windows Exporter :9182, Portainer :9443</li>
+            <li>Consul client (docker, ollama, win-exp)</li>
           </ul>
         </div>
       </div>
@@ -843,7 +835,7 @@
           <div class="card-icon pink">&#x1F5A5;&#xFE0F;</div>
           <div>
             <div class="card-title">Mac Mini M4</div>
-            <div class="card-subtitle">HA Secondary #2 &middot; 192.168.0.30</div>
+            <div class="card-subtitle">HA Secondary #2 &middot; 192.168.0.119</div>
           </div>
         </div>
         <div class="card-body">
@@ -857,12 +849,14 @@
             <tr><td>OS</td><td>macOS Sequoia</td></tr>
           </table>
           <div style="margin-top: 12px; font-size: 12px; color: var(--text-secondary);">
-            <strong style="color: var(--text-primary);">Limitations:</strong>
+            <strong style="color: var(--text-primary);">Status:</strong>
           </div>
           <ul>
             <li>arm64 requires full image rebuild</li>
-            <li>16GB tight for all 3 projects</li>
-            <li>Docker data on external SSD</li>
+            <li>Docker data on external 1TB SSD</li>
+            <li>Ollama running (5 models)</li>
+            <li>node_exporter :9100, Portainer :9443</li>
+            <li>Consul client (docker, ollama, node-exp)</li>
             <li>Best for 1-2 projects at a time</li>
           </ul>
         </div>
@@ -874,7 +868,7 @@
           <div class="card-icon purple">&#x1F4BB;</div>
           <div>
             <div class="card-title">MacBook Air M5</div>
-            <div class="card-subtitle">Coding Only &middot; 192.168.0.40</div>
+            <div class="card-subtitle">Coding Only &middot; 192.168.0.120</div>
           </div>
         </div>
         <div class="card-body">
@@ -893,7 +887,8 @@
             <li>Claude Code + IDE only</li>
             <li>SSH into Docker hosts</li>
             <li>Docker contexts for remote mgmt</li>
-            <li>No containers run locally</li>
+            <li>YAMIL Browser (Electron, :9300)</li>
+            <li>Consul client (service discovery)</li>
           </ul>
         </div>
       </div>
@@ -904,7 +899,7 @@
           <div class="card-icon green">&#x1F4E6;</div>
           <div>
             <div class="card-title">QNAP NAS</div>
-            <div class="card-subtitle">Monitoring &amp; Backups &middot; 192.168.0.1012</div>
+            <div class="card-subtitle">Monitoring &amp; Backups &middot; 192.168.0.102</div>
           </div>
         </div>
         <div class="card-body">
@@ -917,15 +912,20 @@
             <tr><td>OS</td><td>QTS 5.x + Container Station</td></tr>
           </table>
           <div style="margin-top: 12px; font-size: 12px; color: var(--text-secondary);">
-            <strong style="color: var(--text-primary);">Services (~1GB RAM):</strong>
+            <strong style="color: var(--text-primary);">Services (~2.5GB RAM, 13 containers):</strong>
           </div>
           <ul>
-            <li>Grafana (dashboards + alerts)</li>
-            <li>Prometheus (metrics, 30d retention)</li>
-            <li>Loki (log aggregation)</li>
+            <li>Consul Server (HA orchestration, :8500)</li>
+            <li>Grafana (dashboards + alerts, :3000)</li>
+            <li>Prometheus (metrics, 90d retention, :9090)</li>
+            <li>Loki (log aggregation, :3100)</li>
             <li>Blackbox Exporter (uptime probes)</li>
-            <li>ntfy (phone push notifications)</li>
+            <li>Alertmanager + ntfy (phone alerts)</li>
             <li>pg_dump backups every 6 hours</li>
+            <li>Git mirror (5 repos, hourly)</li>
+            <li>Watchtower (auto-updates, daily 4am)</li>
+            <li>Cloudflare tunnel (external access)</li>
+            <li>Uptime Kuma (:3001)</li>
           </ul>
         </div>
       </div>
@@ -945,16 +945,16 @@
     <div class="failover-timeline" id="failoverTimeline">
       <div class="failover-step" id="fo-step-0" data-delay="0">
         <div class="failover-step-num">Step 0 &mdash; Detection</div>
-        <div class="failover-step-title">&#x1F6A8; QNAP detects Windows PC is DOWN</div>
-        <div class="failover-step-desc">Prometheus blackbox probe fails for 192.168.0.101. After 2 minutes of continuous failure, Grafana fires <code>PrimaryDockerHostDown</code> alert. ntfy sends push notification to phone.</div>
-        <div class="failover-step-cmd">alert: PrimaryDockerHostDown (severity: critical)</div>
+        <div class="failover-step-title">&#x1F6A8; Consul detects Windows PC is DOWN</div>
+        <div class="failover-step-desc">Consul health checks fail for <code>yamil-frontend</code> on the primary node (windows-pc). After 30s, service goes critical. Consul watch handler triggers on QNAP. ntfy sends urgent push notification.</div>
+        <div class="failover-step-cmd">consul watch: yamil-frontend → critical → failover-handler.sh</div>
       </div>
 
       <div class="failover-step" id="fo-step-1" data-delay="800">
         <div class="failover-step-num">Step 1 &mdash; Verify Standby</div>
-        <div class="failover-step-title">&#x2705; Verify GEEKOM is reachable</div>
-        <div class="failover-step-desc">SSH into GEEKOM to confirm it's online and Docker is running. If GEEKOM is also down, fall through to Mac Mini.</div>
-        <div class="failover-step-cmd">ssh geekom "docker ps" &amp;&amp; echo "GEEKOM is UP"</div>
+        <div class="failover-step-title">&#x2705; Consul picks failover target</div>
+        <div class="failover-step-desc">Failover handler queries Consul health API. Prefers GEEKOM (amd64, same arch). If GEEKOM node is also unhealthy, falls through to Mac Mini. Records target in KV store.</div>
+        <div class="failover-step-cmd">curl consul:8500/v1/health/node/geekom → passing → TARGET=geekom</div>
       </div>
 
       <div class="failover-step" id="fo-step-2" data-delay="1600">
@@ -968,7 +968,7 @@
         <div class="failover-step-num">Step 3 &mdash; Restore Secrets</div>
         <div class="failover-step-title">&#x1F511; Copy latest secrets from QNAP</div>
         <div class="failover-step-desc">SCP the .env, .env.secrets, and .env.prod files from QNAP NAS dev-transfer share to GEEKOM. These are synced hourly from the active host.</div>
-        <div class="failover-step-cmd">scp admin@192.168.0.1012:/share/dev-transfer/dot-env* ~/project/...</div>
+        <div class="failover-step-cmd">scp admin@192.168.0.102:/share/dev-transfer/dot-env* ~/project/...</div>
       </div>
 
       <div class="failover-step" id="fo-step-4" data-delay="3200">
@@ -995,22 +995,22 @@
       <div class="failover-step" id="fo-step-7" data-delay="5600">
         <div class="failover-step-num">Step 7 &mdash; Update Monitoring</div>
         <div class="failover-step-title">&#x1F4CA; Redirect QNAP backups to GEEKOM</div>
-        <div class="failover-step-desc">Update the ACTIVE_HOST variable in QNAP's db-backup container so future pg_dumps target GEEKOM (192.168.0.20) instead of Windows (192.168.0.101).</div>
-        <div class="failover-step-cmd">ACTIVE_HOST=192.168.0.20 &rarr; docker compose restart db-backup</div>
+        <div class="failover-step-desc">Update the ACTIVE_HOST variable in QNAP's db-backup container so future pg_dumps target GEEKOM (192.168.0.113) instead of Windows (192.168.0.101).</div>
+        <div class="failover-step-cmd">ACTIVE_HOST=192.168.0.113 &rarr; docker compose restart db-backup</div>
       </div>
 
       <div class="failover-step" id="fo-step-8" data-delay="6400">
         <div class="failover-step-num">Step 8 &mdash; Verify</div>
         <div class="failover-step-title">&#x2705; Confirm all services are healthy</div>
         <div class="failover-step-desc">Run health checks on all endpoints. Verify Grafana shows GEEKOM containers as UP. Total failover time: ~3 minutes.</div>
-        <div class="failover-step-cmd">curl http://192.168.0.20:9080 &amp;&amp; echo "Failover complete!"</div>
+        <div class="failover-step-cmd">curl http://192.168.0.113:9080 &amp;&amp; echo "Failover complete!"</div>
       </div>
     </div>
   </div>
 
   <!-- ==================== TAB 4: MONITORING STACK ==================== -->
   <div id="tab-monitoring" class="tab-content">
-    <div class="section-title">QNAP Monitoring Stack (192.168.0.1012)</div>
+    <div class="section-title">QNAP Monitoring Stack (192.168.0.102)</div>
 
     <div class="monitor-grid">
       <div class="monitor-card">
@@ -1031,7 +1031,7 @@
           <div class="monitor-card-port">:9090</div>
         </div>
         <div class="monitor-card-desc">
-          Metrics collection engine. Scrapes all Docker hosts every 15 seconds. Stores 30 days of time-series data. Targets include Docker daemon metrics (:9323), node_exporter (:9100), and blackbox probes.
+          Metrics collection engine. Scrapes 34 targets every 15-30 seconds. Stores 90 days of time-series data. Targets include Docker daemon metrics (:9323), node/Windows exporters (:9100/:9182), blackbox HTTP/TCP probes, and 5 alert rules via Alertmanager.
         </div>
       </div>
 
@@ -1061,10 +1061,65 @@
         <div class="monitor-card-header">
           <div class="monitor-card-icon">&#x1F514;</div>
           <div class="monitor-card-name">ntfy</div>
-          <div class="monitor-card-port">:9999</div>
+          <div class="monitor-card-port">:8090</div>
         </div>
         <div class="monitor-card-desc">
           Self-hosted push notification server. Grafana alerts POST to ntfy, which pushes notifications to your phone. Subscribe to the <code>yamil-alerts</code> topic in the ntfy app.
+        </div>
+      </div>
+
+      <div class="monitor-card">
+        <div class="monitor-card-header">
+          <div class="monitor-card-icon">&#x1F3DB;&#xFE0F;</div>
+          <div class="monitor-card-name">Consul Server</div>
+          <div class="monitor-card-port">:8500</div>
+        </div>
+        <div class="monitor-card-desc">
+          HA orchestration. Server on QNAP with clients on each machine. Health checks every 10-15s on all services. Watches trigger failover scripts. KV store tracks active node. DNS on :8600 resolves <code>*.service.consul</code> to healthy nodes.
+        </div>
+      </div>
+
+      <div class="monitor-card">
+        <div class="monitor-card-header">
+          <div class="monitor-card-icon">&#x1F504;</div>
+          <div class="monitor-card-name">Git Mirror</div>
+          <div class="monitor-card-port">cron / 1h</div>
+        </div>
+        <div class="monitor-card-desc">
+          Bare mirror clones of all 5 GitHub repos (parser_lite, FlashCards, ai-bot, Ai-Tools, yamil-browser). Fetches every hour using GitHub PAT. Ensures code is available even if GitHub is unreachable.
+        </div>
+      </div>
+
+      <div class="monitor-card">
+        <div class="monitor-card-header">
+          <div class="monitor-card-icon">&#x1F440;</div>
+          <div class="monitor-card-name">Watchtower</div>
+          <div class="monitor-card-port">daily 4am</div>
+        </div>
+        <div class="monitor-card-desc">
+          Auto-updates all container images daily at 4am. Pulls latest tags, recreates containers, removes old images. Sends notifications to ntfy when updates are applied.
+        </div>
+      </div>
+
+      <div class="monitor-card">
+        <div class="monitor-card-header">
+          <div class="monitor-card-icon">&#x2601;&#xFE0F;</div>
+          <div class="monitor-card-name">Cloudflared</div>
+          <div class="monitor-card-port">tunnel</div>
+        </div>
+        <div class="monitor-card-desc">
+          Cloudflare tunnel for external access. Routes <code>grafana.yamil-ai.com</code> to Grafana and <code>ntfy.yamil-ai.com</code> to ntfy. Uses Docker service names for routing.
+        </div>
+      </div>
+
+      <div class="monitor-card">
+        <div class="monitor-card-header">
+          <div class="monitor-card-icon">&#x2705;</div>
+          <div class="monitor-card-name">Uptime Kuma</div>
+          <div class="monitor-card-port">:3001</div>
+        </div>
+        <div class="monitor-card-desc">
+          Lightweight uptime monitoring with web dashboard. Alternative view alongside Blackbox/Prometheus. Monitors internal and external endpoints with status pages.
         </div>
       </div>
 
@@ -1105,9 +1160,8 @@
           GEEKOM (HA Secondary #1)
         </div>
         <div class="target-list">
-          <div class="target-item"><span class="target-dot orange"></span>192.168.0.20:9323 <span style="color:var(--text-muted)">docker</span></div>
-          <div class="target-item"><span class="target-dot orange"></span>192.168.0.20:9100 <span style="color:var(--text-muted)">node</span></div>
-          <div class="target-item"><span class="target-dot orange"></span>192.168.0.20:22 <span style="color:var(--text-muted)">ssh</span></div>
+          <div class="target-item"><span class="target-dot orange"></span>192.168.0.113:9323 <span style="color:var(--text-muted)">docker</span></div>
+          <div class="target-item"><span class="target-dot orange"></span>192.168.0.113:9182 <span style="color:var(--text-muted)">windows-exp</span></div>
         </div>
       </div>
 
@@ -1117,9 +1171,8 @@
           Mac Mini (HA Secondary #2)
         </div>
         <div class="target-list">
-          <div class="target-item"><span class="target-dot blue"></span>192.168.0.30:9323 <span style="color:var(--text-muted)">docker</span></div>
-          <div class="target-item"><span class="target-dot blue"></span>192.168.0.30:9100 <span style="color:var(--text-muted)">node</span></div>
-          <div class="target-item"><span class="target-dot blue"></span>192.168.0.30:22 <span style="color:var(--text-muted)">ssh</span></div>
+          <div class="target-item"><span class="target-dot blue"></span>192.168.0.119:9323 <span style="color:var(--text-muted)">docker</span></div>
+          <div class="target-item"><span class="target-dot blue"></span>192.168.0.119:9100 <span style="color:var(--text-muted)">node-exp</span></div>
         </div>
       </div>
     </div>
@@ -1404,6 +1457,310 @@
         </div>
       </div>
     </div>
+
+    <!-- Flow 7: Consul Health & Failover -->
+    <div class="flow-section">
+      <div class="flow-title">
+        <div class="flow-num" style="background: rgba(124,58,237,0.15); color: var(--purple-light);">7</div>
+        Consul Health &amp; Failover (every 10-15s)
+      </div>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F5A5;&#xFE0F;</div>
+          <div class="flow-step-label">Service Checks</div>
+          <div class="flow-step-detail">HTTP/TCP every 10-15s</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F3DB;&#xFE0F;</div>
+          <div class="flow-step-label">Consul Server</div>
+          <div class="flow-step-detail">QNAP :8500</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F50D;</div>
+          <div class="flow-step-label">Watch Handler</div>
+          <div class="flow-step-detail">failover-handler.sh</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F511;</div>
+          <div class="flow-step-label">KV Store</div>
+          <div class="flow-step-detail">active-node state</div>
+        </div>
+        <div class="flow-arrow-sep">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-step-icon">&#x1F514;</div>
+          <div class="flow-step-label">ntfy Alert</div>
+          <div class="flow-step-detail">Phone push</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 6: CONSUL CLUSTER ==================== -->
+  <div id="tab-consul" class="tab-content">
+    <div class="section-title">Consul HA Cluster &mdash; Service Discovery &amp; Failover Orchestration</div>
+
+    <!-- Cluster Members -->
+    <div style="margin-bottom: 28px;">
+      <div style="font-size: 15px; font-weight: 600; margin-bottom: 14px; color: var(--text-primary);">Cluster Members</div>
+      <div class="cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
+        <div class="card" style="border-left: 3px solid var(--green-primary);">
+          <div class="card-header">
+            <div class="card-icon green">&#x1F3DB;&#xFE0F;</div>
+            <div>
+              <div class="card-title">qnap</div>
+              <div class="card-subtitle">SERVER &middot; 192.168.0.102</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <span class="status-badge active"><span class="status-dot"></span>Leader</span>
+            <table class="spec-table">
+              <tr><td>Role</td><td>Server (bootstrap)</td></tr>
+              <tr><td>Version</td><td>1.22.5</td></tr>
+              <tr><td>Datacenter</td><td>homelab</td></tr>
+              <tr><td>UI</td><td>:8500/ui/</td></tr>
+              <tr><td>DNS</td><td>:8600 (TCP+UDP)</td></tr>
+              <tr><td>Runs as</td><td>Docker container</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="border-left: 3px solid var(--purple-primary);">
+          <div class="card-header">
+            <div class="card-icon purple">&#x1F4BB;</div>
+            <div>
+              <div class="card-title">macbook</div>
+              <div class="card-subtitle">CLIENT &middot; 192.168.0.120</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <span class="status-badge active"><span class="status-dot"></span>Alive</span>
+            <table class="spec-table">
+              <tr><td>Role</td><td>Client</td></tr>
+              <tr><td>Version</td><td>1.22.5</td></tr>
+              <tr><td>Runs as</td><td>LaunchAgent</td></tr>
+              <tr><td>Config</td><td>~/consul/config/</td></tr>
+              <tr><td>Services</td><td>yamil-browser</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="border-left: 3px solid var(--pink-primary);">
+          <div class="card-header">
+            <div class="card-icon pink">&#x1F5A5;&#xFE0F;</div>
+            <div>
+              <div class="card-title">macmini</div>
+              <div class="card-subtitle">CLIENT &middot; 192.168.0.119</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <span class="status-badge active"><span class="status-dot"></span>Alive</span>
+            <table class="spec-table">
+              <tr><td>Role</td><td>Client</td></tr>
+              <tr><td>Version</td><td>1.22.5</td></tr>
+              <tr><td>Runs as</td><td>LaunchDaemon</td></tr>
+              <tr><td>Config</td><td>~/consul/config/</td></tr>
+              <tr><td>Services</td><td>docker, ollama, node-exp</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="border-left: 3px solid var(--orange-primary);">
+          <div class="card-header">
+            <div class="card-icon orange">&#x1F4BB;</div>
+            <div>
+              <div class="card-title">geekom</div>
+              <div class="card-subtitle">CLIENT &middot; 192.168.0.113</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <span class="status-badge active"><span class="status-dot"></span>Alive</span>
+            <table class="spec-table">
+              <tr><td>Role</td><td>Client</td></tr>
+              <tr><td>Version</td><td>1.22.5</td></tr>
+              <tr><td>Runs as</td><td>Windows Service (sc)</td></tr>
+              <tr><td>Config</td><td>C:\Users\yvele\consul\config\</td></tr>
+              <tr><td>Services</td><td>docker, ollama, windows-exp</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="border-left: 3px solid var(--blue-primary);">
+          <div class="card-header">
+            <div class="card-icon blue">&#x1F5A5;&#xFE0F;</div>
+            <div>
+              <div class="card-title">windows-pc</div>
+              <div class="card-subtitle">CLIENT &middot; 192.168.0.101</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <span class="status-badge active"><span class="status-dot"></span>Alive</span>
+            <table class="spec-table">
+              <tr><td>Role</td><td>Client</td></tr>
+              <tr><td>Version</td><td>1.22.5</td></tr>
+              <tr><td>Runs as</td><td>Windows Service (sc)</td></tr>
+              <tr><td>Config</td><td>C:\Users\yvele\consul\config\</td></tr>
+              <tr><td>Services</td><td>yamil-frontend, docker, ollama, postgres, redis</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Registered Services -->
+    <div style="margin-bottom: 28px;">
+      <div style="font-size: 15px; font-weight: 600; margin-bottom: 14px; color: var(--text-primary);">Registered Services &amp; Health Checks</div>
+      <div class="cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon blue">&#x1F3AF;</div>
+            <div>
+              <div class="card-title">yamil-frontend</div>
+              <div class="card-subtitle">HTTP check &middot; :9080/envoy-health &middot; 15s</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <span class="status-badge active"><span class="status-dot"></span>windows-pc: passing</span>
+            <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">Primary Y.A.M.I.L production frontend. Critical service for HA failover trigger.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon green">&#x1F504;</div>
+            <div>
+              <div class="card-title">docker-engine</div>
+              <div class="card-subtitle">HTTP check &middot; :9323/metrics &middot; 15s</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <span class="status-badge active"><span class="status-dot"></span>macmini: passing</span>
+            <span class="status-badge active" style="margin-left: 4px;"><span class="status-dot"></span>geekom: passing</span>
+            <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">Docker daemon metrics endpoint. Registered on macmini, geekom, and windows-pc.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon cyan">&#x1F916;</div>
+            <div>
+              <div class="card-title">ollama</div>
+              <div class="card-subtitle">HTTP check &middot; :11434/api/tags &middot; 30s</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <span class="status-badge active"><span class="status-dot"></span>macmini: passing</span>
+            <span class="status-badge active" style="margin-left: 4px;"><span class="status-dot"></span>geekom: passing</span>
+            <span class="status-badge active" style="margin-left: 4px;"><span class="status-dot"></span>windows-pc: passing</span>
+            <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">Ollama LLM inference server. Running on 3 machines for AI redundancy.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon blue">&#x1F4CA;</div>
+            <div>
+              <div class="card-title">node-exporter</div>
+              <div class="card-subtitle">HTTP check &middot; :9100/metrics &middot; 30s</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <span class="status-badge active"><span class="status-dot"></span>macmini: passing</span>
+            <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">Prometheus node exporter. System metrics (CPU, RAM, disk, network).</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon orange">&#x1F4CA;</div>
+            <div>
+              <div class="card-title">windows-exporter</div>
+              <div class="card-subtitle">HTTP check &middot; :9182/metrics &middot; 30s</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <span class="status-badge active"><span class="status-dot"></span>geekom: passing</span>
+            <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">Prometheus Windows exporter. Windows-specific system metrics.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon purple">&#x1F310;</div>
+            <div>
+              <div class="card-title">yamil-browser</div>
+              <div class="card-subtitle">HTTP check &middot; :9300/ping &middot; 15s</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <span class="status-badge active"><span class="status-dot"></span>macbook: passing</span>
+            <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">YAMIL Browser Electron app control API. Used by Claude Code MCP tools.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon teal">&#x1F5C4;&#xFE0F;</div>
+            <div>
+              <div class="card-title">postgres</div>
+              <div class="card-subtitle">TCP check &middot; :5432 &middot; 15s</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <span class="status-badge active"><span class="status-dot"></span>windows-pc: passing</span>
+            <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">PostgreSQL database. Primary data store for Y.A.M.I.L services.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon pink">&#x26A1;</div>
+            <div>
+              <div class="card-title">redis</div>
+              <div class="card-subtitle">TCP check &middot; :6379 &middot; 15s</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <span class="status-badge active"><span class="status-dot"></span>windows-pc: passing</span>
+            <div style="margin-top: 6px; font-size: 12px; color: var(--text-secondary);">Redis cache/message broker. Session store and pub/sub for Y.A.M.I.L.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KV Store -->
+    <div style="margin-bottom: 28px;">
+      <div style="font-size: 15px; font-weight: 600; margin-bottom: 14px; color: var(--text-primary);">KV Store &mdash; Failover State</div>
+      <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px;">
+        <div style="display: grid; grid-template-columns: 200px 1fr; gap: 8px 20px;">
+          <div style="color: var(--text-muted);">failover/active-node</div>
+          <div style="color: var(--green-light); font-weight: 600;">windows-pc</div>
+          <div style="color: var(--text-muted);">failover/last-failover</div>
+          <div style="color: var(--text-secondary);">none</div>
+          <div style="color: var(--text-muted);">failover/previous-node</div>
+          <div style="color: var(--text-secondary);">none</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DNS Resolution -->
+    <div>
+      <div style="font-size: 15px; font-weight: 600; margin-bottom: 14px; color: var(--text-primary);">DNS Resolution (port 8600)</div>
+      <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; line-height: 2;">
+        <div><span style="color: var(--text-muted);">$ dig @192.168.0.102 -p 8600</span> <span style="color: var(--blue-primary);">yamil-frontend</span><span style="color: var(--text-muted);">.service.consul +short</span></div>
+        <div style="color: var(--green-light); padding-left: 20px;">192.168.0.101 <span style="color: var(--text-muted); font-size: 11px;">(windows-pc)</span></div>
+        <div style="margin-top: 4px;"><span style="color: var(--text-muted);">$ dig @192.168.0.102 -p 8600</span> <span style="color: var(--blue-primary);">docker-engine</span><span style="color: var(--text-muted);">.service.consul +short</span></div>
+        <div style="color: var(--green-light); padding-left: 20px;">192.168.0.119 <span style="color: var(--text-muted); font-size: 11px;">(macmini)</span> 192.168.0.113 <span style="color: var(--text-muted); font-size: 11px;">(geekom)</span> 192.168.0.101 <span style="color: var(--text-muted); font-size: 11px;">(windows-pc)</span></div>
+        <div style="margin-top: 4px;"><span style="color: var(--text-muted);">$ dig @192.168.0.102 -p 8600</span> <span style="color: var(--blue-primary);">ollama</span><span style="color: var(--text-muted);">.service.consul +short</span></div>
+        <div style="color: var(--green-light); padding-left: 20px;">192.168.0.119 <span style="color: var(--text-muted); font-size: 11px;">(macmini)</span> 192.168.0.113 <span style="color: var(--text-muted); font-size: 11px;">(geekom)</span> 192.168.0.101 <span style="color: var(--text-muted); font-size: 11px;">(windows-pc)</span></div>
+        <div style="margin-top: 4px;"><span style="color: var(--text-muted);">$ dig @192.168.0.102 -p 8600</span> <span style="color: var(--blue-primary);">yamil-browser</span><span style="color: var(--text-muted);">.service.consul +short</span></div>
+        <div style="color: var(--green-light); padding-left: 20px;">192.168.0.120 <span style="color: var(--text-muted); font-size: 11px;">(macbook)</span></div>
+        <div style="margin-top: 4px;"><span style="color: var(--text-muted);">$ dig @192.168.0.102 -p 8600</span> <span style="color: var(--blue-primary);">postgres</span><span style="color: var(--text-muted);">.service.consul +short</span></div>
+        <div style="color: var(--green-light); padding-left: 20px;">192.168.0.101 <span style="color: var(--text-muted); font-size: 11px;">(windows-pc)</span></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1418,7 +1775,7 @@
   'use strict';
 
   // ===== TAB SWITCHING =====
-  var tabOrder = ['topology','machines','failover','monitoring','dataflow'];
+  var tabOrder = ['topology','machines','failover','monitoring','dataflow','consul'];
 
   window.switchTab = function(tabId) {
     document.querySelectorAll('.tab-content').forEach(function(el) { el.classList.remove('active'); });

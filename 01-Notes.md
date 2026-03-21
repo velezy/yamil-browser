@@ -376,3 +376,22 @@
   access.
 
   Want me to generate a QR code you can scan from the app instead of typing it manually?
+
+
+
+
+
+
+  redesign this,  the ask queston is a general place for students to go and do homework the ai  and ask questions about any  
+  subject has nothing to do with   flash card,  the information the agentic rag  gather in flash, exam/test and study guide   
+  and homework, the ai should be able compartize  in  homework,  in this section the ai can search the web, and learn more    
+  on subjects that is after its training,  like drive sentinel, it should know college math and college science   
+
+
+  ❯ example a study can paste a pdf and the ai will read it but also be able to ask questions to the student   
+
+
+
+  ⏺ Good point — the exam should be scoped by date range and subject. If a student studied calculus for 3 weeks and the final   
+  only covers weeks 2-3, they need to filter by those dates. And the My Subjects tab should show sessions organized by date   
+  too. Let me update both tabs.   

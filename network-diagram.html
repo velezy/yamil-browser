@@ -10,27 +10,27 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg-primary: #0f1117;
-    --bg-secondary: #161822;
-    --bg-surface: #1c1f2e;
-    --bg-surface-hover: #242840;
-    --border-color: #2a2d3e;
-    --border-hover: #3d4160;
-    --text-primary: #e4e6f0;
-    --text-secondary: #8b8fa8;
-    --text-muted: #5e6278;
-    --purple: #8b5cf6; --purple-light: #a78bfa; --purple-bg: rgba(139,92,246,0.12);
-    --blue: #3b82f6; --blue-light: #60a5fa; --blue-bg: rgba(59,130,246,0.12);
-    --green: #10b981; --green-light: #34d399; --green-bg: rgba(16,185,129,0.12);
-    --orange: #f59e0b; --orange-light: #fbbf24; --orange-bg: rgba(245,158,11,0.12);
-    --cyan: #06b6d4; --cyan-light: #22d3ee; --cyan-bg: rgba(6,182,212,0.12);
-    --pink: #ec4899; --pink-light: #f472b6; --pink-bg: rgba(236,72,153,0.12);
-    --red: #ef4444; --red-light: #f87171; --red-bg: rgba(239,68,68,0.12);
-    --teal: #14b8a6; --teal-light: #2dd4bf; --teal-bg: rgba(20,184,166,0.12);
-    --yellow: #eab308; --yellow-light: #facc15; --yellow-bg: rgba(234,179,8,0.12);
+    --bg-primary: #f0f7ff;
+    --bg-secondary: #e3f0fc;
+    --bg-surface: #fff;
+    --bg-surface-hover: #f8fbff;
+    --border-color: #d0e4f7;
+    --border-hover: #90c2f0;
+    --text-primary: #1a2a3a;
+    --text-secondary: #6b8299;
+    --text-muted: #90b4d4;
+    --purple: #7c3aed; --purple-light: #6d28d9; --purple-bg: #f3e5f5;
+    --blue: #1e88e5; --blue-light: #1565c0; --blue-bg: #e3f2fd;
+    --green: #43a047; --green-light: #2e7d32; --green-bg: #e8f5e9;
+    --orange: #ef6c00; --orange-light: #e65100; --orange-bg: #fff3e0;
+    --cyan: #0097a7; --cyan-light: #00838f; --cyan-bg: #e0f7fa;
+    --pink: #d81b60; --pink-light: #ad1457; --pink-bg: #fce4ec;
+    --red: #e53935; --red-light: #c62828; --red-bg: #ffebee;
+    --teal: #00897b; --teal-light: #00695c; --teal-bg: #e0f2f1;
+    --yellow: #f9a825; --yellow-light: #f57f17; --yellow-bg: #fffde7;
     --radius-sm: 6px; --radius-md: 10px; --radius-lg: 16px;
-    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-    --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
     --transition: 0.2s ease;
   }
 
@@ -44,34 +44,29 @@
 
   /* HEADER */
   .header {
-    background: linear-gradient(135deg, #0e7490 0%, #0369a1 40%, #1d4ed8 70%, #6d28d9 100%);
+    background: linear-gradient(135deg, #1e88e5, #42a5f5);
     padding: 28px 40px;
     position: relative;
     overflow: hidden;
   }
-  .header::before {
-    content: '';
-    position: absolute; inset: 0;
-    background: repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(255,255,255,0.03) 60px, rgba(255,255,255,0.03) 61px),
-                repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(255,255,255,0.03) 60px, rgba(255,255,255,0.03) 61px);
-  }
+  .header::before { display: none; }
   .header-content {
     position: relative; z-index: 1; max-width: 1500px; margin: 0 auto;
     display: flex; align-items: center; justify-content: space-between;
   }
   .header h1 { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
-  .header h1 span { opacity: 0.85; font-weight: 400; }
-  .header-sub { font-size: 13px; color: rgba(255,255,255,0.7); margin-top: 4px; }
+  .header h1 span { opacity: 0.9; font-weight: 400; }
+  .header-sub { font-size: 13px; color: rgba(255,255,255,0.85); margin-top: 4px; }
   .header-badge {
-    background: rgba(255,255,255,0.15); backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.3);
     padding: 6px 16px; border-radius: 20px; font-size: 13px; color: #fff; font-weight: 500;
   }
   .header-stats {
     display: flex; gap: 20px; margin-top: 10px;
   }
   .header-stat {
-    font-size: 12px; color: rgba(255,255,255,0.8);
+    font-size: 12px; color: rgba(255,255,255,0.85);
   }
   .header-stat strong {
     color: #fff; font-size: 16px; display: block;
@@ -91,14 +86,14 @@
     white-space: nowrap; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   }
   .tab-btn:hover { color: var(--text-primary); background: var(--bg-surface); }
-  .tab-btn.active { color: var(--cyan-light); border-bottom-color: var(--cyan); background: var(--bg-surface); }
+  .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); background: var(--bg-surface); }
   .tab-content { display: none; padding: 28px 0 40px; animation: fadeIn 0.3s ease; }
   .tab-content.active { display: block; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
 
   /* SECTION TITLE */
   .section-title {
-    font-size: 17px; font-weight: 600; margin-bottom: 20px;
+    font-size: 17px; font-weight: 600; margin-bottom: 20px; color: var(--blue);
     display: flex; align-items: center; gap: 10px;
   }
   .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border-color); }
@@ -109,7 +104,7 @@
     border: 1.5px dashed var(--border-color);
     border-radius: var(--radius-lg);
     padding: 18px 20px 18px 54px;
-    background: rgba(22,24,34,0.5);
+    background: rgba(227,240,252,0.4);
     position: relative;
   }
   .flow-layer-label {
@@ -150,7 +145,7 @@
 
   .port-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
   .port-table td {
-    padding: 3px 8px; font-size: 11px; border-bottom: 1px solid rgba(42,45,62,0.3);
+    padding: 3px 8px; font-size: 11px; border-bottom: 1px solid #e8f0f8;
   }
   .port-table td:first-child {
     font-family: 'JetBrains Mono', monospace; font-size: 10px;
@@ -179,10 +174,10 @@
     display: inline-block; padding: 2px 8px; border-radius: 8px;
     font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600;
   }
-  .speed-badge.g10 { background: rgba(236,72,153,0.15); color: var(--pink-light); }
-  .speed-badge.g25 { background: rgba(139,92,246,0.15); color: var(--purple-light); }
-  .speed-badge.g1 { background: rgba(59,130,246,0.15); color: var(--blue-light); }
-  .speed-badge.wifi { background: rgba(20,184,166,0.15); color: var(--teal-light); }
+  .speed-badge.g10 { background: var(--pink-bg); color: var(--pink-light); }
+  .speed-badge.g25 { background: var(--purple-bg); color: var(--purple-light); }
+  .speed-badge.g1 { background: var(--blue-bg); color: var(--blue-light); }
+  .speed-badge.wifi { background: var(--teal-bg); color: var(--teal-light); }
 
   /* SWITCH DIAGRAM */
   .switch-visual {
@@ -204,7 +199,7 @@
   .switch-port:hover { border-color: var(--border-hover); box-shadow: var(--shadow-md); transform: translateY(-3px); }
   .switch-port.active { border-color: var(--green); }
   .switch-port.empty { opacity: 0.4; border-style: dashed; }
-  .switch-port.sfp { border-color: var(--pink); background: rgba(236,72,153,0.05); }
+  .switch-port.sfp { border-color: var(--pink); background: var(--pink-bg); }
   .switch-port .port-num {
     font-family: 'JetBrains Mono', monospace; font-size: 10px;
     font-weight: 700; color: var(--text-muted); margin-bottom: 4px;
@@ -227,11 +222,11 @@
   .status-card .label { font-size: 11px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
   .status-card .value { font-size: 28px; font-weight: 700; margin: 4px 0; }
   .status-card .detail { font-size: 12px; color: var(--text-secondary); }
-  .status-card.green .value { color: var(--green-light); }
-  .status-card.blue .value { color: var(--blue-light); }
-  .status-card.purple .value { color: var(--purple-light); }
-  .status-card.orange .value { color: var(--orange-light); }
-  .status-card.cyan .value { color: var(--cyan-light); }
+  .status-card.green .value { color: var(--green); }
+  .status-card.blue .value { color: var(--blue); }
+  .status-card.purple .value { color: var(--purple); }
+  .status-card.orange .value { color: var(--orange); }
+  .status-card.cyan .value { color: var(--cyan); }
 
   /* CONTAINER GRID */
   .container-grid {
@@ -246,7 +241,7 @@
   .app-card:hover { border-color: var(--border-hover); box-shadow: var(--shadow-md); }
   .app-card-header {
     padding: 16px 18px; display: flex; align-items: center; gap: 12px;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color); background: linear-gradient(135deg, #e3f2fd, #bbdefb);
   }
   .app-card-icon {
     width: 38px; height: 38px; border-radius: var(--radius-md);
@@ -282,7 +277,7 @@
 
   .svc-group-label {
     font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
-    color: var(--text-muted); padding: 8px 0 4px; border-top: 1px solid rgba(42,45,62,0.5);
+    color: var(--text-muted); padding: 8px 0 4px; border-top: 1px solid #e8f0f8;
     margin-top: 6px;
   }
   .svc-group-label:first-child { border-top: none; margin-top: 0; }
@@ -329,7 +324,7 @@
         <div class="header-stat"><strong>1.5 / 2.3 Gbps</strong>Down / Up</div>
         <div class="header-stat"><strong>15 devices</strong>On network</div>
         <div class="header-stat"><strong>2 VPN peers</strong>WireGuard</div>
-        <div class="header-stat"><strong>10G backbone</strong>SFP+ DAC (pending)</div>
+        <div class="header-stat"><strong>10G backbone</strong>SFP+ DAC (active)</div>
       </div>
     </div>
     <div class="header-badge">AI-Managed &middot; Mar 2026</div>
@@ -347,13 +342,13 @@
 
   <!-- ==================== TAB 1: NETWORK TOPOLOGY ==================== -->
   <div id="tab-topology" class="tab-content active">
-    <div class="section-title">Physical Network Topology &mdash; Current as of 2026-03-16</div>
+    <div class="section-title">Physical Network Topology &mdash; Current as of 2026-03-20</div>
 
     <div class="flow-diagram">
 
       <!-- WAN / ISP LAYER -->
       <div class="flow-layer" style="border-color: var(--cyan);">
-        <div class="flow-layer-label" style="color: var(--cyan-light);">WAN</div>
+        <div class="flow-layer-label" style="color: var(--cyan);">WAN</div>
         <div class="flow-row">
           <div class="flow-box" style="border-left: 3px solid var(--cyan);">
             <div class="name">Verizon Fios 2 Gbps</div>
@@ -364,14 +359,14 @@
           <div class="flow-box" style="border-left: 3px solid var(--cyan);">
             <div class="name">Verizon CR1000A</div>
             <div class="ip">192.168.1.1</div>
-            <div class="desc">WiFi active &middot; NOT in bridge mode (Phase 18)</div>
+            <div class="desc">BRIDGE MODE &mdash; transparent passthrough, no NAT</div>
             <div class="port">10GE WAN &middot; 4x 1G LAN &middot; WiFi 6E</div>
-            <span class="badge warn" style="margin-top: 6px;"><span class="badge-dot"></span>Double NAT</span>
+            <span class="badge up" style="margin-top: 6px;"><span class="badge-dot"></span>Bridge Mode</span>
           </div>
           <div class="flow-arrow">&rarr;</div>
           <div class="flow-box" style="border-left: 3px solid var(--orange); min-width: 200px;">
             <div class="name" style="font-size: 15px;">Alta Labs Route10</div>
-            <div class="ip">WAN: 192.168.1.227 (DHCP)</div>
+            <div class="ip">WAN: 70.111.193.92 (Public IP via DHCP)</div>
             <div class="ip">LAN: 192.168.0.1/24</div>
             <div class="desc">Primary Router &middot; OpenWrt 21.02.1 &middot; Firmware 1.3z</div>
             <div class="port">Qualcomm aarch64 &middot; QCA NSS + ECM HW accel</div>
@@ -382,54 +377,55 @@
 
       <!-- ROUTER PORTS LAYER -->
       <div class="flow-layer" style="border-color: var(--orange);">
-        <div class="flow-layer-label" style="color: var(--orange-light);">ROUTER</div>
+        <div class="flow-layer-label" style="color: var(--orange);">ROUTER</div>
         <div style="margin-bottom: 8px;">
-          <span style="font-size: 12px; font-weight: 600; color: var(--orange-light);">Alta Labs Route10 &mdash; Port Layout</span>
+          <span style="font-size: 12px; font-weight: 600; color: var(--orange);">Alta Labs Route10 &mdash; Port Layout</span>
         </div>
         <div class="flow-row">
           <div class="net-device" style="border-left: 3px solid var(--orange);">
             <div class="name">W1 / eth3</div>
-            <div class="info">CR1000A (WAN uplink)</div>
+            <div class="info">CR1000A bridge &rarr; Public IP</div>
             <span class="speed-badge g25">2.5G</span>
           </div>
           <div class="net-device" style="border-left: 3px solid var(--green);">
             <div class="name">L1 / eth0</div>
-            <div class="info">TRENDnet TEG-3102WS</div>
-            <div class="ip">Core switch uplink</div>
+            <div class="info">Bitdefender BOX (IoT zone)</div>
+            <span class="speed-badge g1">1G</span>
+          </div>
+          <div class="net-device" style="border-left: 3px solid var(--green);">
+            <div class="name">L2 / eth1</div>
+            <div class="info">MacBook Air</div>
             <span class="speed-badge g25">2.5G</span>
           </div>
           <div class="net-device" style="border-left: 3px solid var(--text-muted); opacity: 0.5;">
-            <div class="name">L2 / eth1</div>
-            <div class="info">empty</div>
-            <span class="badge down" style="margin-top: 4px;"><span class="badge-dot"></span>Down</span>
-          </div>
-          <div class="net-device" style="border-left: 3px solid var(--green);">
             <div class="name">L3 / eth2</div>
-            <div class="info">Active (device TBD)</div>
-            <span class="speed-badge g1">1G</span>
+            <div class="info">Down (cable removed)</div>
+            <span class="badge down" style="margin-top: 4px;"><span class="badge-dot"></span>Down</span>
           </div>
           <div class="net-device" style="border-left: 3px solid var(--text-muted); opacity: 0.5;">
             <div class="name">L4</div>
             <div class="info">spare</div>
           </div>
-          <div class="net-device" style="border-left: 3px solid var(--pink); opacity: 0.6;">
-            <div class="name">SFP+ 1 / eth4</div>
-            <div class="info">10Gtek DAC &rarr; TRENDnet</div>
-            <div class="port">Arriving Mon 2026-03-17</div>
-            <span class="speed-badge g10">10G</span>
-          </div>
           <div class="net-device" style="border-left: 3px solid var(--text-muted); opacity: 0.5;">
-            <div class="name">SFP+ 2 / eth5</div>
+            <div class="name">SFP+ 1 / eth4</div>
             <div class="info">empty</div>
+            <span class="badge down" style="margin-top: 4px;"><span class="badge-dot"></span>Down</span>
+          </div>
+          <div class="net-device" style="border-left: 3px solid var(--pink);">
+            <div class="name">SFP+ 2 / eth5</div>
+            <div class="info">10Gtek DAC &rarr; TRENDnet Port 9</div>
+            <div class="port">Installed &middot; 10Gbps link verified</div>
+            <span class="speed-badge g10">10G</span>
+            <span class="badge up" style="margin-top: 4px;"><span class="badge-dot"></span>Active</span>
           </div>
         </div>
       </div>
 
       <!-- CORE SWITCH LAYER -->
       <div class="flow-layer" style="border-color: var(--purple);">
-        <div class="flow-layer-label" style="color: var(--purple-light);">SWITCH</div>
+        <div class="flow-layer-label" style="color: var(--purple);">SWITCH</div>
         <div style="margin-bottom: 8px;">
-          <span style="font-size: 12px; font-weight: 600; color: var(--purple-light);">TRENDnet TEG-3102WS &mdash; 192.168.0.200</span>
+          <span style="font-size: 12px; font-weight: 600; color: var(--purple);">TRENDnet TEG-3102WS &mdash; 192.168.0.200</span>
           <span style="font-size: 11px; color: var(--text-secondary); margin-left: 8px;">8x 2.5G RJ45 + 2x 10G SFP+ &middot; Firmware v1.00.14</span>
         </div>
         <div class="flow-row">
@@ -489,14 +485,14 @@
           </div>
         </div>
         <div class="flow-row" style="margin-top: 12px;">
-          <div class="net-device" style="border-left: 3px solid var(--pink); opacity: 0.6; min-width: 140px;">
-            <div class="name">SFP+ 1</div>
-            <div class="info">10G DAC &rarr; Route10 SFP+</div>
-            <div class="port">Arriving Mon 2026-03-17</div>
+          <div class="net-device" style="border-left: 3px solid var(--pink); min-width: 140px;">
+            <div class="name">SFP+ 1 (Port 9)</div>
+            <div class="info">10G DAC &rarr; Route10 SFP+ 2 (eth5)</div>
             <span class="speed-badge g10">10G</span>
+            <span class="badge up" style="margin-top: 4px;"><span class="badge-dot"></span>Active</span>
           </div>
           <div class="net-device" style="border-left: 3px solid var(--text-muted); opacity: 0.4; min-width: 140px;">
-            <div class="name">SFP+ 2</div>
+            <div class="name">SFP+ 2 (Port 10)</div>
             <div class="info">empty &mdash; future 10G device</div>
           </div>
         </div>
@@ -504,7 +500,7 @@
 
       <!-- DEVICES LAYER -->
       <div class="flow-layer" style="border-color: var(--blue);">
-        <div class="flow-layer-label" style="color: var(--blue-light);">DEVICES</div>
+        <div class="flow-layer-label" style="color: var(--blue);">DEVICES</div>
         <div class="flow-row" style="flex-wrap: wrap;">
           <div class="net-device" style="border-left: 3px solid var(--blue); min-width: 200px;">
             <div class="name">Dark-Knight / Windows PC</div>
@@ -539,9 +535,9 @@
 
       <!-- TRUSTED WIFI LAYER -->
       <div class="flow-layer" style="border-color: var(--cyan);">
-        <div class="flow-layer-label" style="color: var(--cyan-light);">WIFI</div>
+        <div class="flow-layer-label" style="color: var(--cyan);">WIFI</div>
         <div style="margin-bottom: 8px;">
-          <span style="font-size: 12px; font-weight: 600; color: var(--cyan-light);">Trusted WiFi &mdash; "eero+" network (eero Pro 6E)</span>
+          <span style="font-size: 12px; font-weight: 600; color: var(--cyan);">Trusted WiFi &mdash; "eero+" network (eero Pro 6E)</span>
           <span style="font-size: 11px; color: var(--text-secondary); margin-left: 8px;">TRENDnet Port 7 &rarr; same 192.168.0.0/24 subnet &rarr; full LAN access</span>
         </div>
         <div class="flow-row" style="flex-wrap: wrap;">
@@ -557,16 +553,16 @@
             <div class="name">Trusted WiFi Clients</div>
             <div class="info">iPhones, iPads, laptops</div>
             <div class="info">Personal devices</div>
-            <div class="info" style="color: var(--green-light);">Can access: servers, NAS, internet</div>
+            <div class="info" style="color: var(--green);">Can access: servers, NAS, internet</div>
           </div>
         </div>
       </div>
 
       <!-- IOT SECURITY LAYER -->
       <div class="flow-layer" style="border-color: var(--red);">
-        <div class="flow-layer-label" style="color: var(--red-light);">IOT</div>
+        <div class="flow-layer-label" style="color: var(--red);">IOT</div>
         <div style="margin-bottom: 8px;">
-          <span style="font-size: 12px; font-weight: 600; color: var(--red-light);">IoT Zone &mdash; Isolated + Scanned by Bitdefender BOX</span>
+          <span style="font-size: 12px; font-weight: 600; color: var(--red);">IoT Zone &mdash; Isolated + Scanned by Bitdefender BOX</span>
           <span style="font-size: 11px; color: var(--text-secondary); margin-left: 8px;">Route10 L4 &rarr; Bitdefender &rarr; eero &rarr; IoT devices (separate subnet)</span>
         </div>
         <div class="flow-row" style="flex-wrap: wrap;">
@@ -574,26 +570,26 @@
             <div class="name">Bitdefender BOX</div>
             <div class="info">Route10 L4 port</div>
             <div class="info">Inline security gateway</div>
-            <div class="info" style="margin-top: 4px; font-size: 10px; color: var(--orange-light);">Malware scan &middot; Botnet detection &middot; Vulnerability assessment</div>
+            <div class="info" style="margin-top: 4px; font-size: 10px; color: var(--orange);">Malware scan &middot; Botnet detection &middot; Vulnerability assessment</div>
             <span class="badge warn" style="margin-top: 6px;"><span class="badge-dot"></span>IoT Security</span>
           </div>
           <div class="flow-arrow">&rarr;</div>
           <div class="net-device" style="border-left: 3px solid var(--teal); min-width: 200px;">
             <div class="name">eero &mdash; "eero" IoT WiFi</div>
             <div class="info">Behind Bitdefender (isolated subnet)</div>
-            <div class="info" style="color: var(--red-light);">Cannot reach: servers, NAS</div>
-            <div class="info" style="color: var(--green-light);">Can reach: internet (scanned)</div>
+            <div class="info" style="color: var(--red);">Cannot reach: servers, NAS</div>
+            <div class="info" style="color: var(--green);">Can reach: internet (scanned)</div>
           </div>
           <div class="flow-arrow">&rarr;</div>
           <div class="net-device" style="border-left: 3px solid var(--teal); min-width: 280px;">
             <div class="name">IoT Devices</div>
             <table class="port-table">
-              <tr><td style="color: var(--teal-light);">TV</td><td>Sony TV (cc:98:8b)</td></tr>
-              <tr><td style="color: var(--teal-light);">HUB</td><td>SmartThings (24:fd:5b)</td></tr>
-              <tr><td style="color: var(--teal-light);">LIGHT</td><td>Lutron hub</td></tr>
-              <tr><td style="color: var(--teal-light);">APPLE</td><td>Apple TV / HomePod (58:d3:49)</td></tr>
-              <tr><td style="color: var(--teal-light);">IOT</td><td>LinkSprite (00:22:6c)</td></tr>
-              <tr><td style="color: var(--teal-light);">IOT</td><td>TI Sensor (90:70:65)</td></tr>
+              <tr><td style="color: var(--teal);">TV</td><td>Sony TV (cc:98:8b)</td></tr>
+              <tr><td style="color: var(--teal);">HUB</td><td>SmartThings (24:fd:5b)</td></tr>
+              <tr><td style="color: var(--teal);">LIGHT</td><td>Lutron hub</td></tr>
+              <tr><td style="color: var(--teal);">APPLE</td><td>Apple TV / HomePod (58:d3:49)</td></tr>
+              <tr><td style="color: var(--teal);">IOT</td><td>LinkSprite (00:22:6c)</td></tr>
+              <tr><td style="color: var(--teal);">IOT</td><td>TI Sensor (90:70:65)</td></tr>
             </table>
           </div>
         </div>
@@ -601,9 +597,9 @@
 
       <!-- ARUBA AS PORT EXPANDER -->
       <div class="flow-layer" style="border-color: var(--teal);">
-        <div class="flow-layer-label" style="color: var(--teal-light);">WIRED</div>
+        <div class="flow-layer-label" style="color: var(--teal);">WIRED</div>
         <div style="margin-bottom: 8px;">
-          <span style="font-size: 12px; font-weight: 600; color: var(--teal-light);">Aruba Switch &mdash; Wired IoT Port Expander</span>
+          <span style="font-size: 12px; font-weight: 600; color: var(--teal);">Aruba Switch &mdash; Wired IoT Port Expander</span>
           <span style="font-size: 11px; color: var(--text-secondary); margin-left: 8px;">TRENDnet Port 8 &mdash; needed because TRENDnet only has 8 RJ45 ports</span>
         </div>
         <div class="flow-row" style="flex-wrap: wrap;">
@@ -618,15 +614,15 @@
           <div class="net-device" style="border-left: 3px solid var(--teal); min-width: 250px;">
             <div class="name">Wired IoT Devices</div>
             <table class="port-table">
-              <tr><td style="color: var(--teal-light);">ETH</td><td>SmartThings Hub (needs ethernet)</td></tr>
-              <tr><td style="color: var(--teal-light);">ETH</td><td>Sony TV (wired connection)</td></tr>
-              <tr><td style="color: var(--teal-light);">ETH</td><td>Lutron Hub (wired)</td></tr>
-              <tr><td style="color: var(--teal-light);">ETH</td><td>Other wired IoT devices</td></tr>
+              <tr><td style="color: var(--teal);">ETH</td><td>SmartThings Hub (needs ethernet)</td></tr>
+              <tr><td style="color: var(--teal);">ETH</td><td>Sony TV (wired connection)</td></tr>
+              <tr><td style="color: var(--teal);">ETH</td><td>Lutron Hub (wired)</td></tr>
+              <tr><td style="color: var(--teal);">ETH</td><td>Other wired IoT devices</td></tr>
             </table>
           </div>
         </div>
-        <div style="margin-top: 10px; font-size: 11px; color: var(--text-secondary); padding: 8px 12px; background: rgba(20,184,166,0.06); border-radius: var(--radius-sm);">
-          <strong style="color: var(--orange-light);">Note:</strong> Second Aruba switch can be retired. One stays as a port expander until a larger switch is added.
+        <div style="margin-top: 10px; font-size: 11px; color: var(--text-secondary); padding: 8px 12px; background: var(--orange-bg); border-radius: var(--radius-sm);">
+          <strong style="color: var(--orange);">Note:</strong> Second Aruba switch can be retired. One stays as a port expander until a larger switch is added.
         </div>
       </div>
 
@@ -639,7 +635,7 @@
 
     <div class="switch-visual">
       <div class="switch-label">
-        <span style="color: var(--purple-light);">TRENDnet TEG-3102WS</span>
+        <span style="color: var(--purple);">TRENDnet TEG-3102WS</span>
         <span style="font-size: 11px; color: var(--text-secondary); font-weight: 400;">192.168.0.200 &middot; v1.00.14 &middot; VLAN 1 (default)</span>
         <span class="badge up" style="margin-left: auto;"><span class="badge-dot"></span>Online</span>
       </div>
@@ -649,20 +645,20 @@
       <div class="switch-ports">
         <div class="switch-port active">
           <div class="port-num">PORT 1</div>
-          <div class="port-device" style="color: var(--orange-light);">Route10</div>
-          <div class="port-device" style="color: var(--purple-light); font-size: 10px;">+ MacBook Air</div>
+          <div class="port-device" style="color: var(--orange);">Route10</div>
+          <div class="port-device" style="color: var(--purple); font-size: 10px;">+ MacBook Air</div>
           <div class="port-ip">.1 / .10</div>
           <div class="port-speed"><span class="speed-badge g25">2.5G</span></div>
         </div>
         <div class="switch-port active">
           <div class="port-num">PORT 2</div>
-          <div class="port-device" style="color: var(--blue-light);">Dark-Knight</div>
+          <div class="port-device" style="color: var(--blue);">Dark-Knight</div>
           <div class="port-ip">192.168.0.11</div>
           <div class="port-speed"><span class="speed-badge g25">2.5G</span></div>
         </div>
         <div class="switch-port active">
           <div class="port-num">PORT 3</div>
-          <div class="port-device" style="color: var(--teal-light);">Apple Device</div>
+          <div class="port-device" style="color: var(--teal);">Apple Device</div>
           <div class="port-ip">192.168.0.109</div>
           <div class="port-speed"><span class="speed-badge g1">1G</span></div>
         </div>
@@ -674,28 +670,28 @@
         </div>
         <div class="switch-port active">
           <div class="port-num">PORT 5</div>
-          <div class="port-device" style="color: var(--green-light);">brainiac7</div>
+          <div class="port-device" style="color: var(--green);">brainiac7</div>
           <div class="port-device" style="font-size: 10px;">Synology NAS</div>
           <div class="port-ip">192.168.0.111</div>
           <div class="port-speed"><span class="speed-badge g1">1G</span></div>
         </div>
         <div class="switch-port active">
           <div class="port-num">PORT 6</div>
-          <div class="port-device" style="color: var(--green-light);">FridayAI</div>
+          <div class="port-device" style="color: var(--green);">FridayAI</div>
           <div class="port-device" style="font-size: 10px;">QNAP NAS</div>
           <div class="port-ip">192.168.0.102</div>
           <div class="port-speed"><span class="speed-badge g1">1G</span></div>
         </div>
         <div class="switch-port active" style="border-color: var(--cyan);">
           <div class="port-num">PORT 7</div>
-          <div class="port-device" style="color: var(--cyan-light);">eero Pro 6E</div>
+          <div class="port-device" style="color: var(--cyan);">eero Pro 6E</div>
           <div class="port-device" style="font-size: 10px;">"eero+" trusted WiFi</div>
           <div class="port-ip">192.168.0.12</div>
           <div class="port-speed"><span class="speed-badge g1">1G</span></div>
         </div>
         <div class="switch-port active" style="border-color: var(--teal);">
           <div class="port-num">PORT 8</div>
-          <div class="port-device" style="color: var(--teal-light);">Aruba</div>
+          <div class="port-device" style="color: var(--teal);">Aruba</div>
           <div class="port-device" style="font-size: 10px;">Wired IoT hub</div>
           <div class="port-ip">port expander</div>
           <div class="port-speed"><span class="speed-badge g1">1G</span></div>
@@ -705,11 +701,11 @@
       <!-- SFP+ PORTS -->
       <div style="font-size: 11px; color: var(--text-muted); font-weight: 600; margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 1px;">10G SFP+ Slots</div>
       <div class="switch-ports">
-        <div class="switch-port sfp" style="opacity: 0.6;">
-          <div class="port-num">SFP+ 1</div>
-          <div class="port-device" style="color: var(--pink-light);">Route10</div>
+        <div class="switch-port sfp active">
+          <div class="port-num">SFP+ 1 (Port 9)</div>
+          <div class="port-device" style="color: var(--pink);">Route10</div>
           <div class="port-device" style="font-size: 10px;">10Gtek DAC 0.5m</div>
-          <div class="port-ip">Arriving Mon</div>
+          <div class="port-ip">10Gbps active</div>
           <div class="port-speed"><span class="speed-badge g10">10G</span></div>
         </div>
         <div class="switch-port empty sfp">
@@ -727,101 +723,101 @@
       <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow: hidden;">
         <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
           <thead>
-            <tr style="background: var(--bg-secondary); border-bottom: 1px solid var(--border-color);">
-              <td style="padding: 10px 14px; font-weight: 600; color: var(--text-secondary);">Port</td>
-              <td style="padding: 10px 14px; font-weight: 600; color: var(--text-secondary);">MAC Address</td>
-              <td style="padding: 10px 14px; font-weight: 600; color: var(--text-secondary);">IP Address</td>
-              <td style="padding: 10px 14px; font-weight: 600; color: var(--text-secondary);">Device / Vendor</td>
-              <td style="padding: 10px 14px; font-weight: 600; color: var(--text-secondary);">Type</td>
+            <tr style="background: var(--bg-primary); border-bottom: 1px solid var(--border-color);">
+              <td style="padding: 10px 14px; font-weight: 600; color: var(--blue-light);">Port</td>
+              <td style="padding: 10px 14px; font-weight: 600; color: var(--blue-light);">MAC Address</td>
+              <td style="padding: 10px 14px; font-weight: 600; color: var(--blue-light);">IP Address</td>
+              <td style="padding: 10px 14px; font-weight: 600; color: var(--blue-light);">Device / Vendor</td>
+              <td style="padding: 10px 14px; font-weight: 600; color: var(--blue-light);">Type</td>
             </tr>
           </thead>
           <tbody>
-            <tr style="border-bottom: 1px solid rgba(42,45,62,0.3);">
-              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--orange-light);">1</td>
+            <tr style="border-bottom: 1px solid #e8f0f8;">
+              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--orange);">1</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">bc:b9:23:81:9e:3c</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">192.168.0.1</td>
               <td style="padding: 8px 14px;">Alta Labs Route10 (gateway)</td>
               <td style="padding: 8px 14px;"><span class="svc-tag router">ROUTER</span></td>
             </tr>
-            <tr style="border-bottom: 1px solid rgba(42,45,62,0.3);">
-              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--orange-light);">1</td>
+            <tr style="border-bottom: 1px solid #e8f0f8;">
+              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--orange);">1</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">00:e0:4c:b3:3d:fe</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">192.168.0.10</td>
               <td style="padding: 8px 14px;">MacBook Air (Realtek NIC)</td>
               <td style="padding: 8px 14px;"><span class="svc-tag server">PC</span></td>
             </tr>
-            <tr style="border-bottom: 1px solid rgba(42,45,62,0.3);">
-              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--blue-light);">2</td>
+            <tr style="border-bottom: 1px solid #e8f0f8;">
+              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--blue);">2</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">04:d9:f5:81:10:74</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">192.168.0.11</td>
               <td style="padding: 8px 14px;">Dark-Knight / Windows PC (2.5G Realtek)</td>
               <td style="padding: 8px 14px;"><span class="svc-tag server">SERVER</span></td>
             </tr>
-            <tr style="border-bottom: 1px solid rgba(42,45,62,0.3);">
-              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--teal-light);">3</td>
+            <tr style="border-bottom: 1px solid #e8f0f8;">
+              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--teal);">3</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">d0:11:e5:35:9a:b3</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">192.168.0.109</td>
               <td style="padding: 8px 14px;">Apple device (iPhone/iPad/Mac)</td>
               <td style="padding: 8px 14px;"><span class="svc-tag iot">APPLE</span></td>
             </tr>
-            <tr style="border-bottom: 1px solid rgba(42,45,62,0.3);">
+            <tr style="border-bottom: 1px solid #e8f0f8;">
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--text-muted);">4</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">38:f7:cd:d5:35:86</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">192.168.0.113</td>
               <td style="padding: 8px 14px;">Unknown (IEEE Registration Authority)</td>
               <td style="padding: 8px 14px;"><span class="svc-tag iot">???</span></td>
             </tr>
-            <tr style="border-bottom: 1px solid rgba(42,45,62,0.3);">
-              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--green-light);">5</td>
+            <tr style="border-bottom: 1px solid #e8f0f8;">
+              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--green);">5</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">00:11:32:2d:3c:3c</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">192.168.0.111</td>
               <td style="padding: 8px 14px;">brainiac7 / Synology NAS</td>
               <td style="padding: 8px 14px;"><span class="svc-tag nas">NAS</span></td>
             </tr>
-            <tr style="border-bottom: 1px solid rgba(42,45,62,0.3);">
-              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--green-light);">6</td>
+            <tr style="border-bottom: 1px solid #e8f0f8;">
+              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--green);">6</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">24:5e:be:00:e3:fb</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">192.168.0.102</td>
               <td style="padding: 8px 14px;">FridayAI / QNAP TS-251+</td>
               <td style="padding: 8px 14px;"><span class="svc-tag nas">NAS</span></td>
             </tr>
-            <tr style="border-bottom: 1px solid rgba(42,45,62,0.3);">
-              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--red-light);">7</td>
+            <tr style="border-bottom: 1px solid #e8f0f8;">
+              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--red);">7</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">fc:3f:a6:80:9f:12</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">192.168.0.104</td>
               <td style="padding: 8px 14px;">Aruba DAGGER (Instant On 1930)</td>
               <td style="padding: 8px 14px;"><span class="svc-tag switch">SWITCH</span></td>
             </tr>
-            <tr style="border-bottom: 1px solid rgba(42,45,62,0.3);">
-              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--red-light);">8</td>
+            <tr style="border-bottom: 1px solid #e8f0f8;">
+              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--red);">8</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">ec:50:aa:48:dc:a8</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">192.168.0.12</td>
               <td style="padding: 8px 14px;">eero Pro 6E (WiFi mesh)</td>
               <td style="padding: 8px 14px;"><span class="svc-tag wifi">WIFI</span></td>
             </tr>
-            <tr style="border-bottom: 1px solid rgba(42,45,62,0.3);">
-              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--red-light);">8</td>
+            <tr style="border-bottom: 1px solid #e8f0f8;">
+              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--red);">8</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">cc:98:8b:00:0b:e1</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">192.168.0.13</td>
               <td style="padding: 8px 14px;">Sony TV (Sony Visual Products)</td>
               <td style="padding: 8px 14px;"><span class="svc-tag iot">IOT</span></td>
             </tr>
-            <tr style="border-bottom: 1px solid rgba(42,45,62,0.3);">
-              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--red-light);">8</td>
+            <tr style="border-bottom: 1px solid #e8f0f8;">
+              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--red);">8</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">24:fd:5b:03:55:47</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">192.168.0.16</td>
               <td style="padding: 8px 14px;">SmartThings Hub</td>
               <td style="padding: 8px 14px;"><span class="svc-tag iot">IOT</span></td>
             </tr>
-            <tr style="border-bottom: 1px solid rgba(42,45,62,0.3);">
-              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--red-light);">8</td>
+            <tr style="border-bottom: 1px solid #e8f0f8;">
+              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--red);">8</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">00:22:6c:3b:57:65</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">192.168.0.106</td>
               <td style="padding: 8px 14px;">LinkSprite IoT device</td>
               <td style="padding: 8px 14px;"><span class="svc-tag iot">IOT</span></td>
             </tr>
             <tr>
-              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--red-light);">8</td>
+              <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; color: var(--red);">8</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">58:d3:49:e0:62:f2</td>
               <td style="padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px;">192.168.0.112</td>
               <td style="padding: 8px 14px;">Apple device (Apple TV / HomePod)</td>
@@ -925,7 +921,7 @@
 
     <div class="flow-diagram">
       <div class="flow-layer" style="border-color: var(--pink);">
-        <div class="flow-layer-label" style="color: var(--pink-light);">VPN</div>
+        <div class="flow-layer-label" style="color: var(--pink);">VPN</div>
         <div class="flow-row">
           <div class="net-device" style="border-left: 3px solid var(--pink); min-width: 320px;">
             <div class="name" style="font-size: 15px;">WireGuard VPN Server</div>
@@ -934,38 +930,38 @@
             <div class="info">Hardware-accelerated on Qualcomm NPU</div>
             <table class="port-table" style="margin-top: 10px;">
               <tr style="font-weight: 600; color: var(--text-secondary);"><td>PEER</td><td>IP</td><td>STATUS</td></tr>
-              <tr><td style="color: var(--pink-light);">yamil-mobile</td><td>10.0.0.2/32</td><td><span class="badge up" style="font-size: 10px;"><span class="badge-dot"></span>Connected (49m ago)</span></td></tr>
+              <tr><td style="color: var(--pink);">yamil-mobile</td><td>10.0.0.2/32</td><td><span class="badge up" style="font-size: 10px;"><span class="badge-dot"></span>Connected (49m ago)</span></td></tr>
               <tr><td style="color: var(--text-muted);">peer-2</td><td>10.0.0.3/32</td><td><span class="badge down" style="font-size: 10px;"><span class="badge-dot"></span>Never connected</span></td></tr>
             </table>
           </div>
           <div class="flow-arrow">&rarr;</div>
-          <div class="net-device" style="border-left: 3px solid var(--cyan);">
-            <div class="name">CR1000A Port Forward</div>
-            <div class="info">UDP 51820 &rarr; 192.168.1.227 (Route10 WAN)</div>
+          <div class="net-device" style="border-left: 3px solid var(--green);">
+            <div class="name">Direct Public IP</div>
+            <div class="info">Route10 receives UDP 51820 directly</div>
             <div class="info">Public IP: 70.111.193.92</div>
-            <div class="info" style="color: var(--orange-light); margin-top: 4px;">May change &mdash; consider DDNS</div>
+            <div class="info" style="color: var(--green); margin-top: 4px;">No port forward needed (bridge mode)</div>
           </div>
         </div>
       </div>
 
       <div class="flow-layer" style="border-color: var(--red);">
-        <div class="flow-layer-label" style="color: var(--red-light);">FIREWALL</div>
+        <div class="flow-layer-label" style="color: var(--red);">FIREWALL</div>
         <div class="flow-row" style="flex-wrap: wrap;">
           <div class="net-device" style="border-left: 3px solid var(--red); min-width: 200px;">
             <div class="name">WAN Zone</div>
-            <div class="info">Default: <strong style="color: var(--red-light);">DROP</strong></div>
+            <div class="info">Default: <strong style="color: var(--red);">DROP</strong></div>
             <div class="info">Allow: WireGuard UDP 51820</div>
             <div class="info">NAT / Masquerade: ON</div>
           </div>
           <div class="net-device" style="border-left: 3px solid var(--green); min-width: 200px;">
             <div class="name">LAN Zone</div>
-            <div class="info">Default: <strong style="color: var(--green-light);">ACCEPT</strong></div>
+            <div class="info">Default: <strong style="color: var(--green);">ACCEPT</strong></div>
             <div class="info">Forward to WAN: ACCEPT</div>
             <div class="info">Forward to VPN: ACCEPT</div>
           </div>
           <div class="net-device" style="border-left: 3px solid var(--pink); min-width: 200px;">
             <div class="name">VPN Zone</div>
-            <div class="info">Default: <strong style="color: var(--green-light);">ACCEPT</strong></div>
+            <div class="info">Default: <strong style="color: var(--green);">ACCEPT</strong></div>
             <div class="info">Forward to LAN: ACCEPT</div>
             <div class="info">Forward to WAN: ACCEPT</div>
           </div>
@@ -973,7 +969,7 @@
       </div>
 
       <div class="flow-layer" style="border-color: var(--blue);">
-        <div class="flow-layer-label" style="color: var(--blue-light);">DNS</div>
+        <div class="flow-layer-label" style="color: var(--blue);">DNS</div>
         <div class="flow-row">
           <div class="net-device" style="border-left: 3px solid var(--blue);">
             <div class="name">DNS Servers</div>
@@ -994,7 +990,7 @@
 
   <!-- ==================== TAB 5: STATUS ==================== -->
   <div id="tab-status" class="tab-content">
-    <div class="section-title">Network Status &mdash; Snapshot 2026-03-16</div>
+    <div class="section-title">Network Status &mdash; Snapshot 2026-03-20</div>
 
     <div class="status-grid">
       <div class="status-card green">
@@ -1032,10 +1028,10 @@
         <div class="value">ON</div>
         <div class="detail">QCA NSS + ECM active</div>
       </div>
-      <div class="status-card orange">
+      <div class="status-card green">
         <div class="label">Double NAT</div>
-        <div class="value">Yes</div>
-        <div class="detail">CR1000A &rarr; Route10 (Phase 18 fix)</div>
+        <div class="value">No</div>
+        <div class="detail">Eliminated &mdash; CR1000A bridge mode active</div>
       </div>
     </div>
 
@@ -1047,38 +1043,38 @@
           <div class="app-card-header">
             <div class="app-card-icon" style="background: var(--green-bg);">&#x2705;</div>
             <div>
-              <div class="app-card-title">Phases 1&ndash;13 Complete</div>
-              <div class="app-card-sub">Router, switch, VPN, firewall, DHCP all configured</div>
+              <div class="app-card-title">Phases 1&ndash;16 Complete</div>
+              <div class="app-card-sub">Router, switch, VPN, firewall, DHCP, 10G DAC, device migration done</div>
             </div>
           </div>
         </div>
 
-        <div class="app-card" style="border-left: 3px solid var(--pink);">
+        <div class="app-card" style="border-left: 3px solid var(--green);">
           <div class="app-card-header">
-            <div class="app-card-icon" style="background: var(--pink-bg);">&#x1F517;</div>
+            <div class="app-card-icon" style="background: var(--green-bg);">&#x2705;</div>
             <div>
               <div class="app-card-title">Phase 14: 10G SFP+ DAC</div>
-              <div class="app-card-sub">Install 10G cable Route10 &harr; TRENDnet (Mon 3/17)</div>
+              <div class="app-card-sub">Installed! Route10 SFP+2 (eth5) &harr; TRENDnet Port 9 &mdash; 10Gbps verified</div>
             </div>
           </div>
         </div>
 
-        <div class="app-card" style="border-left: 3px solid var(--blue);">
+        <div class="app-card" style="border-left: 3px solid var(--green);">
           <div class="app-card-header">
-            <div class="app-card-icon" style="background: var(--blue-bg);">&#x1F527;</div>
+            <div class="app-card-icon" style="background: var(--green-bg);">&#x2705;</div>
             <div>
               <div class="app-card-title">Phase 15&ndash;16: Move Devices</div>
-              <div class="app-card-sub">Trusted devices to TRENDnet, eero Pro 6E to Port 7</div>
+              <div class="app-card-sub">Done! PC on Port 2 (2.5G), NASes on Ports 5-6 (1G), eero on Port 7</div>
             </div>
           </div>
         </div>
 
-        <div class="app-card" style="border-left: 3px solid var(--orange);">
+        <div class="app-card" style="border-left: 3px solid var(--green);">
           <div class="app-card-header">
-            <div class="app-card-icon" style="background: var(--orange-bg);">&#x1F6E1;</div>
+            <div class="app-card-icon" style="background: var(--green-bg);">&#x2705;</div>
             <div>
               <div class="app-card-title">Phase 17&ndash;19: IoT Security</div>
-              <div class="app-card-sub">Bitdefender BOX on L4, eero IoT WiFi behind it, migrate IoT devices</div>
+              <div class="app-card-sub">Done! Bitdefender BOX on L1, eero IoT WiFi behind it, IoT devices migrated</div>
             </div>
           </div>
         </div>
@@ -1093,12 +1089,12 @@
           </div>
         </div>
 
-        <div class="app-card" style="border-left: 3px solid var(--cyan);">
+        <div class="app-card" style="border-left: 3px solid var(--green);">
           <div class="app-card-header">
-            <div class="app-card-icon" style="background: var(--cyan-bg);">&#x1F310;</div>
+            <div class="app-card-icon" style="background: var(--green-bg);">&#x2705;</div>
             <div>
               <div class="app-card-title">Phase 22: Bridge Mode</div>
-              <div class="app-card-sub">Put CR1000A in bridge &mdash; eliminate double NAT (do LAST)</div>
+              <div class="app-card-sub">Done! CR1000A bridge mode enabled 2026-03-20</div>
             </div>
           </div>
         </div>

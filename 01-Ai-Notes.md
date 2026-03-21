@@ -1,5 +1,298 @@
 # AI Notes
 
+## 2026-03-21 — HA Infrastructure Remaining Work
+
+### Task
+Work through remaining HA items from 135-InfrastructureHA.md.
+
+### Completed
+1. **GEEKOM sleep mode disabled** — Was on Balanced plan with 10-min sleep. Set standby timeout to 0 (never), disabled hibernate, monitor timeout. GEEKOM stays awake 24/7 now.
+2. **Consul client on GEEKOM** — Downloaded v1.22.5, installed at `C:\Users\yvele\consul\`. Registered as Windows service (`sc create Consul`). Joined cluster with 3 services: docker-engine, ollama, windows-exporter. All health checks passing.
+3. **Docker contexts on MacBook** — Created `geekom` (ssh://geekom) and `macmini` (ssh://macmini). Mac Mini required `PermitUserEnvironment yes` in sshd_config + `~/.ssh/environment` with PATH and DOCKER_HOST.
+4. **Consul added to Prometheus** — Added `consul` scrape job at `192.168.0.102:8500/v1/agent/metrics?format=prometheus`. Required adding `telemetry.prometheus_retention_time: 60s` to Consul server config and container restart. Target confirmed UP.
+5. **MacBook Ollama + DB confirmed** — Ollama v0.18.2 installed, mb-postgres running (healthy).
+6. **135-InfrastructureHA.md updated** — Fixed all stale IPs (.0.20→.0.113, .0.30→.0.119, .0.40→.0.120), updated network to Alta Labs + TRENDnet, added Consul HA section, updated implementation phases with status, updated SSH config, failover scripts with Consul KV integration.
+
+### Key Fix
+- GEEKOM PowerShell over SSH silently fails for many operations (Set-Content, New-Item to C:\). Workaround: use SCP from MacBook or plain cmd commands.
+- Mac Mini Docker context needed `PermitUserEnvironment yes` + `~/.ssh/environment` because SSH non-interactive commands don't source `.zprofile`
+
+### Remaining
+- [ ] Install Consul client on Windows PC (when online)
+- [ ] Full failover drill (Phase 14)
+- [ ] Secrets sync automation
+- [ ] Backup verification automation
+
+---
+
+## 2026-03-21 — Architecture Diagram Updates
+
+### Task
+Update `architecture-diagram.html` and rename `architecture-diagram-infra.html` → `homelab-ha-architecture.html` with all Consul HA information.
+
+### Changes to `architecture-diagram.html`
+- Fixed stale IPs: Windows PC `192.168.0.11` → `.101`, MacBook `192.168.0.10` → `.120`
+- Added GEEKOM A8 Max (192.168.0.113) and Mac Mini M4 (192.168.0.119) to Network tab LAN section
+- Updated TRENDnet from "FUTURE" to deployed (core switch at 192.168.0.200)
+- Added consul-server, git-mirror, cadvisor to QNAP container inventory (10 → 13)
+- Added Uptime Kuma, Consul Server, Git Mirror to QNAP monitoring flow layer
+- Updated Prometheus targets from 28/28 → 34/34
+- Added grafana.yamil-ai.com to tunnel route config
+- Updated header subtitle with HA + Consul references
+- Updated SFP+ port from "arriving" to connected via 10Gtek DAC
+- Updated status snapshot date to 2026-03-20
+
+### Changes to `homelab-ha-architecture.html` (renamed from architecture-diagram-infra.html)
+- Full Consul Cluster tab added (Tab 6) with cluster members, services, KV store, DNS
+- All machine cards updated with correct IPs and current status
+- Failover flow updated to use Consul detection
+- QNAP monitoring cards expanded with all 13 services
+
+---
+
+## 2026-03-21 — Consul HA Cluster Deployment
+
+### Task
+Deploy HashiCorp Consul for cross-platform HA failover orchestration across the homelab.
+
+### Steps Taken
+1. **Phase 1 — Consul server on QNAP**: Added `consul-server` service to docker-compose.yml, deployed v1.22.5
+   - Fixed read-only config mount (`chown` fails with `:ro`)
+   - Added `advertise_addr: 192.168.0.102` — critical for Docker networking (without it, clients see container's internal IP `172.29.0.x` and can't connect)
+2. **Phase 4 — Mac Mini client**: Installed via Homebrew, configured as LaunchDaemon, registered 3 services (docker-engine, ollama, node-exporter)
+3. **MacBook client**: Installed via Homebrew, configured as LaunchAgent, registered yamil-browser service
+4. **Phase 5 — Failover handler**: Created `failover-handler.sh` and `watches.json` on QNAP Consul server, initialized KV store
+5. **Phase 6 — DNS verified**: `dig @192.168.0.102 -p 8600 ollama.service.consul` → `192.168.0.119`
+
+### Cluster Status
+- **qnap** (192.168.0.102) — server, alive
+- **macbook** (192.168.0.120) — client, alive (yamil-browser)
+- **macmini** (192.168.0.119) — client, alive (docker, ollama, node-exporter)
+- **geekom** — offline, Consul not yet installed
+- **windows-pc** — offline, Consul not yet installed
+
+### Key Decisions
+- Used LaunchAgent (not LaunchDaemon) on MacBook — avoids sudo requirement
+- Removed docker-engine check from MacBook — Docker Desktop metrics not enabled on port 9323
+- GEEKOM and Windows PC will get Consul when they come online
+
+### Errors & Fixes
+- `chown: /consul/config: Read-only file system` → removed `:ro` from config volume mount
+- `dial tcp 172.29.0.13:8300: operation was canceled` → added `advertise_addr` to server config
+- MacBook SSH timeout connecting to GEEKOM → GEEKOM is powered off, skipped
+
+### Next Steps
+- [ ] Install Consul client on GEEKOM (when online)
+- [ ] Install Consul client on Windows PC (when online)
+- [ ] Test end-to-end failover
+- [ ] Add Consul-aware Grafana dashboard
+- [ ] Add Consul to Prometheus scrape targets
+
+---
+
+## 2026-03-21 — QNAP Monitoring Stack Updates
+
+### Task
+Update QNAP Prometheus to scrape HA machines, fix stale IPs, add git mirror, and enable Grafana email alerts.
+
+### Steps Taken
+1. **Prometheus config updated**: Fixed stale Windows PC IPs (`192.168.0.11` -> `192.168.0.101`). Added 4 new scrape jobs: geekom-windows-exporter (:9182), geekom-docker (:9323), macmini-node-exporter (:9100), macmini-docker (:9323). All 4 targets confirmed UP.
+2. **Git mirror deployed**: New `git-mirror` container (alpine/git) clones all 5 repos as bare mirrors hourly. Uses macmini-ha PAT for auth. First run cloned all 5 repos successfully (0 errors). Memory bumped to 256MB for large repos.
+3. **Grafana email alerts**: Configured Gmail SMTP (Yvelez1@gmail.com, App Password). Created "Email Alerts" contact point, set as default notification policy. Test email sent successfully.
+4. **db-backup fix**: Updated backup.sh to auto-install curl (postgres:17 image doesn't include it). Backup fails gracefully when Windows PC postgres is offline.
+
+### Key Fix
+- POSIX compatibility: git-mirror.sh uses `$REPOS` string variable instead of bash arrays (alpine uses ash, not bash)
+- Gmail App Password stored in QNAP `.env` file alongside GitHub PAT
+
+---
+
+## 2026-03-21 — GEEKOM A8 Max HA Setup (Completed)
+
+### Task
+Complete GEEKOM HA Secondary #1 setup remotely via SSH from MacBook Air.
+
+### Steps Taken
+1. **SSH verified** — GEEKOM Claude installed the MacBook Air's public key. Confirmed `ssh geekom` works. Added SSH config alias.
+2. **Inventory check** — Found Docker v29.2.1, Git v2.53.0, Ollama v0.18.2 (4 models), all repos cloned, Windows Exporter running, firewall rules in place. Most phases already done by GEEKOM Claude session.
+3. **Docker metrics** — Added `"metrics-addr": "0.0.0.0:9323"` to daemon.json. Required Docker Desktop GUI restart via `schtasks /it`.
+4. **AutoStart** — Set `AutoStart: true` in Docker Desktop settings-store.json.
+5. **.env files** — SCP'd all .env files from MacBook Air (YAMIL: .env, .env.secrets, .env.prod; FlashCards: .env; ai-bot: .env). Added missing `GRAFANA_ADMIN_PASSWORD`.
+6. **Docker builds** — Solved Docker Desktop SSH credential helper DPAPI issue by using scheduled tasks with `/it` (interactive) flag to run builds in the desktop session. YAMIL built first try. FlashCards and ai-bot needed yamil-browser build context fix (git URL -> local path `C:/project/yamil-browser/browser-service`, dockerfile: `Dockerfile`). All 3 projects built successfully.
+7. **Portainer** — Installed via scheduled task, running at :9443.
+8. **Ubuntu WSL** — Installed as side-effect of troubleshooting (available for future use).
+9. **Metrics verified** — Both :9182 (Windows Exporter) and :9323 (Docker metrics) accessible from MacBook Air.
+
+### Key Issues & Fixes
+- **Docker SSH DPAPI error**: `docker-credential-desktop.exe` uses Windows DPAPI unavailable in SSH sessions. Fix: use `schtasks /create /ru yvele /it` to run builds in the interactive desktop session.
+- **Docker Desktop killed by Stop-Process**: Restarting from SSH impossible (GUI app). Fix: use `schtasks /it` to restart Docker Desktop in user's console session.
+- **yamil-browser git URL context**: Windows Docker can't use `https://github.com/...` as build context. Fix: clone repo locally, set context to `C:/project/yamil-browser/browser-service` and dockerfile to `Dockerfile`.
+- **GRAFANA_ADMIN_PASSWORD missing**: Not in any .env file. Added to .env on GEEKOM.
+
+### GEEKOM HA Status: COMPLETE
+All 10 phases done. Machine is ready for failover.
+
+---
+
+## 2026-03-20 — Mac Mini HA Setup (Executed) + Task Docs
+
+### Task
+Set up Mac Mini M4 (192.168.0.119, hostname Kain.local) as HA Secondary #2. Also created task docs for both GEEKOM and Mac Mini.
+
+### Files Created
+- `139-GEEKOM-HA-Setup.md` — 10-phase setup guide for GEEKOM (not yet executed)
+- `140-MacMini-HA-Setup.md` — 11-phase setup guide for Mac Mini
+
+### Mac Mini Setup Completed
+
+**SSH Access**
+- Generated ed25519 key (`~/.ssh/macmini_ha`), copied to Mac Mini
+- Added `Host macmini` entry to `~/.ssh/config` (192.168.0.119)
+- Enabled passwordless sudo for user `yaml`
+
+**Software Installed (via SSH)**
+- Homebrew (fresh install)
+- Ollama 0.18.2 with MLX support — 5 models already present: gemma3:4b, nomic-embed-text, qwen2.5-coder:7b, qwen2.5:7b, llama3.2
+- node_exporter 1.10.2 on :9100
+
+**Repos Cloned (to `/Volumes/External/project/`, symlinked at `~/project/`)**
+- parser_lite, Ai-Tools (via qnap-mirror PAT)
+- FlashCards, ai-bot (via new `macmini-ha` PAT — all repos, Contents read-only)
+
+**Docker Desktop**
+- Already installed (v29.2.1) under user `yvelez` (uid 501)
+- Socket at `/Users/yvelez/.docker/run/docker.sock` — `yaml` user accesses via `DOCKER_HOST` env var
+- Socket permission fix persisted via LaunchDaemon (`com.docker.socket.fix.plist`)
+- **Docker.raw moved to external SSD**: `/Volumes/External/docker-data/vms/0/data/Docker.raw` (symlinked back)
+- Existing containers: Portainer (:9443), Open-WebUI (:3000), Watchtower
+- Docker metrics already enabled on :9323
+- PATH and DOCKER_HOST added to `~/.zshrc`
+
+**Disk Space Freed**
+- Removed 9 unused apps (iMovie, Office suite, Chrome, Edge, OneDrive) — freed ~20GB
+- Internal SSD: 31GB free (was 121MB)
+- External SSD: 1.8TB, Docker.raw + projects use ~56GB
+
+**Vault Strategy (No .env Files)**
+- Will use Vault from parser_lite docker-compose (same as Windows PC)
+- On failover: Vault auto-inits with fresh unseal key, root token, policies, engines
+- vault-agent renders secrets to `vault-secrets/env` — services read from there
+- DB creds are dynamic (24h TTL), JWT key regenerated (users re-login)
+- No .env file copying needed
+
+### AWS Secrets Created
+- `yamil/homelab/macmini-ssh` — SSH access details (yaml@192.168.0.119, ed25519 key, password)
+- `yamil/github/pat-macmini-ha` — GitHub PAT for all repos, Contents read-only, expires Apr 19 2026
+
+### Remaining Work
+- [ ] Reserve static IP 192.168.0.30 in Route10 DHCP (currently .119 via DHCP)
+- [ ] Pre-build Docker images (`docker compose build` for all 3 projects)
+- [ ] Verify QNAP Prometheus can scrape :9100 and :9323
+- [ ] Test full failover drill (start Y.A.M.I.L stack, Vault auto-init, restore DB from backup)
+- [ ] GEEKOM setup (139-GEEKOM-HA-Setup.md — not started)
+
+---
+
+## 2026-03-20 — QNAP Infrastructure: Promtail Fix, Git Mirrors, Volume Backups
+
+### Task
+Complete 3 outstanding items from the QNAP infrastructure hub: fix Promtail log shipping, set up git mirror cron, and configure Docker volume backups.
+
+### Steps Taken
+
+**1. Promtail Fix (Phase 6)**
+- Read `C:\project\yamil-browser\promtail\promtail-config.yml` on Windows PC — found old QNAP IP `192.168.1.188`
+- All pushes to Loki were failing with `context deadline exceeded`
+- Updated IP to `192.168.0.102` via PowerShell string replacement
+- Restarted promtail container: `docker restart promtail`
+- Verified logs flowing: Loki query `{host="windows-server"}` returns fresh container logs
+
+**2. Git Mirror Cron (Phase 9)**
+- QNAP has no native git — used `alpine/git:latest` Docker image
+- Created `/share/Container/git-mirrors/git-mirror.sh` script
+- Cloned `velezy/yamil-browser` (public) as bare mirror — verified with `git log --oneline -3`
+- 2 private repos (`parser_lite.py`, `Ai-Tools`) skipped — need GitHub PAT saved to `.github-pat`
+- Added hourly cron: `0 * * * *`
+
+**3. Docker Volume Backups (Phase C4)**
+- Deployed Windows PC SSH key (from AWS SM `yamil/homelab/windows-pc`) to `/root/.ssh/id_ed25519_windows` on QNAP
+- Tested QNAP → Windows PC SSH: working
+- Hit Docker Desktop `credsStore: desktop` issue — `busybox` pull fails in SSH sessions
+- Fix: temporarily removed `credsStore`, pulled busybox, restored config
+- Created `/share/Container/volume-backups/volume-backup.sh` script
+- Backed up 5 volumes: vault-data (45K), vault-logs (888K), redis-data (6.9M), mb-redis-data (2.8K), mb-etcd-data (1.6M)
+- Added daily cron: `0 3 * * *` with 30-day retention
+
+### Key Findings
+- QNAP Docker binary at `/share/CACHEDEV1_DATA/.qpkg/container-station/usr/bin/.libs/docker` (not in PATH)
+- Docker Desktop Windows `credsStore: desktop` breaks `docker pull` in SSH sessions — must pull images interactively first
+- QNAP cron managed via `/etc/config/crontab`, reload with `crontab /etc/config/crontab`
+
+### Files Created
+- `134-QNAPInfrastructureHub.md` — full documentation of all 3 phases
+- `/share/Container/git-mirrors/git-mirror.sh` (on QNAP)
+- `/share/Container/volume-backups/volume-backup.sh` (on QNAP)
+
+### Follow-up: GitHub PAT + Private Repo Mirroring
+- Created fine-grained PAT `qnap-mirror` via GitHub UI (YAMIL Browser)
+  - Scoped to `velezy/parser_lite` and `velezy/Ai-Tools`, Contents: Read-only
+  - Expires April 19, 2026
+- Saved PAT to `/share/Container/git-mirrors/.github-pat` on QNAP
+- Corrected repo name: `parser_lite` not `parser_lite.py` (local folder has `.py` suffix but GitHub repo doesn't)
+- Re-ran mirror script: **3 OK, 0 failed** — all repos now mirrored
+
+### Remaining Work
+- Monitor ntfy for backup/mirror notifications
+- After QTS firmware updates, verify custom cron entries persist
+- Renew `qnap-mirror` PAT before April 19, 2026
+
+---
+
+## 2026-03-20 — Phase 22: CR1000A Bridge Mode + Network Diagram Update
+
+### Task
+Enable bridge mode on the Verizon CR1000A router to eliminate double NAT. Update network documentation and diagrams.
+
+### Steps Taken
+1. Logged into CR1000A admin at `https://192.168.1.1` using credentials from AWS SM (`CR1000A` secret)
+2. Navigated to Advanced > Network Settings > Network Connections > Network (Home/Office) > Settings
+3. In the **Bridge** section, checked the **"Broadband Connection (Ethernet)"** checkbox
+4. Clicked **Save Changes** — CR1000A applied bridge mode
+5. Verified via SSH to Route10:
+   - WAN IP changed from `192.168.1.227` (private) to `70.111.193.92` (public IP)
+   - Default gateway: `70.111.193.1` (Verizon, direct)
+   - WireGuard still listening on UDP 51820
+   - Internet connectivity confirmed via ping
+6. Updated `136-NetworkUpgrade-OmadaSDN.md` — marked Phase 22 complete, updated topology, WAN IP, double NAT section
+7. Updated `network-diagram.html` — new topology, colors changed to light blue theme from `134-screen-to-database-mapping.html`
+8. **Phase 23 — Service verification post-bridge-mode**:
+   - Uptime Kuma (:3001) — UP
+   - Grafana (:3000) — UP
+   - YAMIL Browser (:9300) — UP
+   - Route10 SSH — UP
+   - TRENDnet Switch (:80) — UP
+   - QNAP QTS — **UP on :8443** (HTTPS), HTTP :8092 redirects (Force SSL = 1). Port 8080 was wrong.
+   - WireGuard VPN (:51820) — UP
+9. SSHed into QNAP (admin@192.168.0.102:2222 via ed25519 key) to confirm web UI ports:
+   - `Web Access Port = 8092` (HTTP, redirects to HTTPS)
+   - HTTPS on `:8443` via `fcgi-pm` process
+   - `Force SSL = 1` — all connections redirect to HTTPS
+   - Docker services on :8043, :8088, :8090
+
+### Key Findings
+- CR1000A bridge mode is under Network (Home/Office) Settings > Bridge section, NOT under Broadband Connection settings
+- The "Settings" button on the Network (Home/Office) page toggles between info/edit views
+- CR1000A at `192.168.1.1` is no longer reachable from Route10 subnet after bridge mode (expected)
+- Stale port forwarding rules on CR1000A (Synology→.186, VPN-IKE/NAT-T/L2TP→.226) — irrelevant now
+- WireGuard clients don't need config changes — same public IP, port 51820 now received directly
+- Public IP `70.111.193.92` — consider DDNS for permanence
+
+### AWS Secrets Used
+- `CR1000A` — Network Settings Password: `SZWBR77LK`
+- `yamil/homelab/route10-ssh` — SSH access for verification
+
+---
+
 ## 2026-03-19 — Browser Knowledge + AI Orchestrator Integration & TTS Auto-Play
 
 ### Task

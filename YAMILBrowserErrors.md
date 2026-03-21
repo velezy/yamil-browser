@@ -1096,3 +1096,346 @@ Detection failures logged automatically for review and improvement.
 
 ---
 
+### 2026-03-18T06:35:49.616Z — `yamil_browser_wait`
+- **Page**: http://192.168.0.200/
+- **Params**: `{"selector":"input, form, body","timeout":5000}`
+- **Error**: Timeout waiting for visible: input, form, body
+
+---
+
+### 2026-03-18T06:40:53.270Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/clients/Home+Base
+- **Params**: `{"text":"No name"}`
+- **Error**: Element not found after 3 attempts: No name
+
+---
+
+### 2026-03-18T06:42:31.393Z — `yamil_browser_network_idle`
+- **Page**: https://manage.alta.inc/site/Home+Base
+- **Params**: `{"timeout":5000}`
+- **Error**: Network idle timeout
+
+---
+
+### 2026-03-18T15:55:37.167Z — `yamil_browser_click`
+- **Page**: https://manage.alta.inc/site/Home+Base
+- **Params**: `{"selector":"tr:has(td) .icon"}`
+- **Error**: Element not found after 3 attempts: tr:has(td) .icon
+
+---
+
+### 2026-03-18T23:19:47.869Z — `__uncaughtException__`
+- **Page**: unknown
+- **Params**: `{}`
+- **Error**: spawn npx ENOENT
+
+---
+
+### 2026-03-19T03:12:57.896Z — `yamil_browser_fill`
+- **Page**: http://127.0.0.1:3003/login
+- **Params**: `{"selector":"input[type=\"email\"], input[name=\"email\"]","value":"admin@memobyte.com"}`
+- **Error**: Input not found: input[type="email"], input[name="email"]
+
+---
+
+### 2026-03-19T03:16:50.694Z — `yamil_browser_wait`
+- **Page**: http://127.0.0.1:3003/collections
+- **Params**: `{"selector":".sidebar","timeout":5000}`
+- **Error**: Timeout waiting for visible: .sidebar
+
+---
+
+### 2026-03-19T03:17:04.051Z — `yamil_browser_eval`
+- **Page**: http://127.0.0.1:3003/collections
+- **Params**: `{"script":"\nconst raw = localStorage.getItem('auth-storage');\nconst parsed = JSON.parse(raw);\nconst token = parsed?.state?.token;\nconst resp = await fetch('/api/v1/collections', { headers: { 'Authorization': `Be"}`
+- **Error**: Eval failed after all retries
+
+---
+
+### 2026-03-19T04:40:24.469Z — `yamil_browser_wait`
+- **Page**: http://127.0.0.1:3003/login
+- **Params**: `{"selector":"aside","timeout":5000}`
+- **Error**: Timeout waiting for visible: aside
+
+---
+
+### 2026-03-19T05:52:49.582Z — `yamil_browser_wait`
+- **Page**: http://localhost:19080/ai-quiz
+- **Params**: `{"selector":".sidebar, nav, [class*='dashboard']","timeout":8000}`
+- **Error**: Timeout waiting for visible: .sidebar, nav, [class*='dashboard']
+
+---
+
+### 2026-03-19T06:23:24.144Z — `yamil_browser_fill`
+- **Page**: http://localhost:19080/login
+- **Params**: `{"selector":"input[type=\"email\"]","value":"admin@memobyte.com"}`
+- **Error**: Input not found: input[type="email"]
+
+---
+
+### 2026-03-19T06:24:16.606Z — `yamil_browser_wait`
+- **Page**: http://localhost:19080/
+- **Params**: `{"selector":"[class*='sidebar'], [class*='Sidebar']","timeout":5000}`
+- **Error**: Timeout waiting for visible: [class*='sidebar'], [class*='Sidebar']
+
+---
+
+### 2026-03-19T12:21:18.821Z — `yamil_browser_wait`
+- **Page**: http://127.0.0.1:3003/login
+- **Params**: `{"selector":"nav, [class*=\"sidebar\"], [class*=\"dashboard\"]","timeout":5000}`
+- **Error**: Timeout waiting for visible: nav, [class*="sidebar"], [class*="dashboard"]
+
+---
+
+### 2026-03-19T12:22:10.497Z — `yamil_browser_wait`
+- **Page**: http://127.0.0.1:3003/login
+- **Params**: `{"selector":"[class*=\"sidebar\"], [class*=\"nav\"]","timeout":8000}`
+- **Error**: Timeout waiting for visible: [class*="sidebar"], [class*="nav"]
+
+---
+
+### 2026-03-19T12:23:59.058Z — `yamil_browser_wait`
+- **Page**: http://127.0.0.1:3003/study/Biology%20%E2%80%94%20Cell%20Division
+- **Params**: `{"selector":"[class*=\"card\"], [class*=\"grid\"]","timeout":5000}`
+- **Error**: Timeout waiting for visible: [class*="card"], [class*="grid"]
+
+---
+
+### 2026-03-19T12:25:11.774Z — `yamil_browser_fill`
+- **Page**: http://127.0.0.1:3003/create
+- **Params**: `{"selector":"input[type=\"number\"]","value":"150"}`
+- **Error**: Input not found: input[type="number"]
+
+---
+
+### 2026-03-19T13:20:13.363Z — `yamil_browser_wait`
+- **Page**: http://127.0.0.1:3003/login
+- **Params**: `{"selector":"aside, [class*=\"dashboard\"]","timeout":8000}`
+- **Error**: Timeout waiting for visible: aside, [class*="dashboard"]
+
+---
+
+### 2026-03-19T13:20:49.373Z — `yamil_browser_wait`
+- **Page**: http://127.0.0.1:3003/login
+- **Params**: `{"selector":"aside","timeout":8000}`
+- **Error**: Timeout waiting for visible: aside
+
+---
+
+### 2026-03-19T13:21:34.890Z — `yamil_browser_wait`
+- **Page**: http://127.0.0.1:3003/login
+- **Params**: `{"selector":"aside, h1","timeout":8000}`
+- **Error**: Timeout waiting for visible: aside, h1
+
+---
+
+### 2026-03-19T13:35:16.366Z — `yamil_browser_click`
+- **Page**: http://127.0.0.1:3003/manage/422ecbd9-5a3a-4146-b8d8-e69c2abaae88
+- **Params**: `{"text":"Spanish Vocabulary — Travel"}`
+- **Error**: Element not found after 3 attempts: Spanish Vocabulary — Travel
+
+---
+
+### 2026-03-19T13:35:21.090Z — `yamil_browser_click`
+- **Page**: http://127.0.0.1:3003/manage/422ecbd9-5a3a-4146-b8d8-e69c2abaae88
+- **Params**: `{"text":"Spanish Vocabulary"}`
+- **Error**: Element not found after 3 attempts: Spanish Vocabulary
+
+---
+
+### 2026-03-19T13:36:12.431Z — `yamil_browser_click`
+- **Page**: http://127.0.0.1:3003/collections
+- **Params**: `{"text":"Biology"}`
+- **Error**: Element not found after 3 attempts: Biology
+
+---
+
+### 2026-03-19T14:09:17.719Z — `yamil_browser_fill`
+- **Page**: http://localhost:19080/login
+- **Params**: `{"selector":"input[type='email']","value":"admin@memobyte.com"}`
+- **Error**: Input not found: input[type='email']
+
+---
+
+### 2026-03-19T14:35:51.591Z — `yamil_browser_click`
+- **Page**: http://localhost:3002/manage/422ecbd9-5a3a-4146-b8d8-e69c2abaae88
+- **Params**: `{"text":"Click to reveal answer"}`
+- **Error**: Element not found after 3 attempts: Click to reveal answer
+
+---
+
+### 2026-03-19T14:35:56.775Z — `yamil_browser_click`
+- **Page**: http://localhost:3002/manage/422ecbd9-5a3a-4146-b8d8-e69c2abaae88
+- **Params**: `{"text":"Reveal Answer"}`
+- **Error**: Element not found after 3 attempts: Reveal Answer
+
+---
+
+### 2026-03-19T14:36:03.470Z — `yamil_browser_click`
+- **Page**: http://localhost:3002/manage/5df3859a-3eae-4aff-b87b-7ffe0333b10e
+- **Params**: `{"text":"What is the S phase?"}`
+- **Error**: Element not found after 3 attempts: What is the S phase?
+
+---
+
+### 2026-03-19T14:49:41.588Z — `yamil_browser_click`
+- **Page**: http://localhost:3002/study?collection=422ecbd9-5a3a-4146-b8d8-e69c2abaae88
+- **Params**: `{"selector":".min-h-\\\\[320px\\\\].rounded-xl"}`
+- **Error**: Element not found after 3 attempts: .min-h-\\[320px\\].rounded-xl
+
+---
+
+### 2026-03-19T15:53:43.735Z — `yamil_browser_fill`
+- **Page**: http://127.0.0.1:3003/login
+- **Params**: `{"selector":"input[type=\"email\"], input[name=\"email\"]","value":"admin@memobyte.com"}`
+- **Error**: Input not found: input[type="email"], input[name="email"]
+
+---
+
+### 2026-03-19T17:03:19.487Z — `yamil_browser_wait`
+- **Page**: http://localhost:3002/login
+- **Params**: `{"selector":".sidebar, nav, [class*='dashboard']","timeout":5000}`
+- **Error**: Timeout waiting for visible: .sidebar, nav, [class*='dashboard']
+
+---
+
+### 2026-03-19T17:05:57.032Z — `yamil_browser_wait`
+- **Page**: http://localhost:3002/quiz?collection=a1111111-1111-1111-1111-111111111111&mode=practice
+- **Params**: `{"selector":"[class*='Question']","timeout":5000}`
+- **Error**: Timeout waiting for visible: [class*='Question']
+
+---
+
+### 2026-03-19T17:06:46.372Z — `yamil_browser_wait`
+- **Page**: http://localhost:3002/quiz?collection=a1111111-1111-1111-1111-111111111111&mode=practice
+- **Params**: `{"selector":"[class*='Question'], [class*='question']","timeout":5000}`
+- **Error**: Timeout waiting for visible: [class*='Question'], [class*='question']
+
+---
+
+### 2026-03-19T17:31:29.885Z — `yamil_browser_wait`
+- **Page**: http://localhost:3002/
+- **Params**: `{"selector":"nav, [class*=\"sidebar\"], [class*=\"dashboard\"]","timeout":5000}`
+- **Error**: Timeout waiting for visible: nav, [class*="sidebar"], [class*="dashboard"]
+
+---
+
+### 2026-03-19T23:55:28.329Z — `yamil_browser_click`
+- **Page**: https://yamil-ai.com/users
+- **Params**: `{"text":"API Consumers (0)"}`
+- **Error**: Element not found after 3 attempts: API Consumers (0)
+
+---
+
+### 2026-03-19T23:55:35.044Z — `yamil_browser_click`
+- **Page**: https://yamil-ai.com/users
+- **Params**: `{"text":"API Consumers"}`
+- **Error**: Element not found after 3 attempts: API Consumers
+
+---
+
+### 2026-03-20T00:02:58.378Z — `yamil_browser_click`
+- **Page**: https://yamil-ai.com/gateway
+- **Params**: `{"text":"API Keys"}`
+- **Error**: Element not found after 3 attempts: API Keys
+
+---
+
+### 2026-03-20T06:34:37.269Z — `yamil_browser_click`
+- **Page**: https://yamil-ai.com/login
+- **Params**: `{"text":"Access controls"}`
+- **Error**: Element not found after 3 attempts: Access controls
+
+---
+
+### 2026-03-20T06:35:54.325Z — `yamil_browser_click`
+- **Page**: https://dash.cloudflare.com/login?redirect_uri=https%3A%2F%2Fone.dash.cloudflare.com%2F2c4d6f2c9a02c47a683b1cf5c0e61fcc%2Faccess%2Fapps&state=9cc81e0c-7581-4981-af4f-9a83c61f80e9|https://one.dash.cloudflare.com/2c4d6f2c9a02c47a683b1cf5c0e61fcc/access/apps
+- **Params**: `{"text":"Add an application"}`
+- **Error**: Element not found after 3 attempts: Add an application
+
+---
+
+### 2026-03-20T20:53:49.487Z — `yamil_browser_wait`
+- **Page**: https://192.168.1.1/#/basic/home
+- **Params**: `{"selector":"body","timeout":5000}`
+- **Error**: Timeout waiting for visible: body
+
+---
+
+### 2026-03-20T23:10:05.588Z — `yamil_browser_fill`
+- **Page**: https://github.com/settings/personal-access-tokens/new
+- **Params**: `{"selector":"input[name=\"token[name]\"], #token_name, input[placeholder*=\"name\" i]","value":"qnap-mirror"}`
+- **Error**: Input not found: input[name="token[name]"], #token_name, input[placeholder*="name" i]
+
+---
+
+### 2026-03-20T23:20:22.419Z — `yamil_browser_wait`
+- **Page**: https://github.com/settings/personal-access-tokens/new
+- **Params**: `{"selector":"input[type=\"search\"]","timeout":3000}`
+- **Error**: Timeout waiting for visible: input[type="search"]
+
+---
+
+### 2026-03-20T23:23:00.051Z — `yamil_browser_wait`
+- **Page**: https://github.com/settings/personal-access-tokens/new
+- **Params**: `{"selector":".token-code, [data-testid='new-token'], .flash-full","timeout":10000}`
+- **Error**: Timeout waiting for visible: .token-code, [data-testid='new-token'], .flash-full
+
+---
+
+### 2026-03-20T23:23:34.222Z — `yamil_browser_wait`
+- **Page**: https://github.com/settings/personal-access-tokens/new
+- **Params**: `{"selector":"#new-access-token","timeout":10000}`
+- **Error**: Timeout waiting for visible: #new-access-token
+
+---
+
+### 2026-03-21T03:49:36.744Z — `yamil_browser_fill`
+- **Page**: https://github.com/settings/personal-access-tokens/new
+- **Params**: `{"selector":"#token-name","value":"macmini-ha"}`
+- **Error**: Input not found: #token-name
+
+---
+
+### 2026-03-21T05:38:16.835Z — `__uncaughtException__`
+- **Page**: unknown
+- **Params**: `{}`
+- **Error**: spawn npx ENOENT
+
+---
+
+### 2026-03-21T06:20:44.364Z — `__uncaughtException__`
+- **Page**: unknown
+- **Params**: `{}`
+- **Error**: spawn npx ENOENT
+
+---
+
+### 2026-03-21T06:21:22.999Z — `__uncaughtException__`
+- **Page**: unknown
+- **Params**: `{}`
+- **Error**: spawn npx ENOENT
+
+---
+
+### 2026-03-21T06:36:02.074Z — `__uncaughtException__`
+- **Page**: unknown
+- **Params**: `{}`
+- **Error**: spawn npx ENOENT
+
+---
+
+### 2026-03-21T16:40:44.575Z — `__uncaughtException__`
+- **Page**: unknown
+- **Params**: `{}`
+- **Error**: spawn npx ENOENT
+
+---
+
+### 2026-03-21T16:41:10.869Z — `__uncaughtException__`
+- **Page**: unknown
+- **Params**: `{}`
+- **Error**: spawn npx ENOENT
+
+---
+
