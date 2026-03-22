@@ -19,6 +19,58 @@ Build YAMIL Browser into an **AI-native browser** like **OpenAI's ChatGPT Atlas*
 
 Power the YAMIL Browser's AI sidebar with a local Ollama-based AI orchestrator, copied and adapted from the AssemblyLine project's `ai-orchestrator-service`. Layer Symphony's agent orchestration on top for autonomous task management. This gives the browser intelligent, multi-model AI capabilities without relying on cloud APIs.
 
+## LLM Provider Architecture: Ollama + Optional Cloud Hybrid
+
+Ollama is **always running** as the core intelligence layer. Cloud LLMs are optional upgrades.
+
+```
+                        User Query
+                            │
+                            ▼
+                ┌───────────────────────┐
+                │   Ollama (always on)  │
+                │                       │
+                │  • Intent routing     │
+                │  • RAG retrieval      │
+                │  • Embeddings         │
+                │  • Tool calls / MCP   │
+                │  • Page understanding │
+                │  • Agent orchestration│
+                └───────────┬───────────┘
+                            │
+                    ┌───────▼───────┐
+                    │  LLM Key set? │
+                    └───┬───────┬───┘
+                     No │       │ Yes
+                        ▼       ▼
+            ┌──────────────┐  ┌──────────────────┐
+            │ Ollama model │  │ Cloud LLM        │
+            │ generates    │  │ (OpenAI/Anthropic │
+            │ response     │  │  /Gemini/Bedrock) │
+            │ (free/local) │  │ generates response│
+            └──────────────┘  └──────────────────┘
+```
+
+### How It Works
+- **No API key** → 100% local. Ollama does everything: routing, RAG, embeddings, response generation
+- **API key added** → Hybrid mode. Ollama still does all the agentic work (RAG, routing, tools, embeddings). Cloud LLM only handles final response generation for higher quality
+- **Multiple keys** → User picks preferred provider in settings. Ollama always stays as the orchestration backbone
+
+### Provider Settings (in YAMIL Browser sidebar)
+```
+LLM Provider: [Ollama (default)] ▼
+  ├── Ollama (local, free)
+  ├── OpenAI (requires API key)
+  ├── Anthropic (requires API key)
+  ├── Google Gemini (requires API key)
+  └── AWS Bedrock (requires credentials)
+
+API Key: [________________________]
+
+Ollama always handles: RAG, embeddings, routing, tools
+Selected provider handles: response generation
+```
+
 ## Current State
 
 - YAMIL Browser sidebar sends `POST AI_ENDPOINT` with `{ message, pageContext, stream }` format
