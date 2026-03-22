@@ -1,8 +1,23 @@
-# 148 - YAMIL AI Powered by Ollama Model Tiers via AI Orchestrator
+# 148 - YAMIL AI: Atlas-Style Browser + Symphony Agent Orchestration
+
+## Vision
+
+Build YAMIL Browser into an **AI-native browser** like **OpenAI's ChatGPT Atlas** — with an intelligent sidebar that understands page context, automates tasks, compares products, researches across tabs, and takes actions. Layer **OpenAI Symphony** on top as the agent orchestration framework for autonomous task execution (issue → workspace → code → PR).
+
+### Inspiration
+- **ChatGPT Atlas**: AI sidebar that reads pages, summarizes, compares products, automates browsing tasks, agent mode for research/booking
+- **OpenAI Symphony**: Autonomous agent orchestration — polls task boards, creates isolated workspaces, dispatches agents, delivers PRs with proof-of-work
+
+### What YAMIL Browser Becomes
+- **Atlas-like AI sidebar** powered by local Ollama models (no cloud dependency, no API costs)
+- **Symphony-style agent orchestration** for autonomous coding/task execution
+- **Multi-model intelligence** — auto-routes queries to the right model tier (fast/quality/deep/code/vision)
+- **Browser-aware agents** — agents can read pages, fill forms, click buttons, navigate, extract data
+- **Privacy-first** — all LLM inference runs locally via Ollama
 
 ## Goal
 
-Power the YAMIL Browser's AI sidebar with a local Ollama-based AI orchestrator, copied and adapted from the AssemblyLine project's `ai-orchestrator-service`. This gives the browser intelligent, multi-model AI capabilities without relying on cloud APIs.
+Power the YAMIL Browser's AI sidebar with a local Ollama-based AI orchestrator, copied and adapted from the AssemblyLine project's `ai-orchestrator-service`. Layer Symphony's agent orchestration on top for autonomous task management. This gives the browser intelligent, multi-model AI capabilities without relying on cloud APIs.
 
 ## Current State
 
@@ -248,3 +263,171 @@ data: [DONE]
 | `electron-app/preload.js` | Update default AI_ENDPOINT to port 8024 |
 | `electron-app/main.js` | Add AI_ENDPOINT env var in stealth tab browser-service launch |
 | `electron-app/renderer/renderer.js` | No changes needed (already supports streaming SSE) |
+
+---
+
+## Symphony Agent Orchestration Layer
+
+### What Symphony Adds
+
+Symphony sits **on top** of the AI orchestrator as an autonomous task execution layer:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  YAMIL Browser                       │
+│  ┌──────────┐  ┌──────────┐  ┌───────────────────┐  │
+│  │ AI Chat  │  │ Agent    │  │ Task Board        │  │
+│  │ Sidebar  │  │ Mode     │  │ (Symphony UI)     │  │
+│  └────┬─────┘  └────┬─────┘  └────────┬──────────┘  │
+└───────┼──────────────┼────────────────┼──────────────┘
+        │              │                │
+        ▼              ▼                ▼
+┌─────────────────────────────────────────────────────┐
+│              AI Orchestrator (FastAPI)                │
+│  ┌──────────┐  ┌──────────┐  ┌───────────────────┐  │
+│  │ Browser  │  │ RAG      │  │ Agent             │  │
+│  │ Chat     │  │ Search   │  │ Coordinator       │  │
+│  └──────────┘  └──────────┘  └───────────────────┘  │
+└──────────────────────┬──────────────────────────────┘
+                       │
+        ┌──────────────▼──────────────────┐
+        │    Symphony Orchestrator        │
+        │    (Elixir/BEAM or Node port)   │
+        │                                 │
+        │  ┌───────────┐ ┌────────────┐  │
+        │  │ Task Poll  │ │ Workspace  │  │
+        │  │ (Linear/   │ │ Isolation  │  │
+        │  │  GitHub)   │ │            │  │
+        │  └─────┬─────┘ └─────┬──────┘  │
+        │        │              │         │
+        │  ┌─────▼──────────────▼──────┐  │
+        │  │  Agent Dispatch           │  │
+        │  │  (Codex / Ollama Code)    │  │
+        │  └─────┬─────────────────────┘  │
+        │        │                        │
+        │  ┌─────▼──────────────────────┐ │
+        │  │  Proof of Work             │ │
+        │  │  (CI, Tests, PR Review)    │ │
+        │  └────────────────────────────┘ │
+        └─────────────────────────────────┘
+                       │
+              ┌────────▼────────┐
+              │  Ollama Models  │
+              │  + GitHub API   │
+              │  + Linear API   │
+              └─────────────────┘
+```
+
+### Symphony Integration Phases
+
+#### Phase 7: Clone & Adapt Symphony
+
+1. Clone `https://github.com/openai/symphony` into `C:/project/yamil-browser/symphony/`
+2. Symphony is Elixir/OTP — options:
+   - **Option A**: Run Elixir natively (install Erlang + Elixir)
+   - **Option B**: Port the orchestration logic to Node.js (simpler, aligns with YAMIL stack)
+   - **Option C**: Run in Docker container
+3. Replace OpenAI Codex agent backend with **Ollama Code model** (`qwen2.5-coder:7b`)
+4. Configure task source:
+   - GitHub Issues (instead of Linear) — since our repos are on GitHub
+   - Or add Linear integration later
+
+#### Phase 8: Symphony + YAMIL Browser Integration
+
+1. Add **Task Board UI** to YAMIL Browser sidebar:
+   - View active tasks/issues from GitHub
+   - Start/stop agent runs
+   - Monitor agent progress in real-time
+   - Review agent PRs inline
+2. Add Symphony status endpoint to AI orchestrator
+3. Browser agents can:
+   - Read and understand web pages (via browser-service)
+   - Fill forms, click buttons, navigate (via MCP tools)
+   - Research across multiple tabs
+   - Compare products (like Atlas does)
+
+#### Phase 9: Atlas-Style Browser AI Features
+
+Build the features that make Atlas special, powered by local models:
+
+| Feature | Atlas (OpenAI) | YAMIL (Local Ollama) |
+|---------|---------------|---------------------|
+| **Page Summary** | GPT-4o | Quality model (gemma3:4b) |
+| **Product Compare** | GPT-4o | Quality model + page context |
+| **Auto Search** | ChatGPT + Google | Ollama + DuckDuckGo |
+| **Form Filling** | Agent mode | Code model + MCP tools |
+| **Task Automation** | Agent mode | Symphony + browser agents |
+| **Tab Groups AI** | Auto-organize | Embedding model clustering |
+| **Research Mode** | Deep research | Deep model (qwen3:8b) + RAG |
+| **Screenshot Analysis** | Vision | Vision model (qwen2.5vl:3b) |
+| **Voice Input** | Whisper | Whisper via Ollama or local |
+
+#### Phase 10: Autonomous Agent Mode
+
+1. User describes a task in the sidebar: "Find the best price for a John Deere D140 battery across Home Depot, Lowe's, and Amazon"
+2. Symphony creates an agent run:
+   - Opens tabs for each store
+   - Searches for the product
+   - Extracts prices, ratings, availability
+   - Compares results
+   - Presents a summary with recommendation
+3. All running locally — no data leaves the machine
+
+### Symphony Configuration
+
+```yaml
+# symphony/config.yml (adapted for YAMIL)
+orchestrator:
+  poll_interval_ms: 30000
+  max_concurrent_agents: 4
+
+task_source:
+  type: github          # or linear
+  repo: velezy/yamil-browser
+  project: "YAMIL Tasks"
+
+agent:
+  runtime: ollama        # instead of codex
+  model: qwen2.5-coder:7b
+  timeout_minutes: 30
+
+workspace:
+  base_dir: C:/tmp/yamil-workspaces
+  isolation: git_worktree
+
+proof_of_work:
+  require_ci_pass: true
+  require_tests: true
+  auto_merge: false      # human approval required
+
+browser:
+  service_url: http://127.0.0.1:4000
+  mcp_tools: true
+```
+
+### Key Differences from OpenAI's Stack
+
+| Component | OpenAI | YAMIL |
+|-----------|--------|-------|
+| **LLM** | GPT-4o / Codex (cloud, paid) | Ollama (local, free) |
+| **Browser** | Atlas (Chromium, closed) | YAMIL Browser (Electron, open) |
+| **Agents** | Symphony + Codex | Symphony + AI Orchestrator |
+| **Task Board** | Linear | GitHub Issues |
+| **Runtime** | Elixir/BEAM | Elixir or Node.js port |
+| **Privacy** | Data goes to OpenAI | Everything stays local |
+| **Cost** | $200/mo Pro plan | $0 (your hardware) |
+
+## Revised Roadmap
+
+| Phase | What | Priority |
+|-------|------|----------|
+| 1 | Copy AI orchestrator from AssemblyLine | High |
+| 2 | Configure Ollama model tiers | High |
+| 3 | Wire YAMIL Browser sidebar to orchestrator | High |
+| 4 | Docker compose full stack | High |
+| 5 | LLM provider settings UI | Medium |
+| 6 | Test end-to-end | High |
+| 7 | Clone & adapt Symphony | Medium |
+| 8 | Symphony + YAMIL Browser integration | Medium |
+| 9 | Atlas-style browser AI features | Medium |
+| 10 | Autonomous agent mode | Future |
