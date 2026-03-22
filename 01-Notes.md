@@ -395,3 +395,25 @@
   ⏺ Good point — the exam should be scoped by date range and subject. If a student studied calculus for 3 weeks and the final   
   only covers weeks 2-3, they need to filter by those dates. And the My Subjects tab should show sessions organized by date   
   too. Let me update both tabs.   
+
+
+
+
+
+
+    For flashcard generation:
+  - qwen3:1.7b — Primary generation model (fastest, ~1.4GB, excellent JSON compliance)
+  - nomic-embed-text — RAG embeddings for context retrieval
+
+  Available but not actively used in speed tests:
+  - qwen3:8b (5.2GB) — Symphony consensus model #1 (POWERFUL tier)
+  - gemma3:4b (3.3GB) — Symphony consensus model #2
+  - llama3.2:3b (2.0GB) — Symphony consensus model #3
+  - phi4-mini (2.5GB), qwen3:4b (2.5GB), qwen2.5-coder:7b — other available models
+
+  The speed tests use single-model mode (consensus=False) with qwen3:1.7b because it's the fastest while still producing
+  quality flashcards. When users enable "Quality Mode" in the frontend, it would use Symphony consensus with 3 models voting —
+   slower but higher quality.
+
+  I haven't changed models during this optimization — qwen3:1.7b has been the one throughout. Let me unload unnecessary models
+   to free RAM, then run v10.

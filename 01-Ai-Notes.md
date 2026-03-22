@@ -1,5 +1,62 @@
 # AI Notes
 
+## 2026-03-22 — Phase 14: Failover Drill (Successful)
+
+### Task
+Execute end-to-end failover drill to validate Consul watch handler, ntfy notifications, and KV state management.
+
+### Issues Found & Fixed
+1. **Consul config-file watches not spawning** — Watches defined in `watches.json` or `server.json` never started a sub-process. Root cause unknown (Consul 1.22.5 bug or unsupported format). **Fix**: Changed to `consul watch` CLI launched as a background process in custom `entrypoint.sh`.
+2. **Missing jq/curl in Consul container** — Alpine-based image doesn't include them. **Fix**: Created `/consul/config/entrypoint.sh` that runs `apk add jq curl` before `docker-entrypoint.sh`. Survives restarts because it's in the bind-mounted config dir.
+3. **Handler multi-check bug** — When maintenance mode adds a second check (critical), the handler's `jq` filter returned both "critical" and "passing" as a multi-line string, failing the `[ "$STATUS" = "critical" ]` test. **Fix**: Changed to count-based logic: `jq '[.[] | select(.Status == "critical")] | length'`.
+4. **Windows curl quoting** — SSH to Windows PC requires double quotes around URLs with query params (single quotes don't work via PowerShell/SSH).
+
+### Drill Results
+
+| Step | Action | Result |
+|------|--------|--------|
+| 1 | Initialize KV store (`active-node=windows-pc`) | **PASS** |
+| 2 | Put yamil-frontend in maintenance mode (Windows PC) | **PASS** |
+| 3 | Watch detects critical check | **PASS** (triggered within seconds) |
+| 4 | Handler updates KV (`active-node=geekom`) | **PASS** |
+| 5 | ntfy urgent notification sent | **PASS** (Priority 5, rotating_light tag) |
+| 6 | Disable maintenance mode (recovery) | **PASS** |
+| 7 | Recovery notification sent | **PASS** (white_check_mark tag) |
+| 8 | KV preserved (no auto-failback) | **PASS** (`active-node` stays geekom until manual reset) |
+
+### Files Modified on QNAP
+- `/share/Container/yamil-monitor/consul/config/entrypoint.sh` — NEW: installs jq/curl + starts watch process
+- `/share/Container/yamil-monitor/consul/config/failover-handler.sh` — FIXED: count-based critical check logic
+- `/share/Container/yamil-monitor/consul/config/server.json` — Removed watches (now in entrypoint)
+- `/share/Container/yamil-monitor/consul/config/watches.json` — DELETED (redundant)
+- `/share/Container/yamil-monitor/docker-compose.yml` — Added `entrypoint: /consul/config/entrypoint.sh`
+
+### Next Steps
+- [ ] Phase 15: Auto-deploy on git push (webhook or polling)
+- [ ] Secrets sync automation
+- [ ] Backup verification automation
+
+---
+
+## 2026-03-20 — Phase Verification, Bitdefender Fix, AWS Cost Check
+
+### Task
+Verify all 13 implementation phases are working. Troubleshoot Windows PC ↔ QNAP connectivity. Check AWS costs.
+
+### Completed
+1. **Windows PC ↔ QNAP connectivity root cause found**: Bitdefender IGNIS Firewall had WFP (Windows Filtering Platform) filters blocking 192.168.0.102 at max weight (`FWP_ACTION_BLOCK`). Toggling Windows Firewall had zero effect — Bitdefender operates below it. Found via `netsh wfp show state`. Fixed by adding allow rule in Bitdefender UI.
+2. **Network infrastructure verified clean**: TRENDnet TEG-3102WS (192.168.0.200) — single VLAN, no ACLs, no port isolation. Alta Labs Route10 (192.168.0.1) — br-lan bridge clean, FORWARD chain accepts bridged traffic.
+3. **Consul cluster fully operational**: 5/5 nodes alive (qnap, macbook, macmini, geekom, windows-pc). 16/17 health checks passing. 8 services registered.
+4. **Prometheus**: 19/33 targets UP after restarting blackbox exporter. 14 DOWN are logic-weaver services without /metrics (expected).
+5. **Grafana**: Fixed SQLite lock issue via container restart.
+6. **AWS RDS stopped**: Was auto-started by AWS (7-day policy). Stopped `yamil-dev-v2`. EC2 `yamil-prod` confirmed stopped.
+7. **Documentation**: Created `144-FixBitdefender-WindowsPC.md`, committed and pushed. Updated `134-QNAPInfrastructureHub.md` with phase status and verification notes. Updated `homelab-ha-architecture.html` with Consul cluster completion.
+
+### Key Decision
+- AWS RDS/EC2 may no longer be needed — all services run on homelab now (Postgres on Windows PC, monitoring on QNAP, HA on GEEKOM + Mac Mini). Keeping stopped as safety net; consider deleting to eliminate residual costs (~$9/mo).
+
+---
+
 ## 2026-03-21 — HA Infrastructure Remaining Work
 
 ### Task
