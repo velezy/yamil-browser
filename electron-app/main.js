@@ -39,6 +39,9 @@ app.commandLine.appendSwitch('enable-smooth-scrolling')
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
 app.commandLine.appendSwitch('disable-background-timer-throttling')
 
+// Anti-bot-detection: hide automation indicators
+app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled')
+
 // Combined --enable-features (MUST be a single call, comma-separated)
 app.commandLine.appendSwitch('enable-features', [
   'SharedArrayBuffer',
@@ -69,7 +72,57 @@ let toolbarView    // WebContentsView for toolbar UI (tab bar, navbar, sidebar, 
 let tray = null
 
 // ── Chrome UA for spoofing ──────────────────────────────────────────
-const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36'
+
+// ── Stealth script injected into every page to defeat bot detection ──
+// Wrapped in IIFE with guard to prevent redeclaration errors on double-injection
+const STEALTH_SCRIPT = `(function(){
+if(window.__yamil_stealth__)return;window.__yamil_stealth__=true;
+Object.defineProperty(navigator, 'webdriver', {get: () => undefined, configurable: true});
+window.chrome = window.chrome || {};
+window.chrome.runtime = window.chrome.runtime || {};
+Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en'], configurable: true});
+Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5], configurable: true});
+Object.defineProperty(navigator, 'hardwareConcurrency', {get: () => 8, configurable: true});
+var oq = navigator.permissions?.query?.bind(navigator.permissions);
+if (oq) {
+  navigator.permissions.query = (p) =>
+    p.name === 'notifications'
+      ? Promise.resolve({state: Notification.permission})
+      : oq(p);
+}
+var _tdURL = HTMLCanvasElement.prototype.toDataURL;
+var _tBlob = HTMLCanvasElement.prototype.toBlob;
+var _ns = () => (Math.random() - 0.5) * 0.01;
+HTMLCanvasElement.prototype.toDataURL = function(...args) {
+  var ctx = this.getContext('2d');
+  if (ctx && this.width > 0 && this.height > 0) {
+    try { var px = ctx.getImageData(0, 0, 1, 1); px.data[0] = Math.max(0, Math.min(255, px.data[0] + Math.floor(_ns() * 10))); ctx.putImageData(px, 0, 0); } catch(e) {}
+  }
+  return _tdURL.apply(this, args);
+};
+HTMLCanvasElement.prototype.toBlob = function(...args) {
+  var ctx = this.getContext('2d');
+  if (ctx && this.width > 0 && this.height > 0) {
+    try { var px = ctx.getImageData(0, 0, 1, 1); px.data[0] = Math.max(0, Math.min(255, px.data[0] + Math.floor(_ns() * 10))); ctx.putImageData(px, 0, 0); } catch(e) {}
+  }
+  return _tBlob.apply(this, args);
+};
+var _gp1 = WebGLRenderingContext.prototype.getParameter;
+WebGLRenderingContext.prototype.getParameter = function(p) {
+  if (p === 0x9245) return 'Intel Inc.';
+  if (p === 0x9246) return 'Intel Iris OpenGL Engine';
+  return _gp1.call(this, p);
+};
+if (typeof WebGL2RenderingContext !== 'undefined') {
+  var _gp2 = WebGL2RenderingContext.prototype.getParameter;
+  WebGL2RenderingContext.prototype.getParameter = function(p) {
+    if (p === 0x9245) return 'Intel Inc.';
+    if (p === 0x9246) return 'Intel Iris OpenGL Engine';
+    return _gp2.call(this, p);
+  };
+}
+})()`
 
 // ══════════════════════════════════════════════════════════════════════
 // ── TAB MANAGER (WebContentsView-based) ─────────────────────────────
@@ -130,11 +183,32 @@ class TabManager {
     }
 
     if (type === 'stealth') {
-      // Stealth tabs use browser-service (no WebContentsView)
+      // Stealth tabs use browser-service with real Chrome for anti-bot bypass
       const tab = { id, view: null, title: 'Stealth Tab', url, favicon: null, zoom: 0, type: 'stealth', sessionId: null }
       this.tabs.set(id, tab)
       if (activate) this.switchTab(id)
       this._sendTabEvent('tab-created', { tabId: id, url, type: 'stealth' })
+
+      // Create browser-service session and navigate
+      browserServicePost('/sessions', { url: url || 'about:blank', electronManaged: true })
+        .then(r => {
+          if (r.json && r.json.id) {
+            tab.sessionId = r.json.id
+            console.log(`[stealth] Tab ${id} → session ${tab.sessionId}`)
+            if (url) {
+              browserServicePost(`/sessions/${tab.sessionId}/navigate`, { url })
+                .then(nr => {
+                  if (nr.json && nr.json.title) {
+                    tab.title = nr.json.title
+                    this._sendTabEvent('title-updated', { tabId: id, title: tab.title })
+                  }
+                })
+                .catch(e => console.error('[stealth] navigate error:', e.message))
+            }
+          }
+        })
+        .catch(e => console.error('[stealth] session create error:', e.message))
+
       return { id, url, type: 'stealth' }
     }
 
@@ -311,6 +385,8 @@ class TabManager {
 
     wc.on('did-navigate', (_e, url) => {
       tab.url = url
+      // Inject stealth script to hide automation indicators
+      wc.executeJavaScript(STEALTH_SCRIPT).catch(() => {})
       this._sendTabEvent('navigated', {
         tabId: tab.id,
         url,
@@ -350,6 +426,15 @@ class TabManager {
     wc.on('did-finish-load', () => {
       // Check for autofill
       this._checkAutofill(tab)
+
+      // Detect bot-protection error pages and attempt cookie bypass
+      if (!tab._bypassAttempted) {
+        wc.executeJavaScript(`document.title`).then(title => {
+          if (title === 'Error Page' || title === 'Access Denied') {
+            this._attemptCookieBypass(tab)
+          }
+        }).catch(() => {})
+      }
     })
 
     // Handle target="_blank" links by opening in new tab
@@ -496,6 +581,127 @@ class TabManager {
 
     const menu = Menu.buildFromTemplate(menuItems)
     menu.popup()
+  }
+
+  // ── Bot-protection cookie bypass ──────────────────────────────────
+  // Uses real Chrome (via browser-service) to solve PerimeterX/Akamai challenges,
+  // then copies the validated cookies into Electron's session so pages load normally.
+
+  async _attemptCookieBypass (tab) {
+    if (!tab.view || tab._bypassAttempted) return
+    tab._bypassAttempted = true
+
+    const targetUrl = tab.url
+    if (!targetUrl || targetUrl.startsWith('about:') || targetUrl.startsWith('file:')) return
+
+    const domain = new URL(targetUrl).origin
+    console.log(`[cookie-bypass] Attempting bypass for ${targetUrl}`)
+    this._sendTabEvent('status', { tabId: tab.id, message: 'Bypassing bot protection...' })
+
+    const { spawn } = require('child_process')
+    const WebSocket = require('ws')
+    const CDP_PORT = 9444
+
+    // Find real Chrome
+    const chromePaths = [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    ]
+    const chromePath = chromePaths.find(p => fs.existsSync(p))
+    if (!chromePath) { console.error('[cookie-bypass] Chrome not found'); return }
+
+    let chromeProc = null
+    try {
+      // 1. Launch headful Chrome with remote debugging
+      chromeProc = spawn(chromePath, [
+        `--remote-debugging-port=${CDP_PORT}`,
+        `--user-data-dir=${path.join(app.getPath('temp'), 'yamil-cookie-bypass')}`,
+        '--no-first-run', '--disable-default-apps', '--disable-background-timer-throttling',
+        domain,
+      ], { detached: true, stdio: 'ignore' })
+      chromeProc.unref()
+
+      // Wait for Chrome to start
+      await new Promise(r => setTimeout(r, 6000))
+
+      // 2. Get WebSocket URL
+      const cdpRes = await new Promise((resolve, reject) => {
+        http.get(`http://127.0.0.1:${CDP_PORT}/json`, res => {
+          let d = ''; res.on('data', c => d += c)
+          res.on('end', () => { try { resolve(JSON.parse(d)) } catch (e) { reject(e) } })
+        }).on('error', reject)
+      })
+      const pageTarget = cdpRes.find(t => t.type === 'page')
+      if (!pageTarget) throw new Error('No page target found')
+
+      // 3. Connect via CDP, wait for homepage PX, navigate to target, get cookies
+      const cookies = await new Promise((resolve, reject) => {
+        const ws = new WebSocket(pageTarget.webSocketDebuggerUrl)
+        let msgId = 0
+        const send = (method, params = {}) => {
+          const id = ++msgId
+          ws.send(JSON.stringify({ id, method, params }))
+          return id
+        }
+        ws.on('error', reject)
+        ws.on('open', () => {
+          // Wait for homepage PX to run, then navigate to target
+          setTimeout(() => {
+            send('Page.navigate', { url: targetUrl })
+            // Wait for target page to load, then get cookies
+            setTimeout(() => {
+              const cookieId = send('Network.getAllCookies')
+              ws.on('message', data => {
+                const msg = JSON.parse(data)
+                if (msg.id === cookieId) {
+                  ws.close()
+                  resolve(msg.result?.cookies || [])
+                }
+              })
+            }, 8000)
+          }, 5000)
+        })
+        setTimeout(() => { ws.close(); reject(new Error('timeout')) }, 25000)
+      })
+
+      console.log(`[cookie-bypass] Got ${cookies.length} cookies from real Chrome`)
+
+      // 4. Filter to target domain cookies and import into Electron
+      const domainHost = new URL(domain).hostname.replace(/^www\./, '')
+      const relevantCookies = cookies.filter(c => c.domain.includes(domainHost))
+      const yamilSession = session.fromPartition('persist:yamil')
+      let imported = 0
+      for (const c of relevantCookies) {
+        try {
+          await yamilSession.cookies.set({
+            url: `${c.secure ? 'https' : 'http'}://${c.domain.replace(/^\./, '')}${c.path || '/'}`,
+            name: c.name, value: c.value, domain: c.domain, path: c.path || '/',
+            secure: c.secure || false, httpOnly: c.httpOnly || false,
+            expirationDate: c.expires > 0 ? Math.floor(c.expires) : undefined,
+            sameSite: c.sameSite === 'Strict' ? 'strict' : c.sameSite === 'Lax' ? 'lax' : 'no_restriction',
+          })
+          imported++
+        } catch (_) {}
+      }
+      console.log(`[cookie-bypass] Imported ${imported}/${relevantCookies.length} cookies`)
+
+      // 5. Reload the page
+      if (imported > 0) {
+        console.log(`[cookie-bypass] Reloading ${targetUrl}`)
+        tab.view.webContents.reload()
+      }
+    } catch (e) {
+      console.error(`[cookie-bypass] Failed:`, e.message)
+    } finally {
+      // Kill the temporary Chrome
+      if (chromeProc) {
+        try { process.kill(chromeProc.pid) } catch (_) {}
+        try {
+          const { execSync } = require('child_process')
+          execSync(`taskkill /F /PID ${chromeProc.pid} /T 2>nul`, { stdio: 'ignore' })
+        } catch (_) {}
+      }
+    }
   }
 
   // ── Credential injection (Phase 7) ────────────────────────────────
@@ -1495,6 +1701,22 @@ function startControlServer () {
     // ── COOKIE MANAGEMENT ENDPOINTS ───────────────────────────────
     // ═══════════════════════════════════════════════════════════════
 
+    if (req.method === 'POST' && url.pathname === '/cookies/import') {
+      readBody(req, async body => {
+        const yamilSession = session.fromPartition('persist:yamil')
+        const cookies = body.cookies || []
+        let imported = 0, failed = 0
+        for (const c of cookies) {
+          try {
+            await yamilSession.cookies.set(c)
+            imported++
+          } catch (e) { failed++ }
+        }
+        json(res, { ok: true, imported, failed, total: cookies.length })
+      })
+      return
+    }
+
     if (req.method === 'GET' && url.pathname === '/cookies') {
       const domain = url.searchParams.get('domain') || ''
       const yamilSession = session.fromPartition('persist:yamil')
@@ -1869,6 +2091,15 @@ app.whenReady().then(() => {
   // Install ad blocker on webview sessions
   adBlocker.install(yamilSession)
   console.log(`[YAMIL adblock] Installed — ${adBlocker.blockedDomains.size} domains blocked`)
+
+  // Inject Chrome client-hints headers so sites don't flag us as a bot
+  yamilSession.webRequest.onBeforeSendHeaders((details, callback) => {
+    const h = Object.assign({}, details.requestHeaders)
+    h['Sec-Ch-Ua'] = '"Chromium";v="146", "Google Chrome";v="146", "Not?A_Brand";v="99"'
+    h['Sec-Ch-Ua-Mobile'] = '?0'
+    h['Sec-Ch-Ua-Platform'] = '"Windows"'
+    callback({ requestHeaders: h })
+  })
 
   // Unified onHeadersReceived handler — strips frame-blocking headers and optionally blocks 3P cookies.
   yamilSession.webRequest.onHeadersReceived((details, callback) => {

@@ -2,7 +2,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname_mjs = dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = join(__dirname_mjs, "..", "..");
+const PROJECT_ROOT = join(__dirname_mjs, "..", "..", "..");
 
 export const YAMIL_ELECTRON_DIR = join(PROJECT_ROOT, "electron-app");
 export const YAMIL_CTRL         = process.env.YAMIL_CTRL_URL || "http://127.0.0.1:9300";

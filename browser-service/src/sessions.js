@@ -1,8 +1,21 @@
 import { chromium } from 'playwright'
 import { randomUUID } from 'crypto'
-import { mkdirSync } from 'fs'
+import { mkdirSync, existsSync } from 'fs'
 import { join } from 'path'
 import { STEALTH_SCRIPT, LAUNCH_ARGS, USER_AGENT } from './stealth.js'
+
+// Use real Chrome if available — its TLS fingerprint passes bot detection (PerimeterX, Akamai)
+const CHROME_PATHS = [
+  process.env.CHROME_PATH,
+  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/usr/bin/google-chrome',
+  '/usr/bin/google-chrome-stable',
+].filter(Boolean)
+const REAL_CHROME = CHROME_PATHS.find(p => existsSync(p)) || null
+if (REAL_CHROME) console.log(`[sessions] Using real Chrome: ${REAL_CHROME}`)
+else console.log('[sessions] Real Chrome not found, using Playwright Chromium')
 
 const logger = { info: (...a) => console.log('[sessions]', ...a) }
 
@@ -92,16 +105,19 @@ export async function createSession(opts = {}) {
       userAgent: USER_AGENT,
       viewport: { width: 1920, height: 1080 },
     }
+    if (REAL_CHROME) launchOpts.executablePath = REAL_CHROME
     if (proxyConfig) launchOpts.proxy = proxyConfig
 
     context = await chromium.launchPersistentContext(userDataDir, launchOpts)
   } else {
     // ── Ephemeral (incognito) session ──────────────────────────────────
     logger.info(`Session ${id} using ephemeral (incognito) context${proxyConfig ? ' (proxy: ' + proxyConfig.server + ')' : ''}`)
-    const browser = await chromium.launch({
+    const launchConfig = {
       headless: opts.headless !== false,
       args: LAUNCH_ARGS,
-    })
+    }
+    if (REAL_CHROME) launchConfig.executablePath = REAL_CHROME
+    const browser = await chromium.launch(launchConfig)
     const contextOpts = {
       userAgent: USER_AGENT,
       viewport: { width: 1920, height: 1080 },

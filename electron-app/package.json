@@ -13,22 +13,34 @@
   "build": {
     "appId": "com.yamil.browser",
     "productName": "YAMIL Browser",
-    "directories": { "output": "dist" },
+    "directories": {
+      "output": "dist"
+    },
     "protocols": [
       {
         "name": "YAMIL Browser",
-        "schemes": ["yamil-browser"]
+        "schemes": [
+          "yamil-browser"
+        ]
       }
     ],
-    "win":   { "target": "nsis",   "icon": "assets/icon.ico" },
-    "mac":   { "target": "dmg",    "icon": "assets/icon.icns" },
-    "linux": { "target": "AppImage" }
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   },
   "dependencies": {
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "electron": "^33.0.0",
+    "electron": "^36.9.5",
     "electron-builder": "^25.0.0"
   }
 }

@@ -3,7 +3,7 @@
     "yamil-browser": {
       "command": "node",
       "args": ["mcp-server/src/index.mjs"],
-      "cwd": "/Users/yaml/Project/Git/yamil-browser",
+      "cwd": "C:/project/yamil-browser",
       "env": {
         "YAMIL_BROWSER_URL": "http://127.0.0.1:4000"
       }
